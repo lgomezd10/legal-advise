@@ -1,0 +1,24 @@
+{
+  "name": "oca/legal_advice",
+  "description": "Aplicacion Nextcloud para la gestion de consultas legales",
+  "type": "project",
+  "license": "AGPL-3.0-or-later",
+  "autoload": {
+    "psr-4": {
+      "OCA\\Gestion_incidencias\\": "lib/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "OCA\\Gestion_incidencias\\Tests\\": "tests/"
+    }
+  },
+  "require-dev": {
+    "nextcloud/ocp": "30.0.4",
+    "phpunit/phpunit": "^10.5"
+  },
+  "scripts": {
+    "cs:check": "php -l appinfo/app.php",
+    "test:unit": "phpunit -c phpunit.xml"
+  }
+}

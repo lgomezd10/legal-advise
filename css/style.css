@@ -1,0 +1,248 @@
+html,
+body,
+#content,
+#app-content,
+#gestion-incidencias {
+	height: 100%;
+	width: 100%;
+	max-width: none;
+	min-width: 0;
+}
+
+#gestion-incidencias {
+	font-size: 14px;
+	line-height: 1.4;
+}
+
+body {
+	background: linear-gradient(180deg, #7fb2c9 0%, #dfe8e1 24%, #f4f2e7 100%);
+	font-family: 'Segoe UI Variable', 'Aptos', 'Noto Sans', sans-serif;
+}
+
+.gi-page {
+	padding: 1.15rem 1.25rem 1.8rem;
+	width: 100%;
+	max-width: none;
+	min-width: 0;
+	margin: 0 auto;
+	box-sizing: border-box;
+	font-size: .94rem;
+}
+
+.gi-page__header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1rem;
+	margin-bottom: 1.2rem;
+}
+
+.gi-page__header h1,
+.gi-page__header p {
+	margin: 0;
+}
+
+.gi-page__header h1 {
+	font-size: 1.65rem;
+	line-height: 1.1;
+}
+
+.gi-page h2,
+.gi-sidebar-panel h2,
+.gi-form-shell h2 {
+	font-size: 1.32rem;
+	line-height: 1.15;
+}
+
+.gi-page h3,
+.gi-sidebar-panel h3,
+.gi-form-shell h3 {
+	font-size: 1rem;
+	line-height: 1.2;
+}
+
+.gi-page__subtitle {
+	margin-top: .4rem;
+	max-width: 42rem;
+	color: #5f726b;
+	font-size: .92rem;
+}
+
+.gi-page__header--dense {
+	margin-bottom: .75rem;
+}
+
+.gi-search-box {
+	display: grid;
+	gap: .35rem;
+	width: min(100%, 34rem);
+	flex: 1 1 24rem;
+}
+
+.gi-search-box__label {
+	font-size: .85rem;
+	font-weight: 600;
+	color: #52625c;
+}
+
+.gi-search-box__input {
+	width: 100%;
+	min-height: 2.9rem;
+	padding: .7rem .9rem;
+	border: 1px solid rgba(33, 53, 68, .14);
+	border-radius: 12px;
+	background: rgba(255, 255, 255, .96);
+	font: inherit;
+	box-sizing: border-box;
+}
+
+.gi-search-box__input:focus-visible {
+	outline: 2px solid rgba(10, 110, 168, .16);
+	border-color: rgba(10, 110, 168, .34);
+}
+
+.gi-field {
+	display: grid;
+	gap: .35rem;
+}
+
+.gi-field > span {
+	font-size: .8rem;
+	font-weight: 600;
+	line-height: 1.2;
+}
+
+.gi-form-grid {
+	display: grid;
+	gap: 1rem;
+	grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+	padding: 1rem 0;
+}
+
+.gi-field--wide {
+	grid-column: 1 / -1;
+}
+
+.gi-input,
+.gi-select,
+.gi-textarea {
+	width: 100%;
+	border: 1px solid rgba(67, 104, 99, .22);
+	border-radius: 12px;
+	padding: .72rem .82rem;
+	background: rgba(255, 255, 255, .96);
+	font: inherit;
+	font-weight: 400;
+	font-size: .92rem;
+	line-height: 1.35;
+	color: var(--color-main-text, #222);
+	box-sizing: border-box;
+}
+
+.gi-select {
+	min-height: 2.9rem;
+	padding-right: 2.4rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	appearance: auto;
+}
+
+.gi-input:focus,
+.gi-select:focus,
+.gi-textarea:focus {
+	outline: 2px solid rgba(46, 118, 108, .22);
+	border-color: rgba(46, 118, 108, .45);
+}
+
+.gi-primary-button,
+.gi-secondary-button,
+.gi-chip {
+	border: none;
+	border-radius: 999px;
+	padding: .62rem .9rem;
+	font: inherit;
+	font-size: .92rem;
+	cursor: pointer;
+}
+
+.gi-primary-button {
+	background: #0b6e4f;
+	color: white;
+}
+
+.gi-secondary-button,
+.gi-chip {
+	background: rgba(49, 96, 91, .1);
+	color: #1f574c;
+}
+
+.gi-chip:disabled {
+	opacity: .5;
+	cursor: not-allowed;
+}
+
+.gi-chip-row {
+	display: flex;
+	gap: .5rem;
+	flex-wrap: wrap;
+}
+
+.gi-actions {
+	display: flex;
+	justify-content: flex-end;
+	padding-top: .5rem;
+}
+
+.gi-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: .2rem .55rem;
+	border-radius: 999px;
+	background: rgba(11, 110, 79, .1);
+	color: #0b6e4f;
+	font-size: .8rem;
+}
+
+.gi-sidebar-panel {
+	display: grid;
+	gap: 1rem;
+	padding: 1rem;
+	font-size: .94rem;
+}
+
+.gi-sidebar-panel__block,
+.gi-form-shell {
+	padding: 1rem;
+	border: 1px solid rgba(11, 110, 79, .12);
+	border-radius: 24px;
+	background: rgba(255, 255, 255, .92);
+	box-shadow: 0 18px 44px rgba(35, 57, 50, .08);
+}
+
+.gi-comment {
+	padding: .75rem;
+	border-radius: 12px;
+	background: rgba(11, 110, 79, .05);
+	margin-bottom: .75rem;
+}
+
+.gi-empty-state {
+	display: grid;
+	place-items: center;
+	min-height: 20rem;
+	padding: 2rem;
+	text-align: center;
+	color: var(--color-text-maxcontrast);
+}
+
+@media (max-width: 900px) {
+	.gi-page {
+		padding: .9rem .9rem 1.35rem;
+	}
+
+	.gi-page__header {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+}

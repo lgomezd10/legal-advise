@@ -1,0 +1,44 @@
+{
+  "name": "legal_advice",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "webpack --config webpack.js --mode development --progress",
+    "watch": "webpack --config webpack.js --mode development --watch --progress",
+    "lint": "eslint --ext .ts,.vue src",
+    "test:frontend": "vitest run"
+  },
+  "dependencies": {
+    "@nextcloud/axios": "^2.5.0",
+    "@nextcloud/initial-state": "^2.2.0",
+    "@nextcloud/router": "^3.0.0",
+    "@nextcloud/vue": "^8.20.0",
+    "pinia": "^3.0.1",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.22.9",
+    "@nextcloud/eslint-config": "^2.0.0",
+    "@nextcloud/webpack-vue-config": "^7.0.2",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "ajv": "^8.17.1",
+    "ajv-keywords": "^5.1.0",
+    "babel-loader": "^10.0.0",
+    "css-loader": "^7.1.1",
+    "eslint": "^6.8.0",
+    "node-polyfill-webpack-plugin": "4.0.0",
+    "sass": "^1.85.0",
+    "sass-loader": "^16.0.4",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.4.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.1",
+    "vitest": "^3.0.5",
+    "vue-loader": "^17.4.2",
+    "webpack": "^5.88.2",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.0.2"
+  }
+}

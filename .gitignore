@@ -1,0 +1,15 @@
+/node_modules/
+/vendor/
+/js/
+/.phpunit.cache/
+/coverage/
+/dist/
+/package-lock.json
+/localinfo/
+prompt.md
+/dev
+build.log
+build-run.txt
+build-exit.txt
+AGENTS.md
+/.deploy
