@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Controller;
+namespace OCA\ConsultasLegales\Controller;
 
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;

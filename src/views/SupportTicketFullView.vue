@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import TicketSidebarPanel from '@/components/TicketSidebarPanel.vue'
 import { useBootstrapStore } from '@/store/bootstrap'
 import { useTicketsStore } from '@/store/tickets'
+import type { TicketAttachmentLinkDraft } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,7 +35,7 @@ async function download(attachmentId: number) {
 	URL.revokeObjectURL(link.href)
 }
 
-async function commentOnTicket(payload: { body: string, visibility: 'interno' | 'publico', files: File[] }) {
+async function commentOnTicket(payload: { body: string, visibility: 'interno' | 'publico', files: File[], links: TicketAttachmentLinkDraft[] }) {
 	if (!ticketsStore.selected) {
 		return
 	}
@@ -63,26 +64,26 @@ function backToSupport() {
 	<section class="gi-page">
 		<header class="gi-page__header gi-page__header--dense">
 			<div>
-				<p class="gi-kicker">Soporte</p>
-				<h1>Incidencia a pantalla completa</h1>
+				<TicketSidebarPanel
+					:ticket="ticketsStore.selected"
+					:roles="bootstrapStore.data.roles"
+					:users="assignableUsers"
+					:groups="assignableGroups"
+					:statuses="statuses"
+					:urgencies="urgencies"
+					:allowed-extensions="bootstrapStore.data.catalogs.attachmentConfig.allowedExtensions"
+					:max-file-size-mb="bootstrapStore.data.catalogs.attachmentConfig.maxFileSizeMb"
+					fullscreen
+					:read-only="!ticketsStore.selected?.canManage"
+					:show-fullscreen="false"
+					@comment="commentOnTicket"
+					@update="updateTicket"
+					@download="download"
+					@fullscreen="backToSupport"
+				/>
 			</div>
 			<button class="gi-secondary-button" type="button" @click="backToSupport">Volver a consola</button>
-		</header>
-		<TicketSidebarPanel
-			:ticket="ticketsStore.selected"
-			:roles="bootstrapStore.data.roles"
-			:users="assignableUsers"
-			:groups="assignableGroups"
-			:statuses="statuses"
-			:urgencies="urgencies"
-			:allowed-extensions="bootstrapStore.data.catalogs.attachmentConfig.allowedExtensions"
-			fullscreen
-			:show-fullscreen="false"
-			@comment="commentOnTicket"
-			@update="updateTicket"
-			@download="download"
-			@fullscreen="backToSupport"
-		/>
+		</header>		
 	</section>
 </template>
 

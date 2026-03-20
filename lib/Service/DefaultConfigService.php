@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Service;
+namespace OCA\ConsultasLegales\Service;
 
-use OCA\Gestion_incidencias\Db\AppSetting;
-use OCA\Gestion_incidencias\Db\AppSettingMapper;
-use OCA\Gestion_incidencias\Db\AssignmentRule;
-use OCA\Gestion_incidencias\Db\AssignmentRuleMapper;
-use OCA\Gestion_incidencias\Db\CustomField;
-use OCA\Gestion_incidencias\Db\CustomFieldMapper;
-use OCA\Gestion_incidencias\Db\IncidentType;
-use OCA\Gestion_incidencias\Db\IncidentTypeMapper;
-use OCA\Gestion_incidencias\Db\NotificationPreference;
-use OCA\Gestion_incidencias\Db\NotificationPreferenceMapper;
-use OCA\Gestion_incidencias\Db\Urgency;
-use OCA\Gestion_incidencias\Db\UrgencyMapper;
+use OCA\ConsultasLegales\Db\AppSetting;
+use OCA\ConsultasLegales\Db\AppSettingMapper;
+use OCA\ConsultasLegales\Db\AssignmentRule;
+use OCA\ConsultasLegales\Db\AssignmentRuleMapper;
+use OCA\ConsultasLegales\Db\CustomField;
+use OCA\ConsultasLegales\Db\CustomFieldMapper;
+use OCA\ConsultasLegales\Db\IncidentType;
+use OCA\ConsultasLegales\Db\IncidentTypeMapper;
+use OCA\ConsultasLegales\Db\NotificationPreference;
+use OCA\ConsultasLegales\Db\NotificationPreferenceMapper;
+use OCA\ConsultasLegales\Db\Urgency;
+use OCA\ConsultasLegales\Db\UrgencyMapper;
 
 class DefaultConfigService {
 	private bool $ensured = false;
@@ -47,14 +47,7 @@ class DefaultConfigService {
 
 	private function ensureSettings(): void {
 		$settings = [
-			'status_catalog' => [
-				['id' => 'nuevo', 'label' => 'Nuevo'],
-				['id' => 'asignado', 'label' => 'Asignado'],
-				['id' => 'en_espera_usuario', 'label' => 'En espera usuario'],
-				['id' => 'en_progreso', 'label' => 'En progreso'],
-				['id' => 'resuelto', 'label' => 'Resuelto'],
-				['id' => 'cerrado', 'label' => 'Cerrado'],
-			],
+			'status_catalog' => CatalogService::getDefaultStatusCatalog(),
 			'tasks_config' => [
 				'enabled' => true,
 				'defaultStrategy' => 'firstWritable',
@@ -65,12 +58,25 @@ class DefaultConfigService {
 				'allowUserOverrides' => true,
 			],
 			'attachment_config' => [
-				'allowedExtensions' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'tif', 'tiff'],
+				'allowedExtensions' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'tif', 'tiff', 'mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac', 'flac', 'opus', 'wma', 'mp4', 'm4v', 'mov', 'avi', 'mkv', 'webm', 'mpeg', 'mpg', '3gp', 'wmv', 'ogv'],
+				'maxFileSizeMb' => 25,
 			],
 		];
 
 		foreach ($settings as $key => $value) {
-			if ($this->settingMapper->findOneBy('config_key', $key) instanceof AppSetting) {
+			$existing = $this->settingMapper->findOneBy('config_key', $key);
+			if ($existing instanceof AppSetting) {
+				if ($key === 'status_catalog') {
+					$existing->setConfigValue(CatalogService::getDefaultStatusCatalogFromCurrent($existing->getConfigValue()));
+					$this->settingMapper->update($existing);
+				} elseif ($key === 'attachment_config') {
+					$current = is_array($existing->getConfigValue()) ? $existing->getConfigValue() : [];
+					$currentExtensions = is_array($current['allowedExtensions'] ?? null) ? $current['allowedExtensions'] : [];
+					$current['allowedExtensions'] = array_values(array_unique(array_filter(array_map(static fn ($extension) => is_string($extension) ? strtolower(trim(ltrim($extension, '.'))) : '', array_merge($value['allowedExtensions'], $currentExtensions)), static fn (string $extension): bool => $extension !== '')));
+					$current['maxFileSizeMb'] = max(1, (int) ($current['maxFileSizeMb'] ?? $value['maxFileSizeMb']));
+					$existing->setConfigValue($current);
+					$this->settingMapper->update($existing);
+				}
 				continue;
 			}
 

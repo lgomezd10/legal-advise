@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Controller;
+namespace OCA\ConsultasLegales\Controller;
 
-use OCA\Gestion_incidencias\AppInfo\Application;
-use OCA\Gestion_incidencias\Service\BootstrapService;
+use OCA\ConsultasLegales\AppInfo\Application;
+use OCA\ConsultasLegales\Service\BootstrapService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;

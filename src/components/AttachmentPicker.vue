@@ -1,0 +1,307 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import type { TicketAttachmentLinkDraft } from '@/types'
+
+type AttachmentDraft = {
+	files: File[]
+	links: TicketAttachmentLinkDraft[]
+}
+
+const props = withDefaults(defineProps<{
+	modelValue?: AttachmentDraft | null
+	allowedExtensions?: string[]
+	maxFileSizeMb?: number
+}>(), {
+	modelValue: null,
+	allowedExtensions: () => [],
+	maxFileSizeMb: 25,
+})
+
+const emit = defineEmits<{
+	(e: 'update:modelValue', value: AttachmentDraft): void
+}>()
+
+const files = ref<File[]>([])
+const links = ref<TicketAttachmentLinkDraft[]>([])
+const errorMessage = ref('')
+const oversizeModalOpen = ref(false)
+const oversizeFileName = ref('')
+const urlModalOpen = ref(false)
+const urlDraft = ref<TicketAttachmentLinkDraft>({ url: '', label: '' })
+const urlError = ref('')
+
+const normalizedAllowedExtensions = computed(() => (props.allowedExtensions ?? []).map((extension: string) => extension.trim().toLowerCase()).filter((extension: string) => extension !== ''))
+const allowedExtensionsAccept = computed(() => normalizedAllowedExtensions.value.map((extension: string) => `.${extension}`).join(','))
+const allowedExtensionsLabel = computed(() => normalizedAllowedExtensions.value.map((extension: string) => `.${extension}`).join(', '))
+const maxFileSizeBytes = computed(() => Math.max(1, props.maxFileSizeMb) * 1024 * 1024)
+
+watch(() => props.modelValue, (value) => {
+	files.value = [...(value?.files ?? [])]
+	links.value = [...(value?.links ?? [])]
+}, { immediate: true, deep: true })
+
+function emitValue() {
+	emit('update:modelValue', { files: [...files.value], links: [...links.value] })
+}
+
+function onFileChange(event: Event) {
+	const input = event.target as HTMLInputElement
+	const nextFiles = Array.from(input.files ?? [])
+	if (nextFiles.length === 0) {
+		return
+	}
+
+	const invalidFile = nextFiles.find((file) => !normalizedAllowedExtensions.value.includes(file.name.split('.').pop()?.toLowerCase() ?? ''))
+	if (invalidFile) {
+		errorMessage.value = `La extension de ${invalidFile.name} no esta permitida.`
+		input.value = ''
+		return
+	}
+
+	const oversizeFile = nextFiles.find((file) => file.size > maxFileSizeBytes.value)
+	if (oversizeFile) {
+		oversizeFileName.value = oversizeFile.name
+		oversizeModalOpen.value = true
+		errorMessage.value = ''
+		input.value = ''
+		return
+	}
+
+	const knownKeys = new Set(files.value.map((file) => `${file.name}:${file.size}:${file.lastModified}`))
+	for (const file of nextFiles) {
+		const key = `${file.name}:${file.size}:${file.lastModified}`
+		if (!knownKeys.has(key)) {
+			files.value.push(file)
+			knownKeys.add(key)
+		}
+	}
+
+	errorMessage.value = ''
+	input.value = ''
+	emitValue()
+}
+
+function removeFile(index: number) {
+	files.value.splice(index, 1)
+	emitValue()
+}
+
+function removeLink(index: number) {
+	links.value.splice(index, 1)
+	emitValue()
+}
+
+function closeOversizeModal() {
+	oversizeModalOpen.value = false
+	oversizeFileName.value = ''
+}
+
+function openUrlModal() {
+	urlDraft.value = { url: '', label: '' }
+	urlError.value = ''
+	urlModalOpen.value = true
+	closeOversizeModal()
+}
+
+function closeUrlModal() {
+	urlModalOpen.value = false
+	urlError.value = ''
+	urlDraft.value = { url: '', label: '' }
+}
+
+function saveUrl() {
+	const normalizedUrl = urlDraft.value.url.trim()
+	if (normalizedUrl === '') {
+		urlError.value = 'Debes indicar una ruta URL.'
+		return
+	}
+
+	try {
+		new URL(normalizedUrl)
+	} catch {
+		urlError.value = 'La ruta URL no es valida.'
+		return
+	}
+
+	links.value.push({
+		url: normalizedUrl,
+		label: urlDraft.value.label.trim() || normalizedUrl,
+	})
+	closeUrlModal()
+	emitValue()
+	}
+</script>
+
+<template>
+	<div class="gi-attachment-picker">
+		<div class="gi-attachment-picker__toolbar">
+			<label class="gi-secondary-button gi-attachment-picker__trigger" for="attachment-picker-input">Adjuntar archivos</label>
+			<input id="attachment-picker-input" class="gi-attachment-picker__input" type="file" multiple :accept="allowedExtensionsAccept" @change="onFileChange" />
+			<button class="gi-secondary-button" type="button" @click="openUrlModal">Adjuntar URL</button>
+			<span v-if="allowedExtensionsLabel" class="gi-attachment-picker__helper">Permitidos: {{ allowedExtensionsLabel }}</span>
+			<span class="gi-attachment-picker__helper">Maximo: {{ maxFileSizeMb }} MB</span>
+		</div>
+
+		<ul v-if="files.length || links.length" class="gi-attachment-picker__list">
+			<li v-for="(file, index) in files" :key="`${file.name}-${file.size}-${file.lastModified}`" class="gi-attachment-picker__item">
+				<span>{{ file.name }}</span>
+				<button class="gi-tertiary-button" type="button" @click="removeFile(index)">Quitar</button>
+			</li>
+			<li v-for="(link, index) in links" :key="`${link.url}-${index}`" class="gi-attachment-picker__item">
+				<span>{{ link.label }}</span>
+				<button class="gi-tertiary-button" type="button" @click="removeLink(index)">Quitar</button>
+			</li>
+		</ul>
+
+		<p v-if="errorMessage" class="gi-form-error">{{ errorMessage }}</p>
+
+		<div v-if="oversizeModalOpen" class="gi-filter-modal-backdrop" @click.self="closeOversizeModal">
+			<section class="gi-filter-save-modal" aria-label="Archivo demasiado grande">
+				<header class="gi-filter-modal__header">
+					<h3>Archivo demasiado grande</h3>
+					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeOversizeModal">x</button>
+				</header>
+				<p class="gi-filter-save-modal__message gi-filter-save-modal__message--neutral">
+					{{ oversizeFileName }} supera el tamano maximo configurado. Para videos grandes, adjunta la ruta web del archivo.
+				</p>
+				<footer class="gi-filter-modal__footer">
+					<button class="gi-ghost-button" type="button" @click="closeOversizeModal">Cancelar</button>
+					<button class="gi-primary-button" type="button" @click="openUrlModal">Adjuntar URL</button>
+				</footer>
+			</section>
+		</div>
+
+		<div v-if="urlModalOpen" class="gi-filter-modal-backdrop" @click.self="closeUrlModal">
+			<section class="gi-filter-save-modal" aria-label="Adjuntar URL">
+				<header class="gi-filter-modal__header">
+					<h3>Adjuntar URL</h3>
+					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeUrlModal">x</button>
+				</header>
+				<label class="gi-field">
+					<span>Ruta URL</span>
+					<input v-model="urlDraft.url" class="gi-input" placeholder="https://..." />
+				</label>
+				<label class="gi-field">
+					<span>Nombre visible</span>
+					<input v-model="urlDraft.label" class="gi-input" placeholder="Video reunion.mp4" />
+				</label>
+				<p v-if="urlError" class="gi-form-error">{{ urlError }}</p>
+				<footer class="gi-filter-modal__footer">
+					<button class="gi-ghost-button" type="button" @click="closeUrlModal">Cancelar</button>
+					<button class="gi-primary-button" type="button" @click="saveUrl">Guardar URL</button>
+				</footer>
+			</section>
+		</div>
+	</div>
+</template>
+
+<style scoped>
+.gi-attachment-picker {
+	display: grid;
+	gap: .75rem;
+}
+
+.gi-attachment-picker__toolbar {
+	display: flex;
+	gap: .65rem;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.gi-attachment-picker__trigger {
+	cursor: pointer;
+}
+
+.gi-attachment-picker__input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.gi-attachment-picker__helper {
+	color: #5f726b;
+	font-size: .9rem;
+}
+
+.gi-attachment-picker__list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: grid;
+	gap: .45rem;
+}
+
+.gi-attachment-picker__item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: .75rem;
+	padding: .65rem .8rem;
+	border: 1px solid rgba(33, 53, 68, .12);
+	border-radius: 12px;
+	background: rgba(255, 255, 255, .7);
+}
+
+.gi-filter-modal-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(24, 38, 34, .34);
+	display: grid;
+	place-items: center;
+	padding: 1rem;
+	z-index: 80;
+}
+
+.gi-filter-save-modal {
+	width: min(30rem, 100%);
+	min-height: min(20rem, calc(100vh - 2rem));
+	max-height: calc(100vh - 2rem);
+	overflow: auto;
+	display: grid;
+	gap: 1rem;
+	padding: 1rem;
+	border-radius: 22px;
+	background: rgba(255, 255, 255, .99);
+	box-shadow: 0 24px 64px rgba(20, 34, 30, .18);
+}
+
+.gi-filter-modal__header,
+.gi-filter-modal__footer {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: .75rem;
+}
+
+.gi-filter-modal__header h3 {
+	margin: 0;
+}
+
+.gi-filter-save-modal__message {
+	margin: 0;
+	color: #7b3d23;
+	font-weight: 600;
+}
+
+.gi-filter-save-modal__message--neutral {
+	color: #2b4c44;
+}
+
+.gi-modal-close {
+	width: 2rem;
+	height: 2rem;
+	display: inline-grid;
+	place-items: center;
+	border: 1px solid rgba(33, 79, 69, .18);
+	border-radius: 999px;
+	background: rgba(255, 255, 255, .9);
+	color: #255d52;
+	font: inherit;
+	line-height: 1;
+	padding: 0;
+	cursor: pointer;
+	flex: none;
+}
+</style>

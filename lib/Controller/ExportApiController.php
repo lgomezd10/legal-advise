@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Controller;
+namespace OCA\ConsultasLegales\Controller;
 
-use OCA\Gestion_incidencias\Service\ExportService;
+use OCA\ConsultasLegales\Service\ExportService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\IRequest;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Migration;
+namespace OCA\ConsultasLegales\Migration;
 
 use Closure;
 use OCP\DB\ISchemaWrapper;

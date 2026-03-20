@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Notification;
+namespace OCA\ConsultasLegales\Notification;
 
-use OCA\Gestion_incidencias\AppInfo\Application;
+use OCA\ConsultasLegales\AppInfo\Application;
 use OCP\L10N\IFactory;
 use OCP\Notification\INotification;
 use OCP\Notification\INotifier;
@@ -23,19 +23,68 @@ class Notifier implements INotifier {
 
 	public function prepare(INotification $notification, string $languageCode): INotification {
 		$l = $this->l10nFactory->get(Application::APP_ID, $languageCode);
-		$subject = $notification->getSubject() ?: 'ticket_update';
+		$subject = $notification->getSubject() ?: 'ticket_updated';
 		$params = $notification->getSubjectParameters();
+		$number = $params['number'] ?? '';
+		$title = $params['title'] ?? '';
+		$statusLabel = $this->getStatusLabel((string) ($params['status'] ?? ''));
+		$recipientRole = (string) ($params['recipientRole'] ?? 'watcher');
 
-		if ($subject === 'ticket_update') {
-			$number = $params['number'] ?? '';
-			$title = $params['title'] ?? '';
-			$notification->setParsedSubject($l->t('Consulta %1$s actualizada: %2$s', [$number, $title]));
-		}
+		switch ($subject) {
+			case 'ticket_created':
+				if ($recipientRole === 'assignee') {
+					$notification->setParsedSubject($l->t('Consulta %1$s asignada: %2$s', [$number, $title]));
+					$notification->setParsedMessage($l->t('Se le ha asignado una nueva consulta legal.'));
+					break;
+				}
 
-		if ($notification->getParsedMessage() === '') {
-			$notification->setParsedMessage($l->t('Hay actividad nueva en una consulta legal asignada o seguida por usted.'));
+				$notification->setParsedSubject($l->t('Consulta %1$s creada: %2$s', [$number, $title]));
+				$notification->setParsedMessage($l->t('Su consulta legal se ha registrado correctamente.'));
+				break;
+
+			case 'ticket_assigned':
+				$notification->setParsedSubject($l->t('Consulta %1$s asignada: %2$s', [$number, $title]));
+				$notification->setParsedMessage(
+					$recipientRole === 'assignee'
+						? $l->t('Se le ha asignado esta consulta legal.')
+						: $l->t('La consulta legal ha sido asignada para su gestion.')
+				);
+				break;
+
+			case 'ticket_status_changed':
+				$notification->setParsedSubject($l->t('Estado actualizado en la consulta %1$s: %2$s', [$number, $title]));
+				$notification->setParsedMessage($l->t('La consulta legal ha cambiado de estado a %1$s.', [$statusLabel]));
+				break;
+
+			case 'ticket_resolved':
+				$notification->setParsedSubject($l->t('Consulta %1$s resuelta: %2$s', [$number, $title]));
+				$notification->setParsedMessage($l->t('La consulta legal ha quedado resuelta.'));
+				break;
+
+			case 'ticket_public_reply':
+				$notification->setParsedSubject($l->t('Nueva respuesta en la consulta %1$s: %2$s', [$number, $title]));
+				$notification->setParsedMessage($l->t('Hay un nuevo comentario en la consulta legal.'));
+				break;
+
+			case 'ticket_update':
+			case 'ticket_updated':
+			default:
+				$notification->setParsedSubject($l->t('Consulta %1$s actualizada: %2$s', [$number, $title]));
+				$notification->setParsedMessage($l->t('Se ha actualizado la informacion de la consulta legal.'));
+				break;
 		}
 
 		return $notification;
+	}
+
+	private function getStatusLabel(string $status): string {
+		return match ($status) {
+			'nuevo' => 'Nuevo',
+			'asignado' => 'Asignado',
+			'en_progreso' => 'En progreso',
+			'resuelto' => 'Resuelto',
+			'cerrado' => 'Cerrado',
+			default => $status,
+		};
 	}
 }

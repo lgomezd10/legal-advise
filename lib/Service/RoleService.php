@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Service;
+namespace OCA\ConsultasLegales\Service;
 
-use OCA\Gestion_incidencias\Db\ProfileAssignmentMapper;
+use OCA\ConsultasLegales\Db\ProfileAssignmentMapper;
 use OCP\IGroupManager;
 use OCP\IUserManager;
 

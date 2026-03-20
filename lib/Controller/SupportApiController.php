@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Controller;
+namespace OCA\ConsultasLegales\Controller;
 
-use OCA\Gestion_incidencias\Service\SupportFilterService;
+use OCA\ConsultasLegales\Service\SupportFilterService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\IRequest;
@@ -18,13 +18,32 @@ class SupportApiController extends BaseApiController {
 	#[NoAdminRequired]
 	public function filters(): DataResponse {
 		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		return $this->ok(['items' => $this->supportFilterService->list($uid)]);
+		return $this->ok(['items' => $this->supportFilterService->listForConsole($uid)]);
 	}
 
 	#[NoAdminRequired]
 	public function saveFilter(): DataResponse {
 		$uid = $this->userSession->getUser()?->getUID() ?? '';
 		return $this->created($this->supportFilterService->save($uid, $this->request->getParams()));
+	}
+
+	#[NoAdminRequired]
+	public function filterSettings(): DataResponse {
+		$uid = $this->userSession->getUser()?->getUID() ?? '';
+		return $this->ok(['items' => $this->supportFilterService->listForUserSettings($uid)]);
+	}
+
+	#[NoAdminRequired]
+	public function updateFilterSettings(): DataResponse {
+		$uid = $this->userSession->getUser()?->getUID() ?? '';
+		$items = $this->request->getParam('items') ?? [];
+		return $this->ok(['items' => $this->supportFilterService->saveUserSettings($uid, is_array($items) ? $items : [])]);
+	}
+
+	#[NoAdminRequired]
+	public function restoreFilterSettings(): DataResponse {
+		$uid = $this->userSession->getUser()?->getUID() ?? '';
+		return $this->ok(['items' => $this->supportFilterService->restoreUserSettings($uid)]);
 	}
 
 	#[NoAdminRequired]

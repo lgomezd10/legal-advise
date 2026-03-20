@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Service;
+namespace OCA\ConsultasLegales\Service;
 
-use OCA\Gestion_incidencias\AppInfo\Application;
-use OCA\Gestion_incidencias\Db\TaskSync;
-use OCA\Gestion_incidencias\Db\TaskSyncMapper;
-use OCA\Gestion_incidencias\Db\Ticket;
+use OCA\ConsultasLegales\AppInfo\Application;
+use OCA\ConsultasLegales\Db\TaskSync;
+use OCA\ConsultasLegales\Db\TaskSyncMapper;
+use OCA\ConsultasLegales\Db\Ticket;
 use OCP\App\IAppManager;
 use OCP\Calendar\ICreateFromString;
 use OCP\Calendar\IManager as CalendarManager;

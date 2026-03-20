@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\AppInfo;
+namespace OCA\ConsultasLegales\AppInfo;
 
-use OCA\Gestion_incidencias\Notification\Notifier;
+use OCA\ConsultasLegales\Notification\Notifier;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;

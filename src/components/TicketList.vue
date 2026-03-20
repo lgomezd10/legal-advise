@@ -17,18 +17,17 @@ function formatDate(timestamp: number) {
 
 <template>
 	<div class="gi-list">
-		<button v-for="ticket in tickets" :key="ticket.id" class="gi-ticket-card" @click="emit('open', ticket.id)">
+		<button v-for="ticket in tickets" :key="ticket.id" class="gi-ticket-card" :class="{ 'gi-ticket-card--waiting': ticket.status === 'en_espera_usuario' }" @click="emit('open', ticket.id)">
 			<div class="gi-ticket-card__header">
-				<strong>{{ ticket.number }}</strong>
+				<div class="gi-ticket-card__summary">
+					<strong>{{ ticket.number }}</strong>
+					<span>{{ formatDate(ticket.createdAt) }}</span>
+				</div>
 				<span class="gi-badge">{{ ticket.status }}</span>
 			</div>
-			<h3>{{ ticket.title }}</h3>
-			<p>{{ ticket.userDescription }}</p>
-			<div class="gi-ticket-card__meta">
-				<span>{{ formatDate(ticket.createdAt) }}</span>
-				<span>{{ ticket.province || 'Sin provincia' }}</span>
-				<span>{{ ticket.city || 'Sin ciudad' }}</span>
-				<span v-if="ticket.assignedUserUid || ticket.assignedGroupId">{{ ticket.assignedUserUid || ticket.assignedGroupId }}</span>
+			<div class="gi-ticket-card__content">
+				<h3>{{ ticket.title }}</h3>
+				<p>{{ ticket.userDescription }}</p>
 			</div>
 		</button>
 		<div v-if="tickets.length === 0" class="gi-empty-state">
@@ -53,11 +52,25 @@ function formatDate(timestamp: number) {
 	box-shadow: 0 12px 28px rgba(34, 62, 55, .06);
 }
 
+.gi-ticket-card--waiting {
+	background: linear-gradient(180deg, rgba(235, 248, 238, .98), rgba(221, 241, 226, .94));
+	border-color: rgba(55, 128, 82, .24);
+	box-shadow: 0 14px 32px rgba(49, 123, 75, .12);
+}
+
 .gi-ticket-card__header,
-.gi-ticket-card__meta {
+.gi-ticket-card__summary {
 	display: flex;
 	justify-content: space-between;
 	gap: 1rem;
+	align-items: center;
+}
+
+.gi-ticket-card__summary {
+	min-width: 0;
+	flex-wrap: wrap;
+	color: #61746d;
+	font-size: .84rem;
 }
 
 .gi-ticket-card p {
@@ -68,14 +81,16 @@ function formatDate(timestamp: number) {
 	overflow: hidden;
 }
 
-.gi-ticket-card h3 {
-	margin: .7rem 0 .45rem;
+.gi-ticket-card__content {
+	margin-top: .7rem;
 }
 
-.gi-ticket-card__meta {
-	flex-wrap: wrap;
-	color: #61746d;
-	font-size: .84rem;
-	margin-top: .8rem;
+.gi-ticket-card h3 {
+	margin: 0 0 .25rem;
+	font-size: 1rem;
+}
+
+.gi-ticket-card p {
+	margin: 0;
 }
 </style>

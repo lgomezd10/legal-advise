@@ -10,6 +10,8 @@ const props = withDefaults(defineProps<{
 	emptyLabel?: string
 	clearable?: boolean
 	disabled?: boolean
+	allowCreate?: boolean
+	createLabel?: string
 }>(), {
 	modelValue: null,
 	placeholder: 'Selecciona',
@@ -17,6 +19,8 @@ const props = withDefaults(defineProps<{
 	emptyLabel: 'Sin resultados',
 	clearable: false,
 	disabled: false,
+	allowCreate: false,
+	createLabel: 'Anadir',
 })
 
 const emit = defineEmits<{
@@ -51,6 +55,19 @@ const filteredOptions = computed(() => {
 	}
 
 	return safeOptions.value.filter((option: SearchableSelectOption) => `${option.label} ${option.searchText ?? ''}`.toLowerCase().includes(term))
+})
+
+const canCreateOption = computed(() => {
+	if (!props.allowCreate) {
+		return false
+	}
+
+	const trimmed = query.value.trim()
+	if (trimmed === '') {
+		return false
+	}
+
+	return !safeOptions.value.some((option: SearchableSelectOption) => option.label.trim().toLowerCase() === trimmed.toLowerCase())
 })
 
 function closeDropdown() {
@@ -119,6 +136,9 @@ onBeforeUnmount(() => {
 				Limpiar seleccion
 			</button>
 			<div class="gi-search-select__options">
+				<button v-if="canCreateOption" class="gi-search-select__option gi-search-select__option--create" type="button" @click="selectOption(query.trim())">
+					{{ createLabel }} "{{ query.trim() }}"
+				</button>
 				<button
 					v-for="option in filteredOptions"
 					:key="`${option.value}`"
@@ -245,6 +265,12 @@ onBeforeUnmount(() => {
 .gi-search-select__option--active {
 	background: rgba(49, 96, 91, .1);
 	color: #214f45;
+}
+
+.gi-search-select__option--create {
+	font-weight: 600;
+	border: 1px dashed rgba(49, 96, 91, .24);
+	background: rgba(239, 245, 241, .92);
 }
 
 .gi-search-select__option--disabled {

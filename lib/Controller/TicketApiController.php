@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Controller;
+namespace OCA\ConsultasLegales\Controller;
 
-use OCA\Gestion_incidencias\Service\AttachmentService;
-use OCA\Gestion_incidencias\Service\TicketService;
+use OCA\ConsultasLegales\Service\AttachmentService;
+use OCA\ConsultasLegales\Service\TicketService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\IRequest;
@@ -58,7 +58,16 @@ class TicketApiController extends BaseApiController {
 	public function uploadAttachment(int $id): DataResponse {
 		$uid = $this->userSession->getUser()?->getUID() ?? '';
 		$commentId = (int) ($this->request->getParam('commentId') ?? 0);
-		return $this->created($this->ticketService->addAttachment($uid, $id, $this->request->getUploadedFile('file'), $commentId));
+		$sourceUrl = $this->request->getParam('sourceUrl');
+		$originalName = $this->request->getParam('originalName');
+		return $this->created($this->ticketService->addAttachment(
+			$uid,
+			$id,
+			$this->request->getUploadedFile('file') ?? [],
+			$commentId,
+			is_string($sourceUrl) ? $sourceUrl : null,
+			is_string($originalName) ? $originalName : null,
+		));
 	}
 
 	#[NoAdminRequired]

@@ -32,7 +32,7 @@ body {
 .gi-page__header {
 	display: flex;
 	justify-content: space-between;
-	align-items: center;
+	align-items: flex-start;
 	gap: 1rem;
 	margin-bottom: 1.2rem;
 }

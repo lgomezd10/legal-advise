@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Service;
+namespace OCA\ConsultasLegales\Service;
 
 use OCP\IGroupManager;
 use OCP\IUserManager;
@@ -32,9 +32,8 @@ class BootstrapService {
 
 		$navigation = [
 			['id' => 'mis-incidencias', 'label' => 'Mis incidencias', 'route' => '/mis-incidencias', 'visible' => in_array(RoleService::USER, $roles, true)],
-			['id' => 'configuracion-personal', 'label' => 'Configuracion personal', 'route' => '/configuracion-personal', 'visible' => in_array(RoleService::USER, $roles, true)],
 			['id' => 'soporte', 'label' => 'Consola de soporte', 'route' => '/soporte', 'visible' => in_array(RoleService::SUPPORT, $roles, true) || in_array(RoleService::ADMIN, $roles, true)],
-			['id' => 'admin', 'label' => 'Administración', 'route' => '/administracion', 'visible' => in_array(RoleService::ADMIN, $roles, true)],
+			['id' => 'configuracion', 'label' => 'Configuracion', 'route' => '/configuracion', 'visible' => $roles !== []],
 		];
 
 		$assignableUsers = $this->loadAssignableUsers();
@@ -55,7 +54,7 @@ class BootstrapService {
 				'provinces' => $this->provinceCatalogService->list(),
 				'attachmentConfig' => $this->catalogService->getAttachmentConfig(),
 			],
-			'supportFilters' => $uid === '' ? [] : $this->supportFilterService->list($uid),
+			'supportFilters' => $uid === '' ? [] : $this->supportFilterService->listForConsole($uid),
 			'personalConfig' => $uid === '' ? [] : $this->personalConfigService->getForUser($uid),
 			'assignables' => [
 				'users' => $assignableUsers,

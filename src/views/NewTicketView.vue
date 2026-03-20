@@ -23,22 +23,14 @@ const provinceOptions = computed<SearchableSelectOption[]>(() => bootstrapStore.
 const draft = computed(() => ticketsStore.draft ?? createDefaultTicketDraft(bootstrapStore.data.personalConfig, urgencies.value))
 const selectedPath = ref<number[]>([...(draft.value.selectedPath ?? [])])
 const selectedProvince = ref<string | null>(draft.value.province ?? null)
-const withoutProvince = ref(Boolean(draft.value.withoutProvince ?? false))
-const step = ref(selectedPath.value.length > 0 && (selectedProvince.value !== null || withoutProvince.value) ? 'details' : 'type')
+const step = ref(selectedPath.value.length > 0 && selectedProvince.value !== null ? 'details' : 'type')
 const typeSummary = computed(() => getTypeLabelsForPath(types.value, selectedPath.value))
-const provinceSummary = computed(() => withoutProvince.value ? 'Sin provincia' : (selectedProvince.value ?? 'Sin seleccionar'))
+const provinceSummary = computed(() => selectedProvince.value ?? 'Sin seleccionar')
 const typeStepError = ref('')
 
 if (!ticketsStore.draft) {
 	ticketsStore.replaceDraft(draft.value)
 }
-
-watch(withoutProvince, (nextValue) => {
-	if (nextValue) {
-		selectedProvince.value = null
-	}
-	typeStepError.value = ''
-})
 
 watch(selectedProvince, () => {
 	if (selectedProvince.value) {
@@ -51,15 +43,14 @@ function continueToDetails() {
 		return
 	}
 
-	if (!withoutProvince.value && !selectedProvince.value) {
-		typeStepError.value = 'Debes seleccionar una provincia o marcar "Sin provincia".'
+	if (!selectedProvince.value) {
+		typeStepError.value = 'Debes seleccionar una provincia o anadir una nueva.'
 		return
 	}
 
 	ticketsStore.mergeDraft({
 		selectedPath: [...selectedPath.value],
-		province: withoutProvince.value ? null : selectedProvince.value,
-		withoutProvince: withoutProvince.value,
+		province: selectedProvince.value,
 	})
 	typeStepError.value = ''
 	step.value = 'details'
@@ -77,8 +68,7 @@ function cancel() {
 async function submit(payload: Record<string, unknown>) {
 	const finalPayload = {
 		...payload,
-		province: withoutProvince.value ? null : selectedProvince.value,
-		withoutProvince: withoutProvince.value,
+		province: selectedProvince.value,
 	}
 	ticketsStore.mergeDraft(finalPayload as typeof draft.value)
 	await ticketsStore.create(finalPayload)
@@ -106,11 +96,7 @@ async function submit(payload: Record<string, unknown>) {
 			<TypeCascadeSelector v-model="selectedPath" :types="types" />
 			<label class="gi-field gi-field--wide">
 				<span>Provincia</span>
-				<SearchableSelect v-model="selectedProvince" :options="provinceOptions" placeholder="Selecciona provincia" search-placeholder="Buscar provincia" :disabled="withoutProvince" clearable />
-			</label>
-			<label class="gi-ticket-creation-card__checkbox">
-				<input v-model="withoutProvince" type="checkbox" />
-				<span>Sin provincia</span>
+				<SearchableSelect v-model="selectedProvince" :options="provinceOptions" placeholder="Selecciona provincia" search-placeholder="Buscar provincia" clearable allow-create create-label="Anadir provincia" />
 			</label>
 			<p v-if="typeStepError" class="gi-ticket-creation-card__error">{{ typeStepError }}</p>
 			<div class="gi-ticket-type-summary">
@@ -146,6 +132,8 @@ async function submit(payload: Record<string, unknown>) {
 				:types="types"
 				:fields="fields"
 				:urgencies="urgencies"
+				:allowed-extensions="bootstrapStore.data.catalogs.attachmentConfig.allowedExtensions"
+				:max-file-size-mb="bootstrapStore.data.catalogs.attachmentConfig.maxFileSizeMb"
 				:initial-draft="draft"
 				:locked-type-path="selectedPath"
 				@submit="submit"
@@ -199,14 +187,6 @@ async function submit(payload: Record<string, unknown>) {
 .gi-ticket-creation-card__type-path {
 	min-width: 0;
 	word-break: break-word;
-}
-
-.gi-ticket-creation-card__checkbox {
-	display: inline-flex;
-	align-items: center;
-	gap: .55rem;
-	font-weight: 600;
-	color: #274b43;
 }
 
 .gi-ticket-creation-card__error {

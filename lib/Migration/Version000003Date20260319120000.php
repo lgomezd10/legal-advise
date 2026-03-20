@@ -10,7 +10,7 @@ use OCP\DB\Types;
 use OCP\Migration\IOutput;
 use OCP\Migration\SimpleMigrationStep;
 
-class Version000002Date20260313113000 extends SimpleMigrationStep {
+class Version000003Date20260319120000 extends SimpleMigrationStep {
 	public function changeSchema(IOutput $output, Closure $schemaClosure, array $options): ?ISchemaWrapper {
 		/** @var ISchemaWrapper $schema */
 		$schema = $schemaClosure();
@@ -20,20 +20,8 @@ class Version000002Date20260313113000 extends SimpleMigrationStep {
 		}
 
 		$table = $schema->getTable('tk_attach');
-		if (!$table->hasColumn('comment_id')) {
-			$table->addColumn('comment_id', Types::INTEGER, ['notnull' => false]);
-		}
-
-		$hasCommentIndex = false;
-		foreach ($table->getIndexes() as $index) {
-			if ($index->getName() === 'tk_attach_comment_ix') {
-				$hasCommentIndex = true;
-				break;
-			}
-		}
-
-		if (!$hasCommentIndex) {
-			$table->addIndex(['comment_id'], 'tk_attach_comment_ix');
+		if (!$table->hasColumn('source_url')) {
+			$table->addColumn('source_url', Types::STRING, ['length' => 2048, 'notnull' => false]);
 		}
 
 		return $schema;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Db;
+namespace OCA\ConsultasLegales\Db;
 
 class ProfileAssignment extends AbstractEntity {
 	protected $profile;

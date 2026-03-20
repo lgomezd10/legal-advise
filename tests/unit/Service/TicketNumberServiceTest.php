@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Tests\Unit\Service;
+namespace OCA\ConsultasLegales\Tests\Unit\Service;
 
-use OCA\Gestion_incidencias\Db\TicketMapper;
-use OCA\Gestion_incidencias\Service\TicketNumberService;
+use OCA\ConsultasLegales\Db\TicketMapper;
+use OCA\ConsultasLegales\Service\TicketNumberService;
 use PHPUnit\Framework\TestCase;
 
 class TicketNumberServiceTest extends TestCase {

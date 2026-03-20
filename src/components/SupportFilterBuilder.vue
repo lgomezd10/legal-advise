@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import type { AssignableOption, SavedFilter, SearchableSelectOption, StatusOption, TypeNode } from '@/types'
 import SearchableSelect from './SearchableSelect.vue'
 
-type CriteriaKey = 'status' | 'assignedUser' | 'assignedGroup' | 'typeId' | 'city' | 'text' | 'updatedWithinDays' | 'unassigned'
+type CriteriaKey = 'status' | 'assignedUser' | 'assignedGroup' | 'typeId' | 'city' | 'text' | 'updatedWithinDays' | 'unassigned' | 'hasAttachments'
 
 type FilterCriteriaState = {
 	status: string[]
@@ -14,6 +14,7 @@ type FilterCriteriaState = {
 	text: string
 	updatedWithinDays: string
 	unassigned: boolean
+	hasAttachments: boolean
 }
 
 type FilterChip = {
@@ -27,6 +28,7 @@ const props = defineProps<{
 	types: TypeNode[]
 	users: AssignableOption[]
 	groups: AssignableOption[]
+	initialFilterId?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -44,6 +46,7 @@ const criteria = reactive<FilterCriteriaState>({
 	text: '',
 	updatedWithinDays: '',
 	unassigned: false,
+	hasAttachments: false,
 })
 
 const enabledCriteria = reactive<Record<CriteriaKey, boolean>>({
@@ -55,6 +58,7 @@ const enabledCriteria = reactive<Record<CriteriaKey, boolean>>({
 	text: false,
 	updatedWithinDays: false,
 	unassigned: false,
+	hasAttachments: false,
 })
 
 const draftCriteria = reactive<FilterCriteriaState>({
@@ -66,13 +70,18 @@ const draftCriteria = reactive<FilterCriteriaState>({
 	text: '',
 	updatedWithinDays: '',
 	unassigned: false,
+	hasAttachments: false,
 })
 
 const saveName = ref('')
-const selectedPredefined = ref('')
-const selectedCustom = ref('')
+const selectedFilter = ref('')
 const modalOpen = ref(false)
 const modalCriterionKey = ref<CriteriaKey | ''>('')
+const saveModalOpen = ref(false)
+const saveModalError = ref('')
+const deleteModalOpen = ref(false)
+const overwriteCandidateId = ref<number | null>(null)
+const initializedDefault = ref(false)
 
 function normalizeCollection<T>(items: T[] | Record<string, T> | undefined | null): T[] {
 	if (Array.isArray(items)) {
@@ -95,6 +104,7 @@ const criterionOptions: Array<{ key: CriteriaKey, label: string }> = [
 	{ key: 'text', label: 'Texto libre' },
 	{ key: 'updatedWithinDays', label: 'Fecha reciente' },
 	{ key: 'unassigned', label: 'Sin asignar' },
+	{ key: 'hasAttachments', label: 'Documentos adjuntos' },
 ]
 
 const safeFilters = computed<SavedFilter[]>(() => normalizeCollection<SavedFilter>(props.filters))
@@ -108,14 +118,13 @@ const customFilters = computed(() => safeFilters.value.filter((filter: SavedFilt
 const statusLabelMap = computed(() => new Map(safeStatuses.value.map((status: StatusOption) => [status.id, status.label])))
 const userLabelMap = computed(() => new Map(safeUsers.value.map((user: AssignableOption) => [user.id, user.displayName])))
 const groupLabelMap = computed(() => new Map(safeGroups.value.map((group: AssignableOption) => [group.id, group.displayName])))
-const predefinedFilterOptions = computed<SearchableSelectOption[]>(() => predefinedFilters.value.map((filter: SavedFilter) => ({
+const filterOptions = computed<SearchableSelectOption[]>(() => safeFilters.value.map((filter: SavedFilter) => ({
 	value: String(filter.id),
 	label: filter.name,
+	searchText: `${filter.name} ${filter.isPredefined ? 'predefinido' : 'guardado'}`,
 })))
-const customFilterOptions = computed<SearchableSelectOption[]>(() => customFilters.value.map((filter: SavedFilter) => ({
-	value: String(filter.id),
-	label: filter.name,
-})))
+const selectedSavedFilter = computed(() => safeFilters.value.find((item: SavedFilter) => item.id === Number(selectedFilter.value)) ?? null)
+const canDeleteSelectedFilter = computed(() => Boolean(selectedSavedFilter.value && !selectedSavedFilter.value.isPredefined))
 const criterionTypeOptions = computed<SearchableSelectOption[]>(() => criterionOptions.map((option: { key: CriteriaKey, label: string }) => ({
 	value: option.key,
 	label: option.label,
@@ -158,6 +167,9 @@ const activeCriteria = computed<Record<string, unknown>>(() => {
 	if (enabledCriteria.unassigned && criteria.unassigned) {
 		next.unassigned = true
 	}
+	if (enabledCriteria.hasAttachments && criteria.hasAttachments) {
+		next.hasAttachments = true
+	}
 	return next
 })
 const activeFilterChips = computed<FilterChip[]>(() => {
@@ -186,10 +198,27 @@ const activeFilterChips = computed<FilterChip[]>(() => {
 	if (enabledCriteria.unassigned && criteria.unassigned) {
 		chips.push({ key: 'unassigned', label: 'Sin asignar' })
 	}
+	if (enabledCriteria.hasAttachments && criteria.hasAttachments) {
+		chips.push({ key: 'hasAttachments', label: 'Con adjuntos' })
+	}
 	return chips
 })
 
 watch(activeCriteria, (value) => emit('apply', value), { deep: true, immediate: true })
+
+watch(() => [props.initialFilterId, safeFilters.value], ([initialFilterId]) => {
+	if (initializedDefault.value || !initialFilterId) {
+		return
+	}
+
+	const filter = safeFilters.value.find((item: SavedFilter) => item.id === Number(initialFilterId))
+	if (!filter) {
+		return
+	}
+
+	initializedDefault.value = true
+	applyFilter(filter)
+}, { deep: true, immediate: true })
 
 function flattenTypes(types: TypeNode[], prefix = ''): Array<{ id: number, label: string }> {
 	return types.flatMap((item) => {
@@ -219,6 +248,8 @@ function clearCriterionValue(key: CriteriaKey) {
 		criteria.text = ''
 	} else if (key === 'updatedWithinDays') {
 		criteria.updatedWithinDays = ''
+	} else if (key === 'hasAttachments') {
+		criteria.hasAttachments = false
 	} else {
 		criteria.unassigned = false
 	}
@@ -233,6 +264,7 @@ function resetDraft() {
 	draftCriteria.text = ''
 	draftCriteria.updatedWithinDays = ''
 	draftCriteria.unassigned = false
+	draftCriteria.hasAttachments = false
 	modalCriterionKey.value = ''
 }
 
@@ -245,12 +277,22 @@ function loadDraftForCriterion(key: CriteriaKey) {
 	draftCriteria.text = key === 'text' ? criteria.text : ''
 	draftCriteria.updatedWithinDays = key === 'updatedWithinDays' ? criteria.updatedWithinDays : ''
 	draftCriteria.unassigned = key === 'unassigned' ? criteria.unassigned : true
+	draftCriteria.hasAttachments = key === 'hasAttachments' ? criteria.hasAttachments : true
 	modalCriterionKey.value = key
 }
 
 function openAddCriterionModal() {
 	resetDraft()
 	modalOpen.value = true
+}
+
+function openSaveModal() {
+	saveModalError.value = ''
+	overwriteCandidateId.value = null
+	if (!saveName.value.trim()) {
+		saveName.value = getSuggestedSaveName()
+	}
+	saveModalOpen.value = true
 }
 
 function onModalCriterionChange(value: string) {
@@ -265,6 +307,23 @@ function onModalCriterionChange(value: string) {
 function closeAddCriterionModal() {
 	modalOpen.value = false
 	resetDraft()
+}
+
+function closeSaveModal() {
+	saveModalOpen.value = false
+	saveModalError.value = ''
+	overwriteCandidateId.value = null
+}
+
+function openDeleteModal() {
+	if (!selectedSavedFilter.value || selectedSavedFilter.value.isPredefined) {
+		return
+	}
+	deleteModalOpen.value = true
+}
+
+function closeDeleteModal() {
+	deleteModalOpen.value = false
 }
 
 function hasDraftValue(key: CriteriaKey) {
@@ -288,6 +347,9 @@ function hasDraftValue(key: CriteriaKey) {
 	}
 	if (key === 'updatedWithinDays') {
 		return Boolean(draftCriteria.updatedWithinDays)
+	}
+	if (key === 'hasAttachments') {
+		return draftCriteria.hasAttachments
 	}
 	return draftCriteria.unassigned
 }
@@ -313,13 +375,14 @@ function applyDraftCriterion() {
 		criteria.text = draftCriteria.text.trim()
 	} else if (key === 'updatedWithinDays') {
 		criteria.updatedWithinDays = draftCriteria.updatedWithinDays
+	} else if (key === 'hasAttachments') {
+		criteria.hasAttachments = true
 	} else {
 		criteria.unassigned = true
 	}
 
 	closeAddCriterionModal()
-	selectedPredefined.value = ''
-	selectedCustom.value = ''
+	selectedFilter.value = ''
 	if (key === 'unassigned') {
 		criteria.assignedUser = ''
 		criteria.assignedGroup = ''
@@ -328,14 +391,12 @@ function applyDraftCriterion() {
 		enabledCriteria.unassigned = false
 		criteria.unassigned = false
 	}
-	closeAddCriterionModal()
 }
 
 function removeCriterion(key: CriteriaKey) {
 	enabledCriteria[key] = false
 	clearCriterionValue(key)
-	selectedPredefined.value = ''
-	selectedCustom.value = ''
+	selectedFilter.value = ''
 }
 
 function resetBuilder() {
@@ -347,12 +408,12 @@ function resetBuilder() {
 	criteria.text = ''
 	criteria.updatedWithinDays = ''
 	criteria.unassigned = false
+	criteria.hasAttachments = false
 	for (const key of Object.keys(enabledCriteria) as CriteriaKey[]) {
 		enabledCriteria[key] = false
 	}
 	saveName.value = ''
-	selectedPredefined.value = ''
-	selectedCustom.value = ''
+	selectedFilter.value = ''
 	closeAddCriterionModal()
 	resetDraft()
 }
@@ -379,55 +440,72 @@ function applyFilter(filter: SavedFilter) {
 			criteria.text = String(rawValue)
 		} else if (key === 'updatedWithinDays') {
 			criteria.updatedWithinDays = String(rawValue)
+		} else if (key === 'hasAttachments') {
+			criteria.hasAttachments = Boolean(rawValue)
 		} else if (key === 'unassigned') {
 			criteria.unassigned = Boolean(rawValue)
 		}
 	}
 	saveName.value = filter.isPredefined ? `Copia de ${filter.name}` : filter.name
-	selectedPredefined.value = filter.isPredefined ? String(filter.id) : ''
-	selectedCustom.value = filter.isPredefined ? '' : String(filter.id)
+	selectedFilter.value = String(filter.id)
 }
 
-function saveCurrentFilter() {
-	emit('save', {
-		name: saveName.value.trim() || 'Nuevo filtro',
-		criteria: activeCriteria.value,
-	})
-	selectedPredefined.value = ''
-	selectedCustom.value = ''
-}
-
-function onPredefinedChange() {
-	const filter = predefinedFilters.value.find((item: SavedFilter) => item.id === Number(selectedPredefined.value))
-	if (filter) {
-		applyFilter(filter)
-	}
-	selectedCustom.value = ''
-}
-
-function onCustomChange() {
-	const filter = customFilters.value.find((item: SavedFilter) => item.id === Number(selectedCustom.value))
-	if (filter) {
-		applyFilter(filter)
-	}
-	selectedPredefined.value = ''
-}
-
-function onPredefinedSelect(value: string | number | null) {
-	selectedPredefined.value = value ? String(value) : ''
-	onPredefinedChange()
-}
-
-function onCustomSelect(value: string | number | null) {
-	selectedCustom.value = value ? String(value) : ''
-	onCustomChange()
-}
-
-function onDeleteSelect(value: string | number | null) {
-	if (!value) {
+function saveCurrentFilter(overwrite = false) {
+	const normalizedName = saveName.value.trim()
+	if (normalizedName === '') {
+		saveModalError.value = 'Debes asignar un nombre al filtro.'
 		return
 	}
-	emit('delete', Number(value))
+
+	const duplicate = safeFilters.value.find((filter: SavedFilter) => normalizeFilterName(filter.name) === normalizeFilterName(normalizedName))
+	if (duplicate) {
+		if (duplicate.isPredefined) {
+			overwriteCandidateId.value = null
+			saveModalError.value = 'Ese nombre pertenece a un filtro predefinido y no se puede sobreescribir. Asigna otro nombre.'
+			return
+		}
+
+		if (duplicate.scopeType !== 'user') {
+			overwriteCandidateId.value = null
+			saveModalError.value = 'Ese nombre ya existe en un filtro global y no se puede sobreescribir desde soporte. Asigna otro nombre.'
+			return
+		}
+
+		if (!overwrite || overwriteCandidateId.value !== duplicate.id) {
+			overwriteCandidateId.value = duplicate.id
+			saveModalError.value = 'Ese nombre ya existe. Si quieres, puedes sobrescribir ese filtro guardado.'
+			return
+		}
+	}
+
+	emit('save', {
+		name: normalizedName,
+		criteria: activeCriteria.value,
+		overwrite,
+	})
+	selectedFilter.value = ''
+	closeSaveModal()
+}
+
+function onFilterChange() {
+	const filter = safeFilters.value.find((item: SavedFilter) => item.id === Number(selectedFilter.value))
+	if (filter) {
+		applyFilter(filter)
+	}
+}
+
+function onFilterSelect(value: string | number | null) {
+	selectedFilter.value = value ? String(value) : ''
+	onFilterChange()
+}
+
+function deleteSelectedFilter() {
+	if (!selectedSavedFilter.value || selectedSavedFilter.value.isPredefined) {
+		return
+	}
+	emit('delete', selectedSavedFilter.value.id)
+	selectedFilter.value = ''
+	closeDeleteModal()
 }
 
 function onDraftAssignedUserSelect(value: string | number | null) {
@@ -464,37 +542,29 @@ function formatType(typeId: string) {
 	const selected = typeOptions.value.find((item) => item.id === Number(typeId))
 	return selected?.label ?? typeId
 }
+
+function normalizeFilterName(name: string) {
+	return name.trim().toLocaleLowerCase()
+}
+
+function getSuggestedSaveName() {
+	const activeFilter = safeFilters.value.find((item: SavedFilter) => item.id === Number(selectedFilter.value))
+	if (activeFilter) {
+		return activeFilter.isPredefined ? `Copia de ${activeFilter.name}` : activeFilter.name
+	}
+
+	return 'Nuevo filtro'
+}
 </script>
 
 <template>
 	<section class="gi-filter-panel">
-		<div class="gi-filter-panel__top">
-			<div>
-				<p class="gi-kicker">Soporte</p>
-				<h2>Filtros compactos</h2>
-			</div>
-			<div class="gi-filter-panel__actions">
-				<input v-model="saveName" class="gi-input gi-input--compact" placeholder="Nombre del filtro" />
-				<button class="gi-secondary-button" type="button" @click="saveCurrentFilter">Guardar filtro</button>
-				<button class="gi-ghost-button" type="button" @click="resetBuilder">Limpiar</button>
-			</div>
-		</div>
-
 		<div class="gi-filter-toolbar">
 			<label class="gi-field gi-filter-toolbar__field">
-				<span>Predefinidos</span>
-				<SearchableSelect :model-value="selectedPredefined || null" :options="predefinedFilterOptions" placeholder="Selecciona un filtro" @update:modelValue="onPredefinedSelect" />
+				<span class="gi-filter-toolbar__label">Filtros guardados</span>
+				<SearchableSelect :model-value="selectedFilter || null" :options="filterOptions" placeholder="Selecciona un filtro" @update:modelValue="onFilterSelect" />
 			</label>
-
-			<label v-if="customFilters.length > 0" class="gi-field gi-filter-toolbar__field">
-				<span>Guardados</span>
-				<SearchableSelect :model-value="selectedCustom || null" :options="customFilterOptions" placeholder="Selecciona un filtro" @update:modelValue="onCustomSelect" />
-			</label>
-
-			<div class="gi-field gi-filter-toolbar__field gi-filter-toolbar__action-field">
-				<span>Anadir filtro</span>
-				<button class="gi-secondary-button gi-filter-toolbar__button" type="button" @click="openAddCriterionModal">Abrir selector</button>
-			</div>
+			<button v-if="canDeleteSelectedFilter" class="gi-filter-toolbar__delete-button" type="button" @click="openDeleteModal">Eliminar filtro</button>
 		</div>
 
 		<div class="gi-filter-chip-bar">
@@ -507,24 +577,21 @@ function formatType(typeId: string) {
 					<span class="gi-filter-chip__text">{{ chip.label }}</span>
 					<button class="gi-filter-chip__remove" type="button" :aria-label="`Quitar ${chip.label}`" @click="removeCriterion(chip.key)">x</button>
 				</div>
+				<button class="gi-filter-chip-bar__add" type="button" aria-label="Anadir condicion" @click="openAddCriterionModal">+</button>
 			</div>
-		</div>
-
-		<div v-if="customFilters.length > 0" class="gi-filter-delete-row">
-			<label class="gi-field">
-				<span>Eliminar filtro guardado</span>
-				<SearchableSelect :model-value="null" :options="customFilterOptions" placeholder="Selecciona un filtro" @update:modelValue="onDeleteSelect" />
-			</label>
+			<div class="gi-filter-chip-bar__actions">
+				<button class="gi-filter-chip-bar__icon-action" type="button" aria-label="Guardar filtro" title="Guardar filtro" @click="openSaveModal">
+					<span aria-hidden="true">&#128190;</span>
+				</button>
+				<button class="gi-ghost-button gi-filter-chip-bar__text-action" type="button" @click="resetBuilder">Limpiar</button>
+			</div>
 		</div>
 
 		<div v-if="modalOpen" class="gi-filter-modal-backdrop" @click.self="closeAddCriterionModal">
 			<section class="gi-filter-modal" aria-label="Anadir filtro">
 				<header class="gi-filter-modal__header">
-					<div>
-						<h3>Anadir filtro</h3>
-						<p>Selecciona el criterio y asigna un valor antes de incorporarlo a la linea activa.</p>
-					</div>
-					<button class="gi-ghost-button" type="button" @click="closeAddCriterionModal">Cerrar</button>
+					<h3>Anadir filtro</h3>
+					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeAddCriterionModal">x</button>
 				</header>
 
 				<label class="gi-field">
@@ -570,6 +637,11 @@ function formatType(typeId: string) {
 						<input v-model="draftCriteria.updatedWithinDays" class="gi-input" inputmode="numeric" placeholder="30" />
 					</label>
 
+					<label v-else-if="modalCriterionKey === 'hasAttachments'" class="gi-switch-row gi-switch-row--modal">
+						<input v-model="draftCriteria.hasAttachments" type="checkbox" />
+						<span>Solo tickets con adjuntos o rutas URL</span>
+					</label>
+
 					<label v-else class="gi-switch-row gi-switch-row--modal">
 						<input v-model="draftCriteria.unassigned" type="checkbox" />
 						<span>Mostrar solo tickets sin usuario ni grupo asignado</span>
@@ -579,6 +651,46 @@ function formatType(typeId: string) {
 				<footer class="gi-filter-modal__footer">
 					<button class="gi-ghost-button" type="button" @click="closeAddCriterionModal">Cancelar</button>
 					<button class="gi-primary-button" type="button" :disabled="!modalCriterionKey || !hasDraftValue(modalCriterionKey)" @click="applyDraftCriterion">Anadir</button>
+				</footer>
+			</section>
+		</div>
+
+		<div v-if="saveModalOpen" class="gi-filter-modal-backdrop" @click.self="closeSaveModal">
+			<section class="gi-filter-save-modal" aria-label="Guardar filtro">
+				<header class="gi-filter-modal__header">
+					<h3>Guardar filtro</h3>
+					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeSaveModal">x</button>
+				</header>
+
+				<label class="gi-field">
+					<span>Nombre del filtro</span>
+					<input v-model="saveName" class="gi-input" placeholder="Nombre del filtro" />
+				</label>
+
+				<p v-if="saveModalError" class="gi-filter-save-modal__message">{{ saveModalError }}</p>
+
+				<footer class="gi-filter-modal__footer">
+					<button class="gi-ghost-button" type="button" @click="closeSaveModal">Cancelar</button>
+					<button v-if="overwriteCandidateId !== null" class="gi-secondary-button" type="button" @click="saveCurrentFilter(true)">Sobrescribir</button>
+					<button class="gi-primary-button" type="button" @click="saveCurrentFilter(false)">Guardar</button>
+				</footer>
+			</section>
+		</div>
+
+		<div v-if="deleteModalOpen" class="gi-filter-modal-backdrop" @click.self="closeDeleteModal">
+			<section class="gi-filter-save-modal" aria-label="Eliminar filtro guardado">
+				<header class="gi-filter-modal__header">
+					<h3>Eliminar filtro</h3>
+					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeDeleteModal">x</button>
+				</header>
+
+				<p class="gi-filter-save-modal__message gi-filter-save-modal__message--neutral">
+					¿Quieres eliminar <strong>{{ selectedSavedFilter?.name }}</strong>?
+				</p>
+
+				<footer class="gi-filter-modal__footer">
+					<button class="gi-ghost-button" type="button" @click="closeDeleteModal">Cancelar</button>
+					<button class="gi-secondary-button gi-filter-save-modal__danger" type="button" @click="deleteSelectedFilter">Eliminar</button>
 				</footer>
 			</section>
 		</div>
@@ -597,7 +709,6 @@ function formatType(typeId: string) {
 	margin-bottom: 1.2rem;
 }
 
-.gi-filter-panel__top,
 .gi-filter-panel__actions,
 .gi-filter-modal__header,
 .gi-filter-modal__footer,
@@ -607,7 +718,6 @@ function formatType(typeId: string) {
 	gap: .75rem;
 }
 
-.gi-filter-panel__top,
 .gi-filter-modal__header,
 .gi-filter-modal__footer,
 .gi-filter-chip,
@@ -622,29 +732,54 @@ function formatType(typeId: string) {
 }
 
 .gi-filter-toolbar {
-	display: grid;
-	gap: .85rem;
-	grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-	align-items: end;
+	display: flex;
+	gap: .75rem;
+	align-items: flex-end;
+	flex-wrap: wrap;
 }
 
 .gi-filter-toolbar__field {
 	min-width: 0;
+	flex: 1 1 22rem;
 }
 
-.gi-filter-toolbar__action-field {
-	align-self: stretch;
+.gi-filter-toolbar__delete-button {
+	flex: 0 0 auto;
+	min-height: 2.25rem;
+	padding: .42rem .9rem;
+	border: none;
+	border-radius: 999px;
+	background: rgba(148, 55, 31, .1);
+	color: #8f391d;
+	font: inherit;
+	cursor: pointer;
 }
 
-.gi-filter-toolbar__button {
-	width: 100%;
-	justify-content: center;
+.gi-filter-toolbar__label {
+	margin: 0;
+	font-size: .78rem;
+	font-weight: 700;
+	letter-spacing: .04em;
+	text-transform: uppercase;
+	color: #4b645d;
+	white-space: nowrap;
+}
+
+.gi-filter-toolbar__field :deep(.gi-search-select) {
+	flex: 1 1 auto;
+}
+
+.gi-filter-toolbar__field :deep(.gi-search-select__trigger) {
+	min-height: 2.25rem;
+	padding: .42rem .7rem;
+	border-radius: 999px;
+	font-size: .94rem;
 }
 
 .gi-filter-chip-bar {
-	align-items: flex-start;
-	gap: .9rem;
-	padding: .8rem .9rem;
+	align-items: center;
+	gap: .75rem;
+	padding: .55rem .75rem;
 	border-radius: 18px;
 	background: rgba(242, 246, 243, .92);
 	border: 1px solid rgba(49, 96, 91, .1);
@@ -656,7 +791,6 @@ function formatType(typeId: string) {
 	letter-spacing: .04em;
 	text-transform: uppercase;
 	color: #4b645d;
-	padding-top: .35rem;
 	white-space: nowrap;
 }
 
@@ -664,18 +798,27 @@ function formatType(typeId: string) {
 	display: flex;
 	gap: .5rem;
 	flex-wrap: wrap;
+	align-items: center;
 	min-width: 0;
 	flex: 1;
+}
+
+.gi-filter-chip-bar__actions {
+	display: flex;
+	gap: .55rem;
+	align-items: center;
+	flex: none;
 }
 
 .gi-filter-chip {
 	justify-content: flex-start;
 	max-width: 100%;
-	padding: .45rem .55rem .45rem .8rem;
+	padding: .3rem .48rem .3rem .7rem;
 	border-radius: 999px;
 	background: rgba(49, 96, 91, .1);
 	color: #214f45;
-	min-height: 2.2rem;
+	min-height: 2rem;
+	font-size: .88rem;
 }
 
 .gi-filter-chip--empty {
@@ -690,6 +833,40 @@ function formatType(typeId: string) {
 	max-width: 100%;
 }
 
+.gi-filter-chip-bar__add {
+	width: 2rem;
+	height: 2rem;
+	border: 1px dashed rgba(33, 79, 69, .2);
+	background: rgba(255, 255, 255, .86);
+	color: #214f45;
+	border-radius: 999px;
+	cursor: pointer;
+	font: inherit;
+	font-size: 1.05rem;
+	line-height: 1;
+	padding: 0;
+	flex: none;
+}
+
+.gi-filter-chip-bar__icon-action {
+	width: 2rem;
+	height: 2rem;
+	display: inline-grid;
+	place-items: center;
+	border: 1px solid rgba(33, 79, 69, .18);
+	background: rgba(255, 255, 255, .9);
+	color: #214f45;
+	border-radius: 999px;
+	cursor: pointer;
+	font: inherit;
+	line-height: 1;
+	padding: 0;
+}
+
+.gi-filter-chip-bar__text-action {
+	white-space: nowrap;
+}
+
 .gi-filter-chip__remove {
 	border: none;
 	background: rgba(33, 79, 69, .12);
@@ -702,10 +879,6 @@ function formatType(typeId: string) {
 	line-height: 1;
 	padding: 0;
 	flex: none;
-}
-
-.gi-filter-delete-row {
-	max-width: 22rem;
 }
 
 .gi-option-grid {
@@ -742,9 +915,20 @@ function formatType(typeId: string) {
 	padding: 0;
 }
 
-.gi-input--compact {
-	min-width: 14rem;
-	max-width: 18rem;
+.gi-modal-close {
+	width: 2rem;
+	height: 2rem;
+	display: inline-grid;
+	place-items: center;
+	border: 1px solid rgba(33, 79, 69, .18);
+	border-radius: 999px;
+	background: rgba(255, 255, 255, .9);
+	color: #255d52;
+	font: inherit;
+	line-height: 1;
+	padding: 0;
+	cursor: pointer;
+	flex: none;
 }
 
 .gi-filter-modal-backdrop {
@@ -753,68 +937,85 @@ function formatType(typeId: string) {
 	background: rgba(24, 38, 34, .34);
 	display: grid;
 	place-items: center;
-	padding: 1.2rem;
+	padding: 1rem;
 	z-index: 80;
 }
 
 .gi-filter-modal {
-	width: min(42rem, 100%);
+	width: min(40rem, 100%);
+	min-height: min(32rem, calc(100vh - 2rem));
+	max-height: calc(100vh - 2rem);
+	overflow: auto;
 	display: grid;
 	gap: 1rem;
-	padding: 1.15rem;
-	border-radius: 24px;
+	padding: 1rem;
+	border-radius: 22px;
 	background: rgba(255, 255, 255, .99);
 	box-shadow: 0 24px 64px rgba(20, 34, 30, .18);
-	border: 1px solid rgba(49, 96, 91, .14);
 }
 
-.gi-filter-modal__header {
-	align-items: flex-start;
+.gi-filter-save-modal {
+	width: min(28rem, 100%);
+	min-height: min(20rem, calc(100vh - 2rem));
+	max-height: calc(100vh - 2rem);
+	overflow: auto;
+	display: grid;
+	gap: 1rem;
+	padding: 1rem;
+	border-radius: 22px;
+	background: rgba(255, 255, 255, .99);
+	box-shadow: 0 24px 64px rgba(20, 34, 30, .18);
 }
 
-.gi-filter-modal__header h3,
-.gi-filter-modal__header p {
+.gi-filter-save-modal__message {
 	margin: 0;
+	color: #7b3d23;
+	font-weight: 600;
 }
 
-.gi-filter-modal__header p {
-	margin-top: .3rem;
-	color: #5f726b;
+.gi-filter-save-modal__message--neutral {
+	color: #2b4c44;
+}
+
+.gi-filter-save-modal__danger {
+	background: rgba(148, 55, 31, .12);
+	color: #8f391d;
+}
+
+.gi-filter-modal__header h3 {
+	margin: 0;
 }
 
 .gi-filter-modal__body {
 	display: grid;
-	gap: .85rem;
-}
-
-.gi-filter-modal__footer {
-	justify-content: flex-end;
-	flex-wrap: wrap;
+	gap: .8rem;
 }
 
 @media (max-width: 900px) {
-	.gi-filter-panel__top,
-	.gi-filter-chip-bar,
-	.gi-filter-modal__header {
-		align-items: flex-start;
-		flex-direction: column;
+	.gi-filter-toolbar {
+		align-items: stretch;
 	}
 
-	.gi-filter-panel__actions,
-	.gi-filter-modal__footer {
+	.gi-filter-toolbar__field {
+		flex: 1 1 auto;
+	}
+
+	.gi-filter-modal__header,
+	.gi-filter-modal__footer,
+	.gi-filter-chip-bar,
+	.gi-filter-panel__actions {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.gi-filter-chip-bar__items {
 		width: 100%;
 	}
 
-	.gi-input--compact {
-		max-width: none;
+	.gi-filter-chip-bar__actions {
+		width: 100%;
+		justify-content: flex-end;
 	}
 
-	.gi-filter-delete-row {
-		max-width: none;
-	}
-
-	.gi-filter-modal {
-		padding: 1rem;
-	}
-	}
+}
 </style>

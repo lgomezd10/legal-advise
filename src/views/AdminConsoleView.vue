@@ -1,25 +1,30 @@
 <script setup lang="ts">
 import { computed, onErrorCaptured, onMounted, reactive, ref, watch } from 'vue'
 import AdminTypeTreeEditor from '@/components/AdminTypeTreeEditor.vue'
+import FilterCatalogEditor from '@/components/FilterCatalogEditor.vue'
 import NotificationMatrix from '@/components/NotificationMatrix.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import { useAdminConfigStore } from '@/store/adminConfig'
 import { useBootstrapStore } from '@/store/bootstrap'
 import { useNotificationsStore } from '@/store/notifications'
-import type { AssignmentRule, CatalogField, EditableTypeNode, SearchableSelectOption, TypeNode, UrgencyCatalogItem } from '@/types'
+import type { AdminStatusOption, AssignmentRule, CatalogField, EditableTypeNode, SavedFilter, SearchableSelectOption, TypeNode, UrgencyCatalogItem } from '@/types'
 
 type AdminConfigData = {
+	statuses: AdminStatusOption[]
 	types: TypeNode[]
 	urgencies: UrgencyCatalogItem[]
 	fields: CatalogField[]
+	filters: SavedFilter[]
 	rules: AssignmentRule[]
 	profiles: Array<{ id?: number, profile: string, principalType: string, principalId: string }>
-	attachmentConfig: { allowedExtensions: string[] }
+	attachmentConfig: { allowedExtensions: string[], maxFileSizeMb: number }
 	tasksConfig: Record<string, unknown>
 }
 
+type StatusDraft = AdminStatusOption & { clientId: string }
 type UrgencyDraft = UrgencyCatalogItem & { clientId: string }
 type FieldDraft = CatalogField & { clientId: string }
+type FilterDraft = SavedFilter & { clientId: string }
 type RuleDraft = AssignmentRule & { clientId: string }
 type ProfileDraft = { id?: number, profile: string, principalType: 'user' | 'group', principalId: string, principalKey: string, clientId: string }
 
@@ -32,22 +37,26 @@ const adminConfigStore = useAdminConfigStore()
 const bootstrapStore = useBootstrapStore()
 const notificationsStore = useNotificationsStore()
 const taskConfig = reactive<{ enabled: boolean }>({ enabled: false })
-const attachmentConfig = reactive<{ allowedExtensionsText: string }>({ allowedExtensionsText: '' })
+const attachmentConfig = reactive<{ allowedExtensionsText: string, maxFileSizeMb: number }>({ allowedExtensionsText: '', maxFileSizeMb: 25 })
+const statusDrafts = ref<StatusDraft[]>([])
 const urgencyDrafts = ref<UrgencyDraft[]>([])
 const typeDrafts = ref<EditableTypeNode[]>([])
 const fieldDrafts = ref<FieldDraft[]>([])
+const filterDrafts = ref<FilterDraft[]>([])
 const ruleDrafts = ref<RuleDraft[]>([])
 const profileDrafts = ref<ProfileDraft[]>([])
-const activeSection = ref<'overview' | 'urgencies' | 'types' | 'fields' | 'rules' | 'profiles' | 'attachments' | 'notifications' | 'tasks'>('overview')
+const activeSection = ref<'statuses' | 'urgencies' | 'types' | 'fields' | 'filters' | 'rules' | 'profiles' | 'attachments' | 'notifications' | 'tasks'>('statuses')
 const loadState = reactive({
 	loading: true,
 	error: '',
 	renderError: '',
 })
 const saveState = reactive({
+	statuses: '',
 	urgencies: '',
 	types: '',
 	fields: '',
+	filters: '',
 	rules: '',
 	profiles: '',
 	attachments: '',
@@ -55,10 +64,11 @@ const saveState = reactive({
 })
 
 const adminSections = [
-	{ id: 'overview', label: 'Resumen' },
+	{ id: 'statuses', label: 'Estados' },
 	{ id: 'urgencies', label: 'Criticidades' },
 	{ id: 'types', label: 'Tipos' },
 	{ id: 'fields', label: 'Campos' },
+	{ id: 'filters', label: 'Filtros' },
 	{ id: 'rules', label: 'Reglas' },
 	{ id: 'profiles', label: 'Perfiles' },
 	{ id: 'attachments', label: 'Adjuntos' },
@@ -67,8 +77,10 @@ const adminSections = [
 ] as const
 
 const adminData = computed(() => adminConfigStore.data as AdminConfigData | null)
+const statusItems = computed(() => statusDrafts.value)
 const urgencyItems = computed(() => urgencyDrafts.value)
 const fieldItems = computed(() => fieldDrafts.value)
+const filterItems = computed(() => filterDrafts.value)
 const ruleItems = computed(() => ruleDrafts.value)
 const profileItems = computed(() => profileDrafts.value)
 const typeLines = computed(() => flattenTypes(typeDrafts.value))
@@ -116,7 +128,7 @@ onMounted(async() => {
 
 onErrorCaptured((error) => {
 	loadState.renderError = error instanceof Error ? error.message : 'Se produjo un error al renderizar esta seccion.'
-	activeSection.value = 'overview'
+	activeSection.value = 'statuses'
 	return false
 })
 
@@ -246,6 +258,11 @@ function isTypeNodeLike(value: unknown): value is TypeNode | EditableTypeNode {
 function syncDrafts() {
 	taskConfig.enabled = Boolean(adminData.value?.tasksConfig?.enabled)
 	attachmentConfig.allowedExtensionsText = (adminData.value?.attachmentConfig?.allowedExtensions ?? []).map((extension) => `.${extension}`).join(', ')
+	attachmentConfig.maxFileSizeMb = Math.max(1, Number(adminData.value?.attachmentConfig?.maxFileSizeMb ?? 25))
+	statusDrafts.value = normalizeStatuses(adminData.value?.statuses).map((item, index) => ({
+		...item,
+		clientId: buildClientId('status', item.id || index),
+	}))
 	urgencyDrafts.value = normalizeUrgencies(adminData.value?.urgencies).map((item, index) => ({
 		...item,
 		clientId: buildClientId('urgency', item.id ?? index),
@@ -254,6 +271,10 @@ function syncDrafts() {
 	fieldDrafts.value = normalizeFields(adminData.value?.fields).map((item, index) => ({
 		...item,
 		clientId: buildClientId('field', item.id ?? item.fieldKey ?? index),
+	}))
+	filterDrafts.value = normalizeFilters(adminData.value?.filters).map((item, index) => ({
+		...item,
+		clientId: buildClientId('filter', item.id ?? `${item.name}-${index}`),
 	}))
 	ruleDrafts.value = normalizeRules(adminData.value?.rules).map((item, index) => ({
 		...item,
@@ -268,9 +289,11 @@ function syncDrafts() {
 		principalKey: buildPrincipalKey(item.principalType, item.principalId),
 		clientId: buildClientId('profile', item.id ?? `${item.profile}-${index}`),
 	}))
+	saveState.statuses = ''
 	saveState.urgencies = ''
 	saveState.types = ''
 	saveState.fields = ''
+	saveState.filters = ''
 	saveState.rules = ''
 	saveState.profiles = ''
 	saveState.attachments = ''
@@ -280,6 +303,23 @@ function syncDrafts() {
 function buildClientId(prefix: string, seed: number | string): string {
 	return `${prefix}-${seed}-${Math.random().toString(36).slice(2, 8)}`
 }
+
+function normalizeStatuses(entries: unknown): AdminStatusOption[] {
+	if (!Array.isArray(entries)) {
+		return []
+	}
+
+	return entries
+		.filter(isRecord)
+		.filter((entry) => typeof entry.id === 'string' && typeof entry.label === 'string')
+		.map((entry) => ({
+			id: String(entry.id),
+			label: String(entry.label),
+			fixed: Boolean(entry.fixed ?? true),
+			description: typeof entry.description === 'string' ? entry.description : '',
+		}))
+}
+
 function flattenTypeOptions(nodes: Array<TypeNode | EditableTypeNode>, prefix = ''): SearchableSelectOption[] {
 	return nodes.filter(isTypeNodeLike).flatMap((node) => {
 		const label = prefix ? `${prefix} > ${node.name}` : node.name
@@ -333,6 +373,24 @@ function normalizeFields(entries: unknown): CatalogField[] {
 		preloadSource: typeof entry.preloadSource === 'string' ? entry.preloadSource : '',
 		sortOrder: typeof entry.sortOrder === 'number' ? entry.sortOrder : Number(entry.sortOrder ?? 0),
 		active: Boolean(entry.active ?? true),
+	}))
+}
+
+function normalizeFilters(entries: unknown): SavedFilter[] {
+	if (!Array.isArray(entries)) {
+		return []
+	}
+
+	return entries.filter(isRecord).filter((entry) => typeof entry.name === 'string').map((entry, index) => ({
+		id: typeof entry.id === 'number' ? entry.id : -(index + 1),
+		ownerUid: typeof entry.ownerUid === 'string' ? entry.ownerUid : null,
+		scopeType: typeof entry.scopeType === 'string' ? entry.scopeType : 'global',
+		name: String(entry.name),
+		criteria: isRecord(entry.criteria) ? entry.criteria : {},
+		isPredefined: Boolean(entry.isPredefined ?? true),
+		active: Boolean(entry.active ?? true),
+		isDefault: Boolean(entry.isDefault ?? false),
+		sortOrder: typeof entry.sortOrder === 'number' ? entry.sortOrder : (index + 1) * 10,
 	}))
 }
 
@@ -407,6 +465,32 @@ async function saveFields() {
 	await adminConfigStore.save({ fields: payload })
 	syncDrafts()
 	saveState.fields = 'Campos guardados.'
+}
+
+async function saveFilters(nextFilters: SavedFilter[]) {
+	const payload = nextFilters.map((filter, index) => ({
+		id: filter.id > 0 ? filter.id : undefined,
+		name: filter.name.trim(),
+		criteria: filter.criteria,
+		active: Boolean(filter.active ?? true),
+		isDefault: Boolean(filter.isDefault ?? false),
+		sortOrder: (index + 1) * 10,
+	}))
+
+	await adminConfigStore.save({ filters: payload })
+	syncDrafts()
+	saveState.filters = 'Filtros guardados.'
+}
+
+async function saveStatuses() {
+	const payload = statusDrafts.value.map(({ clientId, ...status }) => ({
+		id: status.id,
+		label: status.label.trim(),
+	}))
+
+	await adminConfigStore.save({ statuses: payload })
+	syncDrafts()
+	saveState.statuses = 'Estados guardados.'
 }
 
 function addRule() {
@@ -553,7 +637,7 @@ function parseAllowedExtensions(rawValue: string): string[] {
 
 async function saveAttachmentConfig() {
 	const allowedExtensions = parseAllowedExtensions(attachmentConfig.allowedExtensionsText)
-	await adminConfigStore.save({ attachmentConfig: { allowedExtensions } })
+	await adminConfigStore.save({ attachmentConfig: { allowedExtensions, maxFileSizeMb: attachmentConfig.maxFileSizeMb } })
 	syncDrafts()
 	saveState.attachments = 'Configuracion de adjuntos guardada.'
 }
@@ -581,28 +665,30 @@ async function saveAttachmentConfig() {
 			</button>
 		</nav>
 
-		<section v-if="activeSection === 'overview'" class="gi-admin-panel gi-admin-panel--stacked">
-			<div class="gi-admin-overview">
-				<article class="gi-stat-card"><span>Criticidades</span><strong>{{ urgencyItems.length }}</strong></article>
-				<article class="gi-stat-card"><span>Tipos</span><strong>{{ typeLines.length }}</strong></article>
-				<article class="gi-stat-card"><span>Campos</span><strong>{{ fieldItems.length }}</strong></article>
-				<article class="gi-stat-card"><span>Reglas</span><strong>{{ ruleItems.length }}</strong></article>
-			</div>
-			<section class="gi-admin-card gi-admin-card--highlight">
+		<section v-if="activeSection === 'statuses'" class="gi-admin-panel">
+			<section class="gi-admin-card gi-admin-card--fullwidth">
 				<div class="gi-admin-card__header">
 					<div>
-						<h2>Semillas iniciales del MVP</h2>
-						<p>La instancia mantiene cargados los tipos base exigidos y la escala minima de criticidad desde el primer arranque.</p>
+						<h2>Estados</h2>
+						<p>Los estados base son obligatorios y no se pueden eliminar. Solo se puede cambiar su etiqueta visible.</p>
+					</div>
+					<div class="gi-admin-card__toolbar">
+						<button class="gi-primary-button" type="button" @click="saveStatuses">Guardar</button>
 					</div>
 				</div>
-				<ul class="gi-admin-list gi-admin-list--dense">
-					<li v-for="item in requiredTypeCoverage" :key="item.path" class="gi-admin-row">
-						<div class="gi-admin-row__title">{{ item.path }}</div>
-						<span class="gi-meta-pill" :class="{ 'gi-meta-pill--ok': item.present, 'gi-meta-pill--warn': !item.present }">
-							{{ item.present ? 'Disponible' : 'Falta' }}
-						</span>
+				<ul class="gi-admin-list">
+					<li v-for="status in statusItems" :key="status.clientId" class="gi-admin-row gi-admin-row--status">
+						<div class="gi-admin-row__status-meta">
+							<strong>{{ status.id }}</strong>
+							<p>{{ status.description }}</p>
+						</div>
+						<label class="gi-field gi-field--wide">
+							<span>Etiqueta visible</span>
+							<input v-model="status.label" class="gi-input" type="text" placeholder="Etiqueta del estado" />
+						</label>
 					</li>
 				</ul>
+				<p v-if="saveState.statuses" class="gi-admin-feedback">{{ saveState.statuses }}</p>
 			</section>
 		</section>
 
@@ -655,6 +741,14 @@ async function saveAttachmentConfig() {
 					</div>
 				</div>
 				<AdminTypeTreeEditor :nodes="typeDrafts" @add-child="addChildType" />
+				<ul class="gi-admin-list gi-admin-list--dense">
+					<li v-for="item in requiredTypeCoverage" :key="item.path" class="gi-admin-row">
+						<div class="gi-admin-row__title">{{ item.path }}</div>
+						<span class="gi-meta-pill" :class="{ 'gi-meta-pill--ok': item.present, 'gi-meta-pill--warn': !item.present }">
+							{{ item.present ? 'Disponible' : 'Falta' }}
+						</span>
+					</li>
+				</ul>
 				<p v-if="saveState.types" class="gi-admin-feedback">{{ saveState.types }}</p>
 			</section>
 		</section>
@@ -707,6 +801,22 @@ async function saveAttachmentConfig() {
 			</section>
 		</section>
 
+		<section v-if="activeSection === 'filters'" class="gi-admin-panel">
+			<FilterCatalogEditor
+				:filters="filterItems"
+				:statuses="bootstrapStore.data.catalogs.statuses"
+				:types="bootstrapStore.data.catalogs.types"
+				:users="bootstrapStore.data.assignables.users"
+				:groups="bootstrapStore.data.assignables.groups"
+				title="Filtros"
+				description="Gestiona los filtros globales de soporte, qué filtros están activos y cuál se aplica por defecto al abrir la consola."
+				save-label="Guardar filtros"
+				empty-label="No hay filtros globales configurados."
+				@save="saveFilters"
+			/>
+			<p v-if="saveState.filters" class="gi-admin-feedback">{{ saveState.filters }}</p>
+		</section>
+
 		<section v-if="activeSection === 'tasks'" class="gi-admin-panel">
 			<section class="gi-admin-card gi-admin-card--fullwidth">
 				<div class="gi-admin-card__header">
@@ -729,15 +839,19 @@ async function saveAttachmentConfig() {
 				<div class="gi-admin-card__header">
 					<div>
 						<h2>Adjuntos</h2>
-						<p>Define las extensiones permitidas para documentos e imagenes. Los usuarios solo podran subir adjuntos al publicar un comentario.</p>
+						<p>Define las extensiones permitidas y el tamano maximo. Si un fichero supera el limite, la UI ofrecera adjuntarlo como ruta URL.</p>
 					</div>
 					<div class="gi-admin-card__toolbar">
 						<button class="gi-primary-button" type="button" @click="saveAttachmentConfig">Guardar</button>
 					</div>
 				</div>
+				<label class="gi-field">
+					<span>Tamano maximo por fichero (MB)</span>
+					<input v-model.number="attachmentConfig.maxFileSizeMb" class="gi-input" type="number" min="1" />
+				</label>
 				<label class="gi-field gi-field--wide">
 					<span>Extensiones permitidas</span>
-					<textarea v-model="attachmentConfig.allowedExtensionsText" class="gi-textarea" rows="5" placeholder=".pdf, .doc, .docx, .xls, .xlsx, .csv, .jpg, .png" />
+					<textarea v-model="attachmentConfig.allowedExtensionsText" class="gi-textarea" rows="5" placeholder=".pdf, .doc, .docx, .xls, .xlsx, .csv, .jpg, .png, .mp3, .mp4, .mov" />
 				</label>
 				<p class="gi-admin-feedback">Introduce las extensiones separadas por comas, espacios o saltos de linea.</p>
 				<p v-if="saveState.attachments" class="gi-admin-feedback">{{ saveState.attachments }}</p>
@@ -971,6 +1085,27 @@ async function saveAttachmentConfig() {
 	grid-template-columns: minmax(0, 2.2fr) repeat(3, minmax(0, 1.25fr)) 7rem;
 	gap: .75rem;
 	align-items: end;
+}
+
+.gi-admin-row--status {
+	display: grid;
+	grid-template-columns: minmax(15rem, 1fr) minmax(0, 1.5fr);
+	gap: .9rem;
+	align-items: start;
+}
+
+.gi-admin-row__status-meta {
+	display: grid;
+	gap: .35rem;
+}
+
+.gi-admin-row__status-meta strong,
+.gi-admin-row__status-meta p {
+	margin: 0;
+}
+
+.gi-admin-row__status-meta p {
+	color: #5f726b;
 }
 
 .gi-admin-row__title {

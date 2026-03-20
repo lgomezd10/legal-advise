@@ -48,7 +48,12 @@ export interface EditableTypeNode {
 	clientId: string
 }
 
-export type SupportColumnKey = 'number' | 'title' | 'userDescription' | 'assignment' | 'status' | 'urgency' | 'createdAt'
+export type SupportColumnKey = 'number' | 'createdBy' | 'title' | 'userDescription' | 'assignment' | 'status' | 'urgency' | 'createdAt' | 'updatedAt'
+
+export interface TicketAttachmentLinkDraft {
+	url: string
+	label: string
+}
 
 export interface TicketComment {
 	id: number
@@ -69,6 +74,7 @@ export interface TicketAttachment {
 	mimeType: string
 	size: number
 	createdAt: number
+	sourceUrl?: string | null
 }
 
 export interface Ticket {
@@ -94,6 +100,9 @@ export interface Ticket {
 	history?: Array<Record<string, unknown>>
 	personalData?: Array<Record<string, unknown>>
 	taskSync?: Record<string, unknown> | null
+	canRead?: boolean
+	canManage?: boolean
+	canComment?: boolean
 }
 
 export interface AssignableOption {
@@ -132,12 +141,20 @@ export interface StatusOption {
 	label: string
 }
 
+export interface AdminStatusOption extends StatusOption {
+	fixed?: boolean
+	description?: string
+}
+
 export interface SavedFilter {
 	id: number
 	ownerUid?: string | null
+	scopeType?: string | null
 	name: string
 	criteria: Record<string, unknown>
 	isPredefined: boolean
+	active?: boolean
+	isDefault?: boolean
 	sortOrder: number
 }
 
@@ -157,6 +174,7 @@ export interface BootstrapData {
 		provinces: string[]
 		attachmentConfig: {
 			allowedExtensions: string[]
+			maxFileSizeMb: number
 		}
 	}
 	supportFilters: SavedFilter[]
@@ -174,10 +192,13 @@ export interface TicketDraft {
 	selectedPath?: number[]
 	typeId?: number | null
 	province?: string | null
-	withoutProvince?: boolean
 	title?: string
 	userDescription?: string
 	urgencyId?: string | null
 	communicationChannel?: string
 	personalData?: Record<string, string>
+	attachments?: {
+		files: File[]
+		links: TicketAttachmentLinkDraft[]
+	}
 }

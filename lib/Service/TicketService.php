@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Service;
+namespace OCA\ConsultasLegales\Service;
 
-use OCA\Gestion_incidencias\Db\Comment;
-use OCA\Gestion_incidencias\Db\CommentMapper;
-use OCA\Gestion_incidencias\Db\HistoryEntry;
-use OCA\Gestion_incidencias\Db\HistoryEntryMapper;
-use OCA\Gestion_incidencias\Db\Ticket;
-use OCA\Gestion_incidencias\Db\TicketData;
-use OCA\Gestion_incidencias\Db\TicketDataMapper;
-use OCA\Gestion_incidencias\Db\TicketMapper;
-use OCA\Gestion_incidencias\Db\Urgency;
-use OCA\Gestion_incidencias\Db\UrgencyMapper;
+use OCA\ConsultasLegales\Db\Comment;
+use OCA\ConsultasLegales\Db\CommentMapper;
+use OCA\ConsultasLegales\Db\HistoryEntry;
+use OCA\ConsultasLegales\Db\HistoryEntryMapper;
+use OCA\ConsultasLegales\Db\Ticket;
+use OCA\ConsultasLegales\Db\TicketData;
+use OCA\ConsultasLegales\Db\TicketDataMapper;
+use OCA\ConsultasLegales\Db\TicketMapper;
+use OCA\ConsultasLegales\Db\Urgency;
+use OCA\ConsultasLegales\Db\UrgencyMapper;
 use OCP\IDBConnection;
 use OCP\IGroupManager;
 use OCP\IUserManager;
@@ -64,8 +64,20 @@ class TicketService {
 
 	public function create(string $uid, array $payload): array {
 		$now = time();
+		$roles = $this->roleService->getEffectiveRoles($uid);
+		$isSupportActor = in_array(RoleService::SUPPORT, $roles, true) || in_array(RoleService::ADMIN, $roles, true);
 		$province = $this->resolveProvinceSelection($payload);
-		$assignment = $this->assignmentService->resolveForType(isset($payload['typeId']) ? (int) $payload['typeId'] : null, $province);
+		$assignment = $isSupportActor
+			? [
+				'assignedUserUid' => $this->normalizeOptionalString($payload['assignedUserUid'] ?? null),
+				'assignedGroupId' => $this->normalizeOptionalString($payload['assignedGroupId'] ?? null),
+			]
+			: $this->assignmentService->resolveForType(isset($payload['typeId']) ? (int) $payload['typeId'] : null, $province);
+		if ($isSupportActor) {
+			$this->assertAssignmentPayloadAllowed($uid, ['assignedGroupId' => $assignment['assignedGroupId']], null);
+		}
+		$this->assertAssignmentConsistency($assignment['assignedUserUid'], $assignment['assignedGroupId']);
+		$initialStatus = $this->resolveAssignmentAwareStatus('nuevo', $assignment['assignedUserUid'], $assignment['assignedGroupId']);
 
 		$ticket = new Ticket();
 		$ticket->setNumber($this->ticketNumberService->nextNumber($now));
@@ -73,7 +85,7 @@ class TicketService {
 		$ticket->setCreatedAt($now);
 		$ticket->setUpdatedAt($now);
 		$ticket->setStatusUpdatedAt($now);
-		$ticket->setStatus('nuevo');
+		$ticket->setStatus($initialStatus);
 		$ticket->setUrgencyId(isset($payload['urgencyId']) ? (int) $payload['urgencyId'] : $this->resolveDefaultUrgencyId());
 		$ticket->setTypeId(isset($payload['typeId']) ? (int) $payload['typeId'] : null);
 		$ticket->setTitle((string) ($payload['title'] ?? ''));
@@ -87,7 +99,7 @@ class TicketService {
 
 		$ticket = $this->ticketMapper->insert($ticket);
 		$this->savePersonalData($ticket->getId(), $payload['personalData'] ?? []);
-		$this->addHistory($ticket->getId(), $uid, RoleService::USER, 'ticket_created', 'publico', ['status' => 'nuevo']);
+		$this->addHistory($ticket->getId(), $uid, $isSupportActor ? RoleService::SUPPORT : RoleService::USER, 'ticket_created', 'publico', ['status' => $initialStatus]);
 		$this->taskSyncService->syncTicket($ticket);
 		$this->notificationService->emit('ticket_created', $ticket);
 
@@ -98,39 +110,79 @@ class TicketService {
 		$ticket = $this->ticketMapper->find($id);
 		$this->permissionService->assertCanManageTicket($uid, $ticket);
 
+		$previousStatus = (string) $ticket->getStatus();
+		$previousAssignedUserUid = $ticket->getAssignedUserUid();
+		$previousAssignedGroupId = $ticket->getAssignedGroupId();
+		$this->assertAssignmentPayloadAllowed($uid, $payload, $previousAssignedGroupId);
 		$statusChanged = false;
+		$assignmentChanged = false;
 		foreach (['status', 'urgencyId', 'assignedUserUid', 'assignedGroupId', 'supportDescription'] as $field) {
 			if (!array_key_exists($field, $payload)) {
 				continue;
 			}
 
 			$value = $payload[$field];
+			$getter = 'get' . ucfirst($field);
+			$currentValue = method_exists($ticket, $getter) ? $ticket->{$getter}() : null;
 			$setter = 'set' . ucfirst($field);
 			$ticket->{$setter}($value);
-			if ($field === 'status') {
+			if ($field === 'status' && $currentValue !== $value) {
 				$ticket->setStatusUpdatedAt(time());
 				$statusChanged = true;
 			}
+
+			if (in_array($field, ['assignedUserUid', 'assignedGroupId'], true) && $currentValue !== $value) {
+				$assignmentChanged = true;
+			}
+		}
+
+		$this->assertAssignmentConsistency($ticket->getAssignedUserUid(), $ticket->getAssignedGroupId());
+		$normalizedStatus = $this->resolveAssignmentAwareStatus((string) $ticket->getStatus(), $ticket->getAssignedUserUid(), $ticket->getAssignedGroupId());
+		if ($normalizedStatus !== (string) $ticket->getStatus()) {
+			$ticket->setStatus($normalizedStatus);
+			$ticket->setStatusUpdatedAt(time());
+			$statusChanged = true;
+			$payload['status'] = $normalizedStatus;
 		}
 
 		$ticket->setUpdatedAt(time());
 		$ticket = $this->ticketMapper->update($ticket);
 		$this->addHistory($ticket->getId(), $uid, RoleService::SUPPORT, 'ticket_updated', 'interno', $payload);
 		$this->taskSyncService->syncTicket($ticket);
-		$this->notificationService->emit($statusChanged ? 'ticket_status_changed' : 'ticket_updated', $ticket);
+
+		$eventName = 'ticket_updated';
+		if ($assignmentChanged) {
+			$eventName = 'ticket_assigned';
+		} elseif ($statusChanged) {
+			$eventName = in_array((string) $ticket->getStatus(), ['resuelto', 'cerrado'], true)
+				? 'ticket_resolved'
+				: 'ticket_status_changed';
+		}
+
+		$this->notificationService->emit($eventName, $ticket, [], [
+			'previousStatus' => $previousStatus,
+			'previousAssignedUserUid' => $previousAssignedUserUid,
+			'previousAssignedGroupId' => $previousAssignedGroupId,
+		]);
 
 		return $this->serializeTicket($uid, $ticket, true);
 	}
 
 	public function addComment(string $uid, int $ticketId, array $payload): array {
 		$ticket = $this->ticketMapper->find($ticketId);
-		$this->permissionService->assertCanReadTicket($uid, $ticket);
 
 		$roles = $this->roleService->getEffectiveRoles($uid);
 		$isSupport = in_array(RoleService::SUPPORT, $roles, true) || in_array(RoleService::ADMIN, $roles, true);
+		if ($isSupport) {
+			$this->permissionService->assertCanManageTicket($uid, $ticket);
+		} else {
+			$this->permissionService->assertCanReadTicket($uid, $ticket);
+		}
+
 		$visibility = $isSupport ? (string) ($payload['visibility'] ?? 'interno') : 'publico';
 		$body = trim((string) ($payload['body'] ?? ''));
-		if ($body === '') {
+		$allowEmpty = filter_var($payload['allowEmpty'] ?? false, FILTER_VALIDATE_BOOLEAN);
+		if ($body === '' && !$allowEmpty) {
 			throw new \InvalidArgumentException('El comentario no puede estar vacio.');
 		}
 
@@ -143,13 +195,26 @@ class TicketService {
 		$comment->setCreatedAt(time());
 
 		$comment = $this->commentMapper->insert($comment);
-		$this->addHistory($ticketId, $uid, $comment->getAuthorRole(), 'comment_added', $visibility, ['commentId' => $comment->getId()]);
+
+		$now = time();
+		$historyPayload = ['commentId' => $comment->getId()];
+		$ticket->setUpdatedAt($now);
+		if ($ticket->getStatus() === 'en_espera_usuario') {
+			$ticket->setStatus('asignado');
+			$ticket->setStatusUpdatedAt($now);
+			$historyPayload['previousStatus'] = 'en_espera_usuario';
+			$historyPayload['nextStatus'] = 'asignado';
+		}
+
+		$ticket = $this->ticketMapper->update($ticket);
+		$this->taskSyncService->syncTicket($ticket);
+		$this->addHistory($ticketId, $uid, $comment->getAuthorRole(), 'comment_added', $visibility, $historyPayload);
 		$this->notificationService->emit('ticket_public_reply', $ticket);
 
 		return $comment->jsonSerialize();
 	}
 
-	public function addAttachment(string $uid, int $ticketId, array $uploadedFile, int $commentId): array {
+	public function addAttachment(string $uid, int $ticketId, array $uploadedFile, int $commentId, ?string $sourceUrl = null, ?string $originalName = null): array {
 		$ticket = $this->ticketMapper->find($ticketId);
 		$this->permissionService->assertCanReadTicket($uid, $ticket);
 
@@ -163,7 +228,9 @@ class TicketService {
 			? RoleService::SUPPORT
 			: RoleService::USER;
 
-		$attachment = $this->attachmentService->create($ticketId, $uid, $uploadedFile, $commentId);
+		$attachment = ($sourceUrl !== null && trim($sourceUrl) !== '')
+			? $this->attachmentService->createFromUrl($ticketId, $uid, $sourceUrl, $originalName, $commentId)
+			: $this->attachmentService->create($ticketId, $uid, $uploadedFile, $commentId);
 		$this->addHistory($ticketId, $uid, $actorRole, 'attachment_added', (string) $comment->getVisibility(), ['attachmentId' => $attachment['id'], 'commentId' => $commentId]);
 		return $attachment;
 	}
@@ -203,26 +270,20 @@ class TicketService {
 
 	private function resolveProvinceSelection(array $payload): ?string {
 		$rawProvince = is_string($payload['province'] ?? null) ? trim((string) $payload['province']) : '';
-		$withoutProvince = filter_var($payload['withoutProvince'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
 		if ($rawProvince !== '') {
 			$province = $this->provinceCatalogService->normalize($rawProvince);
-			if ($province === null) {
-				throw new \InvalidArgumentException('La provincia seleccionada no es valida.');
-			}
-
-			return $province;
+			return $province ?? $rawProvince;
 		}
 
-		if ($withoutProvince) {
-			return null;
-		}
-
-		throw new \InvalidArgumentException('Debes seleccionar una provincia o marcar "Sin provincia".');
+		throw new \InvalidArgumentException('Debes seleccionar una provincia o anadir una nueva.');
 	}
 
 	private function serializeTicket(string $uid, Ticket $ticket, bool $includeDetail = false): array {
 		$data = $ticket->jsonSerialize();
+		$data['canRead'] = $this->permissionService->canReadTicket($uid, $ticket);
+		$data['canManage'] = $this->permissionService->canManageTicket($uid, $ticket);
+		$data['canComment'] = $this->permissionService->canCommentOnTicket($uid, $ticket);
 		$attachments = $includeDetail ? $this->attachmentService->listForTicket($ticket->getId()) : [];
 		$attachmentsByCommentId = [];
 		foreach ($attachments as $attachment) {
@@ -311,6 +372,11 @@ class TicketService {
 						return false;
 					}
 					break;
+				case 'hasAttachments':
+					if ($value && !$this->attachmentService->hasForTicket((int) ($ticket['id'] ?? 0))) {
+						return false;
+					}
+					break;
 			}
 		}
 
@@ -328,5 +394,71 @@ class TicketService {
 		}
 
 		return array_map(static fn ($group) => $group->getGID(), $this->groupManager->getUserGroups($user));
+	}
+
+	private function resolveAssignmentAwareStatus(string $currentStatus, ?string $assignedUserUid, ?string $assignedGroupId): string {
+		$hasAssignment = ($assignedUserUid !== null && $assignedUserUid !== '') || ($assignedGroupId !== null && $assignedGroupId !== '');
+		if ($hasAssignment && $currentStatus === 'nuevo') {
+			return 'asignado';
+		}
+
+		if (!$hasAssignment && $currentStatus === 'asignado') {
+			return 'nuevo';
+		}
+
+		return $currentStatus;
+	}
+
+	private function normalizeOptionalString(mixed $value): ?string {
+		if (!is_string($value)) {
+			return null;
+		}
+
+		$value = trim($value);
+		return $value === '' ? null : $value;
+	}
+
+	private function assertAssignmentPayloadAllowed(string $uid, array $payload, ?string $previousAssignedGroupId): void {
+		if (!array_key_exists('assignedGroupId', $payload)) {
+			return;
+		}
+
+		$nextAssignedGroupId = $payload['assignedGroupId'];
+		$normalizedNextGroupId = is_string($nextAssignedGroupId) ? trim($nextAssignedGroupId) : null;
+		$normalizedNextGroupId = $normalizedNextGroupId === '' ? null : $normalizedNextGroupId;
+		$normalizedPreviousGroupId = is_string($previousAssignedGroupId) ? trim($previousAssignedGroupId) : null;
+		$normalizedPreviousGroupId = $normalizedPreviousGroupId === '' ? null : $normalizedPreviousGroupId;
+
+		if ($normalizedNextGroupId === $normalizedPreviousGroupId) {
+			return;
+		}
+
+		if (!$this->permissionService->canAssignGroup($uid, $normalizedNextGroupId)) {
+			throw new \RuntimeException('Forbidden', 403);
+		}
+	}
+
+	private function assertAssignmentConsistency(?string $assignedUserUid, ?string $assignedGroupId): void {
+		$normalizedAssignedUserUid = $this->normalizeOptionalString($assignedUserUid);
+		$normalizedAssignedGroupId = $this->normalizeOptionalString($assignedGroupId);
+
+		$user = $normalizedAssignedUserUid !== null ? $this->userManager->get($normalizedAssignedUserUid) : null;
+		$group = $normalizedAssignedGroupId !== null ? $this->groupManager->get($normalizedAssignedGroupId) : null;
+
+		if ($normalizedAssignedUserUid !== null && $user === null) {
+			throw new \InvalidArgumentException('El usuario asignado no es valido.');
+		}
+
+		if ($normalizedAssignedGroupId !== null && $group === null) {
+			throw new \InvalidArgumentException('El grupo asignado no es valido.');
+		}
+
+		if ($user === null || $group === null) {
+			return;
+		}
+
+		if (!$group->inGroup($user)) {
+			throw new \InvalidArgumentException('El usuario asignado no pertenece al grupo indicado.');
+		}
 	}
 }

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Service;
+namespace OCA\ConsultasLegales\Service;
 
-use OCA\Gestion_incidencias\Db\TicketMapper;
+use OCA\ConsultasLegales\Db\TicketMapper;
 
 class TicketNumberService {
 	public function __construct(private readonly TicketMapper $ticketMapper) {

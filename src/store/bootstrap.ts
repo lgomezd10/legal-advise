@@ -8,7 +8,7 @@ const fallbackState: BootstrapData = {
 	roles: [],
 	navigation: [],
 	personalConfig: {},
-	catalogs: { statuses: [], urgencies: [], types: [], fields: [], provinces: [], attachmentConfig: { allowedExtensions: [] } },
+	catalogs: { statuses: [], urgencies: [], types: [], fields: [], provinces: [], attachmentConfig: { allowedExtensions: [], maxFileSizeMb: 25 } },
 	supportFilters: [],
 	assignables: { users: [], groups: [] },
 	tasksIntegration: { available: false, config: {} },

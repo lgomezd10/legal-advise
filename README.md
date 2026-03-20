@@ -6,8 +6,9 @@ Aplicacion nativa para Nextcloud 30.0.4 para el soporte de consultas legales.
 
 - Creacion de tickets en dos pasos con tipo jerarquico y datos personales configurables.
 - Consola de usuario con listado propio y detalle en sidebar.
-- Consola de soporte con filtros guardados, exportacion CSV y detalle lateral.
-- Consola de administracion con catalogos, reglas, perfiles y configuracion de Tasks.
+- Consola de soporte con visibilidad global en lectura, filtros guardados, filtro inicial configurable, exportacion CSV y detalle lateral o de solo lectura segun permisos.
+- Configuracion unificada desde un unico acceso lateral con secciones para configuracion personal, preferencias de soporte y administracion segun el rol del usuario.
+- Consola de administracion con catalogos, reglas, perfiles, filtros globales y configuracion de Tasks.
 - Notificaciones Nextcloud y correo usando las capacidades nativas de la instancia.
 - Integracion best-effort con calendarios VTODO para reflejar asignaciones en Tasks sin bloquear el flujo principal.
 

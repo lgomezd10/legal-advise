@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, reactive } from 'vue'
 import type { SupportColumnKey, Ticket } from '@/types'
+
+const MIN_COLUMN_WIDTH = 56
 
 type SupportColumn = {
 	key: SupportColumnKey
 	label: string
 	defaultVisible: boolean
 	sticky?: boolean
+	defaultWidth: number
 }
 
 const props = defineProps<{
@@ -19,19 +22,43 @@ const emit = defineEmits<{
 	(e: 'open', id: number): void
 }>()
 
+const columnWidths = reactive<Record<SupportColumnKey, number>>({
+	number: 160,
+	createdBy: 180,
+	title: 260,
+	userDescription: 380,
+	assignment: 240,
+	status: 150,
+	urgency: 150,
+	createdAt: 210,
+	updatedAt: 210,
+})
+
+let activeResize: {
+	columnKey: SupportColumnKey
+	startX: number
+	startWidth: number
+} | null = null
+
 const columns = computed<SupportColumn[]>(() => {
 	const available: SupportColumn[] = [
-		{ key: 'number', label: 'Ticket', defaultVisible: true, sticky: true },
-		{ key: 'title', label: 'Titulo', defaultVisible: true },
-		{ key: 'userDescription', label: 'Descripcion', defaultVisible: true },
-		{ key: 'assignment', label: 'Asignacion', defaultVisible: true },
-		{ key: 'status', label: 'Estado', defaultVisible: false },
-		{ key: 'urgency', label: 'Criticidad', defaultVisible: false },
-		{ key: 'createdAt', label: 'Fecha apertura', defaultVisible: false },
+		{ key: 'number', label: 'Ticket', defaultVisible: true, sticky: true, defaultWidth: 160 },
+		{ key: 'createdBy', label: 'Creado por', defaultVisible: true, defaultWidth: 180 },
+		{ key: 'title', label: 'Titulo', defaultVisible: true, defaultWidth: 260 },
+		{ key: 'userDescription', label: 'Descripcion', defaultVisible: true, defaultWidth: 380 },
+		{ key: 'assignment', label: 'Asignacion', defaultVisible: true, defaultWidth: 240 },
+		{ key: 'status', label: 'Estado', defaultVisible: false, defaultWidth: 150 },
+		{ key: 'urgency', label: 'Criticidad', defaultVisible: false, defaultWidth: 150 },
+		{ key: 'createdAt', label: 'Fecha apertura', defaultVisible: false, defaultWidth: 210 },
+		{ key: 'updatedAt', label: 'Fecha ultima edicion', defaultVisible: false, defaultWidth: 210 },
 	]
 
 	return available.filter((column) => props.visibleColumns.includes(column.key))
 })
+
+const tableStyle = computed(() => ({
+	width: `${columns.value.reduce((total, column) => total + (columnWidths[column.key] ?? column.defaultWidth), 0)}px`,
+}))
 
 function formatDate(timestamp?: number | null) {
 	if (!timestamp) {
@@ -53,6 +80,87 @@ function excerpt(text: string, maxLength = 140) {
 	}
 	return `${text.slice(0, maxLength - 1)}...`
 }
+
+function getColumnStyle(column: SupportColumn) {
+	const width = columnWidths[column.key] ?? column.defaultWidth
+	return {
+		width: `${width}px`,
+		minWidth: `${width}px`,
+	}
+}
+
+function getCellTitle(columnKey: SupportColumnKey, ticket: Ticket) {
+	if (columnKey === 'number') {
+		return ticket.number
+	}
+
+	if (columnKey === 'title') {
+		return ticket.title || ''
+	}
+
+	if (columnKey === 'createdBy') {
+		return ticket.creatorUid || ''
+	}
+
+	if (columnKey === 'userDescription') {
+		return ticket.userDescription || ''
+	}
+
+	if (columnKey === 'assignment') {
+		return formatAssignment(ticket)
+	}
+
+	if (columnKey === 'status') {
+		return ticket.status || ''
+	}
+
+	if (columnKey === 'urgency') {
+		return String(ticket.urgencyId ?? 'Sin criticidad')
+	}
+
+	if (columnKey === 'createdAt') {
+		return formatDate(ticket.createdAt)
+	}
+
+	if (columnKey === 'updatedAt') {
+		return formatDate(ticket.updatedAt)
+	}
+
+	return ''
+}
+
+function onResizeMove(event: MouseEvent) {
+	if (!activeResize) {
+		return
+	}
+
+	const nextWidth = Math.max(MIN_COLUMN_WIDTH, activeResize.startWidth + (event.clientX - activeResize.startX))
+	columnWidths[activeResize.columnKey] = nextWidth
+	document.body.classList.add('gi-column-resizing')
+}
+
+function stopResize() {
+	activeResize = null
+	window.removeEventListener('mousemove', onResizeMove)
+	window.removeEventListener('mouseup', stopResize)
+	document.body.classList.remove('gi-column-resizing')
+}
+
+function startResize(event: MouseEvent, column: SupportColumn) {
+	event.preventDefault()
+	event.stopPropagation()
+	activeResize = {
+		columnKey: column.key,
+		startX: event.clientX,
+		startWidth: columnWidths[column.key] ?? column.defaultWidth,
+	}
+	window.addEventListener('mousemove', onResizeMove)
+	window.addEventListener('mouseup', stopResize)
+}
+
+onBeforeUnmount(() => {
+	stopResize()
+})
 </script>
 
 <template>
@@ -61,37 +169,49 @@ function excerpt(text: string, maxLength = 140) {
 			<p>{{ emptyLabel }}</p>
 		</div>
 		<div v-else class="gi-table-scroll">
-			<table class="gi-support-table">
+			<table class="gi-support-table" :style="tableStyle">
+				<colgroup>
+					<col v-for="column in columns" :key="column.key" :style="getColumnStyle(column)" />
+				</colgroup>
 				<thead>
 					<tr>
-						<th v-for="column in columns" :key="column.key" :class="{ 'gi-support-table__cell--sticky': column.sticky }">
-							{{ column.label }}
+						<th v-for="column in columns" :key="column.key" :class="{ 'gi-support-table__cell--sticky': column.sticky }" :style="getColumnStyle(column)">
+							<div class="gi-support-table__header-content">
+								<span class="gi-support-table__header-label">{{ column.label }}</span>
+								<button class="gi-support-table__resize-handle" type="button" :aria-label="`Cambiar ancho de ${column.label}`" @mousedown="startResize($event, column)" />
+							</div>
 						</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr v-for="ticket in tickets" :key="ticket.id" class="gi-support-table__row" @click="emit('open', ticket.id)">
-						<td v-for="column in columns" :key="column.key" :class="{ 'gi-support-table__cell--sticky': column.sticky }">
+						<td v-for="column in columns" :key="column.key" :class="{ 'gi-support-table__cell--sticky': column.sticky }" :style="getColumnStyle(column)" :title="getCellTitle(column.key, ticket)">
 							<template v-if="column.key === 'number'">
-								<strong>{{ ticket.number }}</strong>
+								<strong class="gi-support-table__cell-text">{{ ticket.number }}</strong>
 							</template>
 							<template v-else-if="column.key === 'title'">
-								<div class="gi-support-table__title">{{ ticket.title }}</div>
+								<div class="gi-support-table__title gi-support-table__cell-text">{{ ticket.title }}</div>
+							</template>
+							<template v-else-if="column.key === 'createdBy'">
+								<span class="gi-support-table__cell-text">{{ ticket.creatorUid }}</span>
 							</template>
 							<template v-else-if="column.key === 'userDescription'">
-								<span class="gi-support-table__description">{{ excerpt(ticket.userDescription || '') }}</span>
+								<span class="gi-support-table__description gi-support-table__cell-text">{{ excerpt(ticket.userDescription || '') }}</span>
 							</template>
 							<template v-else-if="column.key === 'assignment'">
-								{{ formatAssignment(ticket) }}
+								<span class="gi-support-table__cell-text">{{ formatAssignment(ticket) }}</span>
 							</template>
 							<template v-else-if="column.key === 'status'">
-								<span class="gi-badge">{{ ticket.status }}</span>
+								<span class="gi-badge gi-support-table__cell-text">{{ ticket.status }}</span>
 							</template>
 							<template v-else-if="column.key === 'urgency'">
-								{{ ticket.urgencyId ?? 'Sin criticidad' }}
+								<span class="gi-support-table__cell-text">{{ ticket.urgencyId ?? 'Sin criticidad' }}</span>
 							</template>
 							<template v-else-if="column.key === 'createdAt'">
-								{{ formatDate(ticket.createdAt) }}
+								<span class="gi-support-table__cell-text">{{ formatDate(ticket.createdAt) }}</span>
+							</template>
+							<template v-else-if="column.key === 'updatedAt'">
+								<span class="gi-support-table__cell-text">{{ formatDate(ticket.updatedAt) }}</span>
 							</template>
 						</td>
 					</tr>
@@ -116,19 +236,22 @@ function excerpt(text: string, maxLength = 140) {
 }
 
 .gi-support-table {
-	width: 100%;
-	min-width: 72rem;
+	min-width: 0;
 	border-collapse: separate;
 	border-spacing: 0;
+	table-layout: fixed;
 }
 
 .gi-support-table th,
 .gi-support-table td {
+	min-width: 0;
+	max-width: 0;
 	padding: .95rem 1rem;
 	text-align: left;
 	vertical-align: top;
 	border-bottom: 1px solid rgba(49, 96, 91, .08);
 	background: rgba(255, 255, 255, .96);
+	overflow: hidden;
 }
 
 .gi-support-table thead th {
@@ -140,6 +263,35 @@ function excerpt(text: string, maxLength = 140) {
 	text-transform: uppercase;
 	letter-spacing: .04em;
 	color: #526861;
+}
+
+.gi-support-table__header-content {
+	position: relative;
+	min-height: 1.8rem;
+	min-width: 0;
+	padding-right: 1rem;
+}
+
+.gi-support-table__header-label {
+	display: block;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gi-support-table__resize-handle {
+	position: absolute;
+	right: 0;
+	top: 50%;
+	transform: translateY(-50%);
+	width: .8rem;
+	height: 1.8rem;
+	border: none;
+	border-radius: 999px;
+	background: linear-gradient(180deg, rgba(49, 96, 91, .12), rgba(49, 96, 91, .28));
+	cursor: col-resize;
+	padding: 0;
 }
 
 .gi-support-table__row {
@@ -162,18 +314,22 @@ function excerpt(text: string, maxLength = 140) {
 
 .gi-support-table__title {
 	font-weight: 600;
-	min-width: 12rem;
 }
 
 .gi-support-table__description {
 	display: inline-block;
-	max-width: 36rem;
+	max-width: 100%;
 	color: #596d66;
 }
 
-@media (max-width: 900px) {
-	.gi-support-table {
-		min-width: 56rem;
-	}
+.gi-support-table__cell-text {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
+
 </style>

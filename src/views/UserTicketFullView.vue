@@ -5,6 +5,7 @@ import TicketSidebarPanel from '@/components/TicketSidebarPanel.vue'
 import { createRepeatTicketDraft } from '@/services/ticketDraft'
 import { useBootstrapStore } from '@/store/bootstrap'
 import { useTicketsStore } from '@/store/tickets'
+import type { TicketAttachmentLinkDraft } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,7 +31,7 @@ async function download(attachmentId: number) {
 	URL.revokeObjectURL(link.href)
 }
 
-async function commentOnTicket(payload: { body: string, visibility: 'interno' | 'publico', files: File[] }) {
+async function commentOnTicket(payload: { body: string, visibility: 'interno' | 'publico', files: File[], links: TicketAttachmentLinkDraft[] }) {
 	if (!ticketsStore.selected) {
 		return
 	}
@@ -76,6 +77,7 @@ function repeatTicket() {
 			:ticket="ticketsStore.selected"
 			:roles="['usuario']"
 			:allowed-extensions="bootstrapStore.data.catalogs.attachmentConfig.allowedExtensions"
+			:max-file-size-mb="bootstrapStore.data.catalogs.attachmentConfig.maxFileSizeMb"
 			fullscreen
 			:read-only="true"
 			:show-repeat="true"

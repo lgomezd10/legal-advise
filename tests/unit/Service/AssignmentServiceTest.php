@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Tests\Unit\Service;
+namespace OCA\ConsultasLegales\Tests\Unit\Service;
 
-use OCA\Gestion_incidencias\Db\AssignmentRule;
-use OCA\Gestion_incidencias\Db\AssignmentRuleMapper;
-use OCA\Gestion_incidencias\Db\IncidentType;
-use OCA\Gestion_incidencias\Db\IncidentTypeMapper;
-use OCA\Gestion_incidencias\Service\AssignmentService;
+use OCA\ConsultasLegales\Db\AssignmentRule;
+use OCA\ConsultasLegales\Db\AssignmentRuleMapper;
+use OCA\ConsultasLegales\Db\IncidentType;
+use OCA\ConsultasLegales\Db\IncidentTypeMapper;
+use OCA\ConsultasLegales\Service\AssignmentService;
 use PHPUnit\Framework\TestCase;
 
 class AssignmentServiceTest extends TestCase {

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Controller;
+namespace OCA\ConsultasLegales\Controller;
 
-use OCA\Gestion_incidencias\Service\AdminConfigService;
-use OCA\Gestion_incidencias\Service\RoleService;
+use OCA\ConsultasLegales\Service\AdminConfigService;
+use OCA\ConsultasLegales\Service\RoleService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\IRequest;

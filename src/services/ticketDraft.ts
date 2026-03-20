@@ -19,12 +19,12 @@ export function createDefaultTicketDraft(personalConfig: Record<string, string>,
 		selectedPath: [],
 		typeId: null,
 		province: null,
-		withoutProvince: false,
 		title: '',
 		userDescription: '',
 		urgencyId: getDefaultUrgencyId(urgencies),
 		communicationChannel: 'nextcloud_mail',
 		personalData: { ...personalConfig },
+		attachments: { files: [], links: [] },
 	}
 }
 
@@ -95,7 +95,6 @@ export function createRepeatTicketDraft(ticket: Ticket, types: TypeNode[], perso
 		selectedPath,
 		typeId: ticket.typeId ?? null,
 		province: ticket.province ?? null,
-		withoutProvince: !ticket.province,
 		title: ticket.title,
 		userDescription: ticket.userDescription,
 		urgencyId: ticket.urgencyId ? String(ticket.urgencyId) : getDefaultUrgencyId(urgencies),
@@ -104,5 +103,6 @@ export function createRepeatTicketDraft(ticket: Ticket, types: TypeNode[], perso
 			...personalConfig,
 			...ticketPersonalData,
 		},
+		attachments: { files: [], links: [] },
 	}
 }
