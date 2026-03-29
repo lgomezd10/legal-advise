@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
+import { computed, defineAsyncComponent, reactive, watch } from 'vue'
 import type { CatalogField, SearchableSelectOption, TicketAttachmentLinkDraft, TicketDraft, TypeNode, UrgencyCatalogItem } from '@/types'
 import AttachmentPicker from './AttachmentPicker.vue'
 import SearchableSelect from './SearchableSelect.vue'
 import TypeCascadeSelector from './TypeCascadeSelector.vue'
+import { isRichTextEmpty } from '@/utils/richText'
+
+const RichTextEditor = defineAsyncComponent(() => import(/* webpackChunkName: "rich-text-editor" */ './RichTextEditor.vue'))
 
 const props = defineProps<{
 	types: TypeNode[]
@@ -77,6 +80,8 @@ function submit() {
 			},
 	})
 }
+
+const canSubmit = computed(() => Boolean(selectedTypeId.value) && form.title.trim() !== '' && !isRichTextEmpty(form.userDescription))
 </script>
 
 <template>
@@ -86,7 +91,10 @@ function submit() {
 			<label class="gi-field gi-field--wide"><span>Titulo</span><input v-model="form.title" class="gi-input" /></label>
 			<label class="gi-field"><span>Criticidad</span><SearchableSelect v-model="form.urgencyId" :options="urgencyOptions" placeholder="Selecciona" clearable /></label>
 			<label class="gi-field"><span>Canal de comunicacion</span><SearchableSelect v-model="form.communicationChannel" :options="channelOptions" placeholder="Selecciona" /></label>
-			<label class="gi-field gi-field--wide"><span>Descripcion</span><textarea v-model="form.userDescription" class="gi-textarea" rows="7" /></label>
+			<label class="gi-field gi-field--wide">
+				<span>Descripcion</span>
+				<RichTextEditor v-model="form.userDescription" placeholder="Describe el ticket y, si lo necesitas, pega capturas o inserta imagenes" :min-height="220" />
+			</label>
 			<label class="gi-field gi-field--wide">
 				<span>Adjuntos iniciales</span>
 				<AttachmentPicker v-model="form.attachments" :allowed-extensions="allowedExtensions" :max-file-size-mb="maxFileSizeMb || 25" />
@@ -97,7 +105,7 @@ function submit() {
 			</label>
 		</div>
 		<div class="gi-actions">
-			<button class="gi-primary-button" :disabled="!selectedTypeId || !form.title || !form.userDescription" @click="submit">Crear ticket</button>
+			<button class="gi-primary-button" :disabled="!canSubmit" @click="submit">Crear ticket</button>
 		</div>
 	</div>
 </template>

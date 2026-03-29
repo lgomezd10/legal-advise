@@ -22,14 +22,18 @@ class PersonalConfigApiController extends BaseApiController {
 
 	#[NoAdminRequired]
 	public function show(): DataResponse {
-		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		return $this->ok(['values' => $this->personalConfigService->getForUser($uid)]);
+		return $this->respond(function (): array {
+			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			return ['values' => $this->personalConfigService->getForUser($uid)];
+		});
 	}
 
 	#[NoAdminRequired]
 	public function update(): DataResponse {
-		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		$values = $this->request->getParam('values') ?? [];
-		return $this->ok(['values' => $this->personalConfigService->saveForUser($uid, is_array($values) ? $values : [])]);
+		return $this->respond(function (): array {
+			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$values = $this->request->getParam('values') ?? [];
+			return ['values' => $this->personalConfigService->saveForUser($uid, is_array($values) ? $values : [])];
+		});
 	}
 }

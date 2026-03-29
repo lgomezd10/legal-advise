@@ -6,10 +6,12 @@ namespace OCA\ConsultasLegales\Controller;
 
 use OCA\ConsultasLegales\AppInfo\Application;
 use OCA\ConsultasLegales\Service\BootstrapService;
+use OCP\App\IAppManager;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\RedirectResponse;
+use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
 use OCP\IRequest;
@@ -23,6 +25,7 @@ class PageController extends Controller {
 		private readonly IInitialState $initialState,
 		private readonly BootstrapService $bootstrapService,
 		private readonly IURLGenerator $urlGenerator,
+		private readonly IAppManager $appManager,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -30,6 +33,10 @@ class PageController extends Controller {
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function open(): RedirectResponse {
+		if (!$this->appManager->isEnabledForUser(Application::APP_ID)) {
+			return new RedirectResponse($this->urlGenerator->linkToDefaultPageUrl());
+		}
+
 		$bootstrap = $this->bootstrapService->build();
 		$navigation = $bootstrap['navigation'] ?? [];
 		$landingRoute = '/';
@@ -46,7 +53,11 @@ class PageController extends Controller {
 
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
-	public function index(): TemplateResponse {
+	public function index(): Response {
+		if (!$this->appManager->isEnabledForUser(Application::APP_ID)) {
+			return new RedirectResponse($this->urlGenerator->linkToDefaultPageUrl());
+		}
+
 		$this->initialState->provideInitialState('bootstrap', $this->bootstrapService->build());
 
 		Util::addStyle(Application::APP_ID, 'style');

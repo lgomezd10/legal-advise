@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import type { Ticket, TicketAttachmentLinkDraft, TicketDraft } from '@/types'
-import { addComment, createTicket, downloadAttachment, exportTickets, fetchTicket, fetchTickets, updateTicket, uploadAttachment, uploadAttachmentUrl } from '@/services/tickets'
+import { addComment, createTicket, downloadAttachment, exportTickets, fetchTicket, fetchTickets, reopenTicket, updateTicket, uploadAttachment, uploadAttachmentUrl } from '@/services/tickets'
 
 type CommentPayload = {
 	body: string
@@ -55,6 +55,11 @@ export const useTicketsStore = defineStore('tickets', {
 			}
 
 			await this.select(ticketId)
+		},
+		async reopen(ticketId: number) {
+			this.selected = await reopenTicket(ticketId)
+			this.items = this.items.map((item) => item.id === ticketId ? this.selected as Ticket : item)
+			return this.selected
 		},
 		async download(attachmentId: number) {
 			return downloadAttachment(attachmentId)

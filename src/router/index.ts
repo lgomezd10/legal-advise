@@ -7,6 +7,7 @@ import SupportTicketFullView from '@/views/SupportTicketFullView.vue'
 import UserTicketFullView from '@/views/UserTicketFullView.vue'
 import ConfigurationView from '@/views/ConfigurationView.vue'
 import TicketSidebarView from '@/views/TicketSidebarView.vue'
+import AccessRestrictedView from '@/views/AccessRestrictedView.vue'
 
 export const router = createRouter({
 	history: createWebHashHistory(),
@@ -24,5 +25,6 @@ export const router = createRouter({
 		{ path: '/soporte/:ticketId', components: { default: SupportConsoleView, AppSidebar: TicketSidebarView }, props: { default: false, AppSidebar: true } },
 		{ path: '/soporte/:ticketId/completo', components: { default: SupportTicketFullView }, props: { default: true } },
 		{ path: '/administracion', redirect: '/configuracion' },
+		{ path: '/sin-acceso', components: { default: AccessRestrictedView } },
 	],
 })

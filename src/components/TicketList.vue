@@ -1,33 +1,48 @@
 <script setup lang="ts">
-import type { Ticket } from '@/types'
+import { computed } from 'vue'
+import type { AssignableOption, StatusOption, Ticket } from '@/types'
+import { formatDateTime, getStatusLabel } from '@/utils/formatting'
+import { excerptRichText } from '@/utils/richText'
 
-defineProps<{
+
+const props = defineProps<{
 	tickets: Ticket[]
 	emptyLabel: string
+ 	statuses?: StatusOption[]
+	users?: AssignableOption[]
+	groups?: AssignableOption[]
 }>()
 
 const emit = defineEmits<{
 	(e: 'open', id: number): void
 }>()
 
-function formatDate(timestamp: number) {
-	return new Date(timestamp * 1000).toLocaleString()
+const safeStatuses = computed<StatusOption[]>(() => props.statuses ?? [])
+
+function resolveStatusLabel(statusId: string) {
+	return getStatusLabel(statusId, safeStatuses.value)
 }
+
+function resolveDescription(value: string) {
+	return excerptRichText(value, 180)
+}
+
 </script>
 
 <template>
 	<div class="gi-list">
 		<button v-for="ticket in tickets" :key="ticket.id" class="gi-ticket-card" :class="{ 'gi-ticket-card--waiting': ticket.status === 'en_espera_usuario' }" @click="emit('open', ticket.id)">
 			<div class="gi-ticket-card__header">
-				<div class="gi-ticket-card__summary">
-					<strong>{{ ticket.number }}</strong>
-					<span>{{ formatDate(ticket.createdAt) }}</span>
-				</div>
-				<span class="gi-badge">{{ ticket.status }}</span>
+				<h3 class="gi-ticket-card__title">{{ ticket.title }}</h3>
+				<strong class="gi-ticket-card__number">{{ ticket.number }}</strong>
 			</div>
-			<div class="gi-ticket-card__content">
-				<h3>{{ ticket.title }}</h3>
-				<p>{{ ticket.userDescription }}</p>
+			<div class="gi-ticket-card__meta">
+				<span>Actualizada {{ formatDateTime(ticket.updatedAt) }}</span>
+				<span>Creada {{ formatDateTime(ticket.createdAt) }}</span>
+			</div>
+			<p class="gi-ticket-card__description">{{ resolveDescription(ticket.userDescription) }}</p>
+			<div class="gi-ticket-card__footer">
+				<span class="gi-badge">{{ resolveStatusLabel(ticket.status) }}</span>
 			</div>
 		</button>
 		<div v-if="tickets.length === 0" class="gi-empty-state">
@@ -43,6 +58,8 @@ function formatDate(timestamp: number) {
 }
 
 .gi-ticket-card {
+	display: grid;
+	gap: .55rem;
 	padding: 1rem 1.1rem;
 	border: 1px solid rgba(49, 96, 91, .14);
 	border-radius: 16px;
@@ -50,6 +67,7 @@ function formatDate(timestamp: number) {
 	text-align: left;
 	cursor: pointer;
 	box-shadow: 0 12px 28px rgba(34, 62, 55, .06);
+	min-width: 0;
 }
 
 .gi-ticket-card--waiting {
@@ -59,38 +77,50 @@ function formatDate(timestamp: number) {
 }
 
 .gi-ticket-card__header,
-.gi-ticket-card__summary {
+.gi-ticket-card__meta,
+.gi-ticket-card__footer {
 	display: flex;
 	justify-content: space-between;
 	gap: 1rem;
-	align-items: center;
 }
 
-.gi-ticket-card__summary {
+.gi-ticket-card__header {
+	align-items: start;
+}
+
+.gi-ticket-card__meta {
 	min-width: 0;
 	flex-wrap: wrap;
 	color: #61746d;
 	font-size: .84rem;
 }
 
-.gi-ticket-card p {
+.gi-ticket-card__description {
 	color: var(--color-text-maxcontrast);
 	display: -webkit-box;
+	line-clamp: 2;
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
 	overflow: hidden;
-}
-
-.gi-ticket-card__content {
-	margin-top: .7rem;
-}
-
-.gi-ticket-card h3 {
-	margin: 0 0 .25rem;
-	font-size: 1rem;
-}
-
-.gi-ticket-card p {
 	margin: 0;
+}
+
+.gi-ticket-card__title {
+	margin: 0;
+	font-size: 1rem;
+	text-transform: uppercase;
+	line-height: 1.2;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.gi-ticket-card__number {
+	flex: none;
+	white-space: nowrap;
+}
+
+.gi-ticket-card__footer {
+	justify-content: flex-end;
+	align-items: center;
 }
 </style>

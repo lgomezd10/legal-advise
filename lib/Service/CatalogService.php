@@ -21,12 +21,14 @@ class CatalogService {
 	];
 
 	public const CORE_STATUS_DEFINITIONS = [
-		['id' => 'nuevo', 'label' => 'Nuevo', 'description' => 'Estado inicial al registrar una nueva consulta.'],
-		['id' => 'asignado', 'label' => 'Asignado', 'description' => 'La consulta ya esta en gestion por soporte.'],
-		['id' => 'en_espera_usuario', 'label' => 'En espera usuario', 'description' => 'Soporte necesita una respuesta o accion del usuario.'],
-		['id' => 'en_progreso', 'label' => 'En progreso', 'description' => 'La consulta se esta tramitando internamente.'],
-		['id' => 'resuelto', 'label' => 'Resuelto', 'description' => 'La consulta ya tiene una resolucion comunicada.'],
-		['id' => 'cerrado', 'label' => 'Cerrado', 'description' => 'La consulta ha quedado cerrada definitivamente.'],
+		['id' => 'nuevo', 'label' => 'Nuevo', 'description' => 'Estado inicial al registrar un ticket nuevo.', 'active' => true, 'closed' => false, 'fixed' => true, 'toggleable' => false],
+		['id' => 'asignado', 'label' => 'Asignado', 'description' => 'El ticket ya esta en gestion por soporte.', 'active' => true, 'closed' => false, 'fixed' => true, 'toggleable' => false],
+		['id' => 'en_espera_usuario', 'label' => 'En espera usuario', 'description' => 'Soporte necesita una respuesta o accion del usuario.', 'active' => true, 'closed' => false, 'fixed' => true, 'toggleable' => false],
+		['id' => 'en_progreso', 'label' => 'En progreso', 'description' => 'El ticket se esta tramitando internamente.', 'active' => true, 'closed' => false, 'fixed' => true, 'toggleable' => false],
+		['id' => 'resuelto', 'label' => 'Resuelto', 'description' => 'El ticket ya tiene una resolucion comunicada.', 'active' => true, 'closed' => true, 'fixed' => true, 'toggleable' => true],
+		['id' => 'cerrado', 'label' => 'Cerrado', 'description' => 'El ticket ha quedado cerrado definitivamente.', 'active' => true, 'closed' => true, 'fixed' => true, 'toggleable' => false],
+		['id' => 'abierto_personalizado_1', 'label' => 'Estado abierto 1', 'description' => 'Estado abierto editable adicional.', 'active' => false, 'closed' => false, 'fixed' => false, 'toggleable' => true],
+		['id' => 'abierto_personalizado_2', 'label' => 'Estado abierto 2', 'description' => 'Estado abierto editable adicional.', 'active' => false, 'closed' => false, 'fixed' => false, 'toggleable' => true],
 	];
 
 	public function __construct(
@@ -46,6 +48,10 @@ class CatalogService {
 		return array_map(static fn (array $definition): array => [
 			'id' => $definition['id'],
 			'label' => $definition['label'],
+			'active' => (bool) $definition['active'],
+			'closed' => (bool) $definition['closed'],
+			'fixed' => (bool) $definition['fixed'],
+			'toggleable' => (bool) $definition['toggleable'],
 		], self::CORE_STATUS_DEFINITIONS);
 	}
 
@@ -53,6 +59,10 @@ class CatalogService {
 		return array_map(static fn (array $status): array => [
 			'id' => $status['id'],
 			'label' => $status['label'],
+			'active' => (bool) ($status['active'] ?? true),
+			'closed' => (bool) ($status['closed'] ?? false),
+			'fixed' => (bool) ($status['fixed'] ?? true),
+			'toggleable' => (bool) ($status['toggleable'] ?? false),
 		], self::normalizeStatusCatalog($entries));
 	}
 
@@ -67,20 +77,47 @@ class CatalogService {
 				$id = isset($entry['id']) && is_string($entry['id']) ? trim($entry['id']) : '';
 				$label = isset($entry['label']) && is_string($entry['label']) ? trim($entry['label']) : '';
 				if ($id !== '' && $label !== '') {
-					$labelsById[$id] = $label;
+					$labelsById[$id] = [
+						'label' => $label,
+						'active' => isset($entry['active']) ? (bool) $entry['active'] : null,
+					];
 				}
 			}
 		}
 
 		return array_map(static function (array $definition) use ($labelsById): array {
 			$id = $definition['id'];
+			$current = $labelsById[$id] ?? [];
 			return [
 				'id' => $id,
-				'label' => $labelsById[$id] ?? $definition['label'],
-				'fixed' => true,
+				'label' => $current['label'] ?? $definition['label'],
+				'active' => $definition['toggleable'] ? (bool) ($current['active'] ?? $definition['active']) : (bool) $definition['active'],
+				'closed' => (bool) $definition['closed'],
+				'fixed' => (bool) $definition['fixed'],
+				'toggleable' => (bool) $definition['toggleable'],
 				'description' => $definition['description'],
 			];
 		}, self::CORE_STATUS_DEFINITIONS);
+	}
+
+	public function isClosedStatus(string $statusId): bool {
+		foreach ($this->getStatuses() as $status) {
+			if (($status['id'] ?? '') === $statusId) {
+				return (bool) ($status['closed'] ?? false);
+			}
+		}
+
+		return false;
+	}
+
+	public function isActiveStatus(string $statusId): bool {
+		foreach ($this->getStatuses() as $status) {
+			if (($status['id'] ?? '') === $statusId) {
+				return (bool) ($status['active'] ?? true);
+			}
+		}
+
+		return false;
 	}
 
 	public function getUrgencies(): array {

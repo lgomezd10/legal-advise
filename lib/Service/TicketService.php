@@ -24,6 +24,7 @@ class TicketService {
 		private readonly IGroupManager $groupManager,
 		private readonly IUserManager $userManager,
 		private readonly ProvinceCatalogService $provinceCatalogService,
+		private readonly CatalogService $catalogService,
 		private readonly TicketMapper $ticketMapper,
 		private readonly CommentMapper $commentMapper,
 		private readonly AttachmentService $attachmentService,
@@ -35,6 +36,7 @@ class TicketService {
 		private readonly PermissionService $permissionService,
 		private readonly NotificationService $notificationService,
 		private readonly TaskSyncService $taskSyncService,
+		private readonly RichTextSanitizer $richTextSanitizer,
 		private readonly RoleService $roleService,
 	) {
 	}
@@ -89,7 +91,7 @@ class TicketService {
 		$ticket->setUrgencyId(isset($payload['urgencyId']) ? (int) $payload['urgencyId'] : $this->resolveDefaultUrgencyId());
 		$ticket->setTypeId(isset($payload['typeId']) ? (int) $payload['typeId'] : null);
 		$ticket->setTitle((string) ($payload['title'] ?? ''));
-		$ticket->setUserDescription((string) ($payload['userDescription'] ?? ''));
+		$ticket->setUserDescription($this->richTextSanitizer->sanitize((string) ($payload['userDescription'] ?? '')));
 		$ticket->setSupportDescription('');
 		$ticket->setAssignedUserUid($assignment['assignedUserUid']);
 		$ticket->setAssignedGroupId($assignment['assignedGroupId']);
@@ -109,19 +111,35 @@ class TicketService {
 	public function update(string $uid, int $id, array $payload): array {
 		$ticket = $this->ticketMapper->find($id);
 		$this->permissionService->assertCanManageTicket($uid, $ticket);
+		if ($this->catalogService->isClosedStatus((string) $ticket->getStatus())) {
+			throw new \RuntimeException('El ticket esta cerrado y debe reabrirse antes de modificarlo.', 409);
+		}
 
 		$previousStatus = (string) $ticket->getStatus();
+		$previousTicketStatusWasClosed = $this->catalogService->isClosedStatus($previousStatus);
 		$previousAssignedUserUid = $ticket->getAssignedUserUid();
 		$previousAssignedGroupId = $ticket->getAssignedGroupId();
+		$closeReason = $this->normalizeClosureReason($payload['closeReason'] ?? null);
 		$this->assertAssignmentPayloadAllowed($uid, $payload, $previousAssignedGroupId);
 		$statusChanged = false;
 		$assignmentChanged = false;
-		foreach (['status', 'urgencyId', 'assignedUserUid', 'assignedGroupId', 'supportDescription'] as $field) {
+		foreach (['title', 'status', 'urgencyId', 'assignedUserUid', 'assignedGroupId', 'supportDescription'] as $field) {
 			if (!array_key_exists($field, $payload)) {
 				continue;
 			}
 
 			$value = $payload[$field];
+			if ($field === 'title') {
+				$value = trim((string) $value);
+				if ($value === '') {
+					throw new \InvalidArgumentException('El titulo del ticket no puede estar vacio.');
+				}
+				$payload[$field] = $value;
+			}
+			if ($field === 'supportDescription') {
+				$value = $this->richTextSanitizer->sanitize(is_string($value) ? $value : '');
+				$payload[$field] = $value;
+			}
 			$getter = 'get' . ucfirst($field);
 			$currentValue = method_exists($ticket, $getter) ? $ticket->{$getter}() : null;
 			$setter = 'set' . ucfirst($field);
@@ -145,9 +163,16 @@ class TicketService {
 			$payload['status'] = $normalizedStatus;
 		}
 
+		if ($statusChanged && $this->catalogService->isClosedStatus((string) $ticket->getStatus()) && !$previousTicketStatusWasClosed && $closeReason === '') {
+			throw new \InvalidArgumentException('Debes indicar el motivo del cierre.');
+		}
+
 		$ticket->setUpdatedAt(time());
 		$ticket = $this->ticketMapper->update($ticket);
 		$this->addHistory($ticket->getId(), $uid, RoleService::SUPPORT, 'ticket_updated', 'interno', $payload);
+		if ($statusChanged && $this->catalogService->isClosedStatus((string) $ticket->getStatus()) && !$previousTicketStatusWasClosed && $closeReason !== '') {
+			$this->addClosureReasonComment($ticket, $uid, $closeReason);
+		}
 		$this->taskSyncService->syncTicket($ticket);
 
 		$eventName = 'ticket_updated';
@@ -168,8 +193,24 @@ class TicketService {
 		return $this->serializeTicket($uid, $ticket, true);
 	}
 
+	private function addClosureReasonComment(Ticket $ticket, string $uid, string $closeReason): void {
+		$comment = new Comment();
+		$comment->setTicketId((int) $ticket->getId());
+		$comment->setAuthorUid($uid);
+		$comment->setAuthorRole(RoleService::SUPPORT);
+		$comment->setBody($this->plainTextToRichText($closeReason));
+		$comment->setVisibility('publico');
+		$comment->setCreatedAt(time());
+
+		$comment = $this->commentMapper->insert($comment);
+		$this->addHistory((int) $ticket->getId(), $uid, RoleService::SUPPORT, 'comment_added', 'publico', ['commentId' => $comment->getId(), 'isClosureReason' => true]);
+	}
+
 	public function addComment(string $uid, int $ticketId, array $payload): array {
 		$ticket = $this->ticketMapper->find($ticketId);
+		if ($this->catalogService->isClosedStatus((string) $ticket->getStatus())) {
+			throw new \RuntimeException('El ticket esta cerrado y no admite comentarios hasta reabrirse.', 409);
+		}
 
 		$roles = $this->roleService->getEffectiveRoles($uid);
 		$isSupport = in_array(RoleService::SUPPORT, $roles, true) || in_array(RoleService::ADMIN, $roles, true);
@@ -180,9 +221,9 @@ class TicketService {
 		}
 
 		$visibility = $isSupport ? (string) ($payload['visibility'] ?? 'interno') : 'publico';
-		$body = trim((string) ($payload['body'] ?? ''));
+		$body = $this->richTextSanitizer->sanitize((string) ($payload['body'] ?? ''));
 		$allowEmpty = filter_var($payload['allowEmpty'] ?? false, FILTER_VALIDATE_BOOLEAN);
-		if ($body === '' && !$allowEmpty) {
+		if (!$this->richTextSanitizer->isMeaningful($body) && !$allowEmpty) {
 			throw new \InvalidArgumentException('El comentario no puede estar vacio.');
 		}
 
@@ -214,13 +255,38 @@ class TicketService {
 		return $comment->jsonSerialize();
 	}
 
+	public function reopen(string $uid, int $id): array {
+		$ticket = $this->ticketMapper->find($id);
+		if (!$this->canReopenTicket($uid, $ticket)) {
+			throw new \RuntimeException('Forbidden', 403);
+		}
+
+		if (!$this->catalogService->isClosedStatus((string) $ticket->getStatus())) {
+			return $this->serializeTicket($uid, $ticket, true);
+		}
+
+		$previousStatus = (string) $ticket->getStatus();
+		$ticket->setStatus($this->resolveAssignmentAwareStatus('nuevo', $ticket->getAssignedUserUid(), $ticket->getAssignedGroupId()));
+		$ticket->setStatusUpdatedAt(time());
+		$ticket->setUpdatedAt(time());
+		$ticket = $this->ticketMapper->update($ticket);
+		$this->addHistory($ticket->getId(), $uid, $this->permissionService->canManageTicket($uid, $ticket) ? RoleService::SUPPORT : RoleService::USER, 'ticket_reopened', 'publico', [
+			'previousStatus' => $previousStatus,
+			'nextStatus' => (string) $ticket->getStatus(),
+		]);
+		$this->taskSyncService->syncTicket($ticket);
+		$this->notificationService->emit('ticket_status_changed', $ticket, [], ['previousStatus' => $previousStatus]);
+
+		return $this->serializeTicket($uid, $ticket, true);
+	}
+
 	public function addAttachment(string $uid, int $ticketId, array $uploadedFile, int $commentId, ?string $sourceUrl = null, ?string $originalName = null): array {
 		$ticket = $this->ticketMapper->find($ticketId);
 		$this->permissionService->assertCanReadTicket($uid, $ticket);
 
 		$comment = $this->commentMapper->find($commentId);
 		if ((int) $comment->getTicketId() !== $ticketId) {
-			throw new \InvalidArgumentException('El comentario indicado no pertenece a la incidencia.');
+			throw new \InvalidArgumentException('El comentario indicado no pertenece al ticket.');
 		}
 
 		$roles = $this->roleService->getEffectiveRoles($uid);
@@ -268,6 +334,20 @@ class TicketService {
 		return null;
 	}
 
+	private function normalizeClosureReason(mixed $value): string {
+		return trim(is_string($value) ? $value : '');
+	}
+
+	private function plainTextToRichText(string $value): string {
+		$normalized = preg_replace("/\r\n?|\n/", "\n", trim($value)) ?? trim($value);
+		$lines = array_values(array_filter(array_map(static fn (string $line): string => trim($line), explode("\n", $normalized)), static fn (string $line): bool => $line !== ''));
+		if ($lines === []) {
+			return '<p></p>';
+		}
+
+		return implode('', array_map(static fn (string $line): string => '<p>' . htmlspecialchars($line, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>', $lines));
+	}
+
 	private function resolveProvinceSelection(array $payload): ?string {
 		$rawProvince = is_string($payload['province'] ?? null) ? trim((string) $payload['province']) : '';
 
@@ -281,9 +361,13 @@ class TicketService {
 
 	private function serializeTicket(string $uid, Ticket $ticket, bool $includeDetail = false): array {
 		$data = $ticket->jsonSerialize();
+		$isClosedStatus = $this->catalogService->isClosedStatus((string) $ticket->getStatus());
+		$publicComments = $this->commentMapper->findBy('ticket_id', $ticket->getId(), 'created_at', 'ASC');
 		$data['canRead'] = $this->permissionService->canReadTicket($uid, $ticket);
 		$data['canManage'] = $this->permissionService->canManageTicket($uid, $ticket);
-		$data['canComment'] = $this->permissionService->canCommentOnTicket($uid, $ticket);
+		$data['canComment'] = !$isClosedStatus && $this->permissionService->canCommentOnTicket($uid, $ticket);
+		$data['canReopen'] = $isClosedStatus && $this->canReopenTicket($uid, $ticket);
+		$data['publicCommentSearchText'] = $this->buildPublicCommentSearchText($publicComments);
 		$attachments = $includeDetail ? $this->attachmentService->listForTicket($ticket->getId()) : [];
 		$attachmentsByCommentId = [];
 		foreach ($attachments as $attachment) {
@@ -301,82 +385,136 @@ class TicketService {
 			$comment = $row->jsonSerialize();
 			$comment['attachments'] = $attachmentsByCommentId[(int) ($comment['id'] ?? 0)] ?? [];
 			return $comment;
-		}, $this->commentMapper->findBy('ticket_id', $ticket->getId(), 'created_at', 'ASC')), fn (array $comment) => $this->permissionService->canSeeComment($uid, $ticket, (string) $comment['visibility']))) : [];
+		}, $publicComments), fn (array $comment) => $this->permissionService->canSeeComment($uid, $ticket, (string) $comment['visibility']))) : [];
 		$data['history'] = $includeDetail ? array_values(array_filter(array_map(fn ($row) => $row->jsonSerialize(), $this->historyMapper->findBy('ticket_id', $ticket->getId(), 'created_at', 'ASC')), fn (array $entry) => $entry['visibility'] === 'publico' || $this->permissionService->canManageTicket($uid, $ticket))) : [];
 		$data['personalData'] = $includeDetail ? array_map(fn ($row) => $row->jsonSerialize(), $this->ticketDataMapper->findBy('ticket_id', $ticket->getId(), 'field_key', 'ASC')) : [];
 		$data['taskSync'] = $includeDetail ? $this->taskSyncService->getSyncForTicket($ticket->getId()) : null;
 		return $data;
 	}
 
+	/**
+	 * @param Comment[] $comments
+	 */
+	private function buildPublicCommentSearchText(array $comments): string {
+		$parts = [];
+		foreach ($comments as $comment) {
+			if ($comment->getVisibility() !== 'publico') {
+				continue;
+			}
+
+			$parts[] = $this->richTextSanitizer->toPlainText((string) $comment->getBody());
+		}
+
+		return trim(implode(' ', array_filter($parts, static fn (string $value): bool => $value !== '')));
+	}
+
+	private function canReopenTicket(string $uid, Ticket $ticket): bool {
+		if ($ticket->getCreatorUid() === $uid) {
+			return true;
+		}
+
+		return $this->permissionService->canManageTicket($uid, $ticket);
+	}
+
 	private function matchesCriteria(string $uid, array $ticket, array $criteria): bool {
 		$userGroupIds = $this->loadUserGroupIds($uid);
+		$negatedCriteria = [];
+		if (isset($criteria['negatedCriteria']) && is_array($criteria['negatedCriteria'])) {
+			$negatedCriteria = array_fill_keys(array_map('strval', $criteria['negatedCriteria']), true);
+		}
+
 		foreach ($criteria as $key => $value) {
+			if ($key === 'negatedCriteria') {
+				continue;
+			}
+
 			if ($value === null || $value === '' || $value === []) {
 				continue;
 			}
+
+			$matches = true;
 
 			switch ($key) {
 				case 'status':
 					$statusValues = is_array($value) ? $value : array_map('trim', explode(',', (string) $value))
 					;
-					if (!in_array($ticket['status'], $statusValues, true)) {
-						return false;
-					}
+					$matches = in_array($ticket['status'], $statusValues, true);
+					break;
+				case 'createdBy':
+					$matches = (($ticket['creatorUid'] ?? null) === $value);
 					break;
 				case 'assignedUser':
 					if ($value === '__me__') {
-						if (($ticket['assignedUserUid'] ?? null) !== $uid) {
-							return false;
-						}
+						$matches = (($ticket['assignedUserUid'] ?? null) === $uid);
 						break;
 					}
-					if (($ticket['assignedUserUid'] ?? null) !== $value) {
-						return false;
-					}
+					$matches = (($ticket['assignedUserUid'] ?? null) === $value);
 					break;
 				case 'assignedGroup':
 					if ($value === '__my_groups__') {
-						if (!in_array((string) ($ticket['assignedGroupId'] ?? ''), $userGroupIds, true)) {
-							return false;
-						}
+						$matches = in_array((string) ($ticket['assignedGroupId'] ?? ''), $userGroupIds, true);
 						break;
 					}
-					if (($ticket['assignedGroupId'] ?? null) !== $value) {
-						return false;
-					}
+					$matches = (($ticket['assignedGroupId'] ?? null) === $value);
 					break;
 				case 'unassigned':
-					if ($value && (($ticket['assignedUserUid'] ?? null) !== null || ($ticket['assignedGroupId'] ?? null) !== null)) {
-						return false;
-					}
+					$matches = !($value && (($ticket['assignedUserUid'] ?? null) !== null || ($ticket['assignedGroupId'] ?? null) !== null));
 					break;
 				case 'city':
-					if (stripos((string) ($ticket['city'] ?? ''), (string) $value) === false) {
-						return false;
-					}
+					$matches = stripos((string) ($ticket['city'] ?? ''), (string) $value) !== false;
 					break;
 				case 'typeId':
-					if ((int) ($ticket['typeId'] ?? 0) !== (int) $value) {
-						return false;
-					}
+					$matches = (int) ($ticket['typeId'] ?? 0) === (int) $value;
 					break;
 				case 'updatedWithinDays':
 					$threshold = time() - ((int) $value * 86400);
-					if ((int) ($ticket['updatedAt'] ?? 0) < $threshold) {
-						return false;
-					}
+					$matches = (int) ($ticket['updatedAt'] ?? 0) >= $threshold;
+					break;
+				case 'createdAtFrom':
+					$from = $this->parseDateBoundary((string) $value, false);
+					$matches = $from === null || (int) ($ticket['createdAt'] ?? 0) >= $from;
+					break;
+				case 'createdAtTo':
+					$to = $this->parseDateBoundary((string) $value, true);
+					$matches = $to === null || (int) ($ticket['createdAt'] ?? 0) <= $to;
+					break;
+				case 'updatedAtFrom':
+					$from = $this->parseDateBoundary((string) $value, false);
+					$matches = $from === null || (int) ($ticket['updatedAt'] ?? 0) >= $from;
+					break;
+				case 'updatedAtTo':
+					$to = $this->parseDateBoundary((string) $value, true);
+					$matches = $to === null || (int) ($ticket['updatedAt'] ?? 0) <= $to;
 					break;
 				case 'text':
-					$haystack = strtolower(($ticket['title'] ?? '') . ' ' . ($ticket['userDescription'] ?? '') . ' ' . ($ticket['supportDescription'] ?? ''));
-					if (!str_contains($haystack, strtolower((string) $value))) {
-						return false;
-					}
+					$needle = strtolower(trim((string) $value));
+					$commentText = implode(' ', array_map(fn ($comment) => $this->richTextSanitizer->toPlainText((string) ($comment->getBody() ?? '')), $this->commentMapper->findBy('ticket_id', (int) ($ticket['id'] ?? 0), 'created_at', 'ASC')));
+					$haystack = strtolower(implode(' ', array_filter([
+						(string) ($ticket['number'] ?? ''),
+						(string) ($ticket['title'] ?? ''),
+						$this->richTextSanitizer->toPlainText((string) ($ticket['userDescription'] ?? '')),
+						$this->richTextSanitizer->toPlainText((string) ($ticket['supportDescription'] ?? '')),
+						(string) ($ticket['status'] ?? ''),
+						(string) ($ticket['creatorUid'] ?? ''),
+						(string) ($ticket['assignedUserUid'] ?? ''),
+						(string) ($ticket['assignedGroupId'] ?? ''),
+						(string) ($ticket['province'] ?? ''),
+						(string) ($ticket['city'] ?? ''),
+						$commentText,
+					])));
+					$matches = str_contains($haystack, $needle);
 					break;
 				case 'hasAttachments':
-					if ($value && !$this->attachmentService->hasForTicket((int) ($ticket['id'] ?? 0))) {
-						return false;
-					}
+					$matches = !$value || $this->attachmentService->hasForTicket((int) ($ticket['id'] ?? 0));
 					break;
+			}
+
+			if (isset($negatedCriteria[(string) $key])) {
+				$matches = !$matches;
+			}
+
+			if (!$matches) {
+				return false;
 			}
 		}
 
@@ -407,6 +545,20 @@ class TicketService {
 		}
 
 		return $currentStatus;
+	}
+
+	private function parseDateBoundary(string $value, bool $endOfDay): ?int {
+		$normalized = trim($value);
+		if ($normalized === '') {
+			return null;
+		}
+
+		$timestamp = strtotime($normalized . ($endOfDay ? ' 23:59:59' : ' 00:00:00'));
+		if ($timestamp === false) {
+			return null;
+		}
+
+		return $timestamp;
 	}
 
 	private function normalizeOptionalString(mixed $value): ?string {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import TicketSidebarPanel from '@/components/TicketSidebarPanel.vue'
 import { useBootstrapStore } from '@/store/bootstrap'
 import { useTicketsStore } from '@/store/tickets'
@@ -10,6 +10,21 @@ const route = useRoute()
 const router = useRouter()
 const bootstrapStore = useBootstrapStore()
 const ticketsStore = useTicketsStore()
+const panelRef = ref<{ confirmDiscardChanges: () => boolean } | null>(null)
+
+function canLeaveTicket() {
+	return panelRef.value?.confirmDiscardChanges() ?? true
+}
+
+onBeforeRouteLeave(() => canLeaveTicket())
+
+onBeforeRouteUpdate((to) => {
+	if (to.params.ticketId === route.params.ticketId) {
+		return true
+	}
+
+	return canLeaveTicket()
+})
 
 const assignableUsers = computed(() => bootstrapStore.data.assignables.users)
 const assignableGroups = computed(() => bootstrapStore.data.assignables.groups)
@@ -43,7 +58,7 @@ async function commentOnTicket(payload: { body: string, visibility: 'interno' | 
 	await ticketsStore.comment(ticketsStore.selected.id, payload)
 }
 
-async function updateTicket(payload: Record<string, unknown>) {
+async function saveTicket(payload: Record<string, unknown>) {
 	if (!ticketsStore.selected) {
 		return
 	}
@@ -51,39 +66,64 @@ async function updateTicket(payload: Record<string, unknown>) {
 	await ticketsStore.update(ticketsStore.selected.id, payload)
 }
 
-function backToSupport() {
-	if (ticketsStore.selected) {
-		void router.push(`/soporte/${ticketsStore.selected.id}`)
+async function reopenTicket() {
+	if (!ticketsStore.selected) {
 		return
 	}
+
+	await ticketsStore.reopen(ticketsStore.selected.id)
+}
+
+async function assignToCurrentUser() {
+	if (!ticketsStore.selected) {
+		return
+	}
+
+	await ticketsStore.update(ticketsStore.selected.id, { assignedUserUid: bootstrapStore.data.currentUser.uid })
+}
+
+function backToIncident() {
+	if (!ticketsStore.selected) {
+		return
+	}
+
+	void router.push(`/soporte/${ticketsStore.selected.id}`)
+}
+
+function backToSupport() {
 	void router.push('/soporte')
 }
 </script>
 
 <template>
-	<section class="gi-page">
-		<header class="gi-page__header gi-page__header--dense">
-			<div>
-				<TicketSidebarPanel
-					:ticket="ticketsStore.selected"
-					:roles="bootstrapStore.data.roles"
-					:users="assignableUsers"
-					:groups="assignableGroups"
-					:statuses="statuses"
-					:urgencies="urgencies"
-					:allowed-extensions="bootstrapStore.data.catalogs.attachmentConfig.allowedExtensions"
-					:max-file-size-mb="bootstrapStore.data.catalogs.attachmentConfig.maxFileSizeMb"
-					fullscreen
-					:read-only="!ticketsStore.selected?.canManage"
-					:show-fullscreen="false"
-					@comment="commentOnTicket"
-					@update="updateTicket"
-					@download="download"
-					@fullscreen="backToSupport"
-				/>
-			</div>
-			<button class="gi-secondary-button" type="button" @click="backToSupport">Volver a consola</button>
-		</header>		
+	<section class="gi-page gi-page--ticket-full">
+		<TicketSidebarPanel
+			ref="panelRef"
+			:ticket="ticketsStore.selected"
+			:roles="bootstrapStore.data.roles"
+			:users="assignableUsers"
+			:groups="assignableGroups"
+			:current-user-uid="bootstrapStore.data.currentUser.uid"
+			:statuses="statuses"
+			:urgencies="urgencies"
+			:allowed-extensions="bootstrapStore.data.catalogs.attachmentConfig.allowedExtensions"
+			:max-file-size-mb="bootstrapStore.data.catalogs.attachmentConfig.maxFileSizeMb"
+			:initial-composer-visible="false"
+			fullscreen
+			initial-tab="comments"
+			:read-only="!ticketsStore.selected?.canManage"
+			:show-fullscreen="false"
+			@comment="commentOnTicket"
+			@save="saveTicket"
+			@download="download"
+			@reopen="reopenTicket"
+			@assign-to-me="assignToCurrentUser"
+		>
+			<template #actions>
+				<button class="gi-secondary-button" type="button" @click="backToIncident">Volver al ticket</button>
+				<button class="gi-secondary-button" type="button" @click="backToSupport">Volver a consola</button>
+			</template>
+		</TicketSidebarPanel>
 	</section>
 </template>
 

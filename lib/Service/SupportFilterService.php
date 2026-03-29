@@ -8,13 +8,14 @@ use OCA\ConsultasLegales\Db\SavedFilter;
 use OCA\ConsultasLegales\Db\SavedFilterMapper;
 
 class SupportFilterService {
+	private const OPEN_TICKET_STATUSES = ['nuevo', 'asignado', 'en_progreso', 'en_espera_usuario'];
+
 	private const PREDEFINED_FILTERS = [
-		['name' => 'Asignadas a mi', 'criteria' => ['assignedUser' => '__me__'], 'sortOrder' => 10, 'isDefault' => true],
-		['name' => 'Asignadas a mis grupos', 'criteria' => ['assignedGroup' => '__my_groups__'], 'sortOrder' => 20, 'isDefault' => false],
-		['name' => 'Sin asignar', 'criteria' => ['unassigned' => true], 'sortOrder' => 30, 'isDefault' => false],
-		['name' => 'Abiertas', 'criteria' => ['status' => ['nuevo', 'asignado', 'en_progreso']], 'sortOrder' => 40, 'isDefault' => false],
-		['name' => 'Pendientes de usuario', 'criteria' => ['status' => ['en_espera_usuario']], 'sortOrder' => 50, 'isDefault' => false],
-		['name' => 'Cerradas recientes', 'criteria' => ['status' => ['resuelto', 'cerrado'], 'updatedWithinDays' => 30], 'sortOrder' => 60, 'isDefault' => false],
+		['name' => 'Asignadas a mi', 'criteria' => ['assignedUser' => '__me__', 'status' => self::OPEN_TICKET_STATUSES], 'sortOrder' => 10, 'isDefault' => true],
+		['name' => 'Asignadas a mis grupos', 'criteria' => ['assignedGroup' => '__my_groups__', 'status' => self::OPEN_TICKET_STATUSES], 'sortOrder' => 20, 'isDefault' => false],
+		['name' => 'Sin asignar', 'criteria' => ['unassigned' => true, 'status' => self::OPEN_TICKET_STATUSES], 'sortOrder' => 30, 'isDefault' => false],
+		['name' => 'Pendientes de usuario', 'criteria' => ['status' => ['en_espera_usuario']], 'sortOrder' => 40, 'isDefault' => false],
+		['name' => 'Cerradas recientes', 'criteria' => ['status' => ['resuelto', 'cerrado'], 'updatedWithinDays' => 30], 'sortOrder' => 50, 'isDefault' => false],
 	];
 
 	public function __construct(private readonly SavedFilterMapper $savedFilterMapper) {
@@ -149,14 +150,17 @@ class SupportFilterService {
 			$byName[$row->getName()] = $row;
 		}
 
+		if (isset($byName['Abiertas'])) {
+			$this->savedFilterMapper->delete($byName['Abiertas']);
+			unset($byName['Abiertas']);
+		}
+
 		foreach (self::PREDEFINED_FILTERS as $definition) {
 			$existing = $byName[$definition['name']] ?? null;
 			if ($existing instanceof SavedFilter) {
 				$existing->setIsPredefined(true);
 				$existing->setScopeType('global');
-				if ($existing->getCriteria() === null || $existing->getCriteria() === []) {
-					$existing->setCriteria($definition['criteria']);
-				}
+				$existing->setCriteria($definition['criteria']);
 				if ($existing->getActive() === null) {
 					$existing->setActive(true);
 				}

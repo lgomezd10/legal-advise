@@ -53,7 +53,13 @@ class AdminConfigService {
 
 		if (isset($payload['statuses']) && is_array($payload['statuses'])) {
 			$setting = $this->settingMapper->findOneBy('config_key', 'status_catalog');
-			$setting->setConfigValue(CatalogService::getDefaultStatusCatalogFromCurrent($payload['statuses']));
+			$setting->setConfigValue(CatalogService::getDefaultStatusCatalogFromCurrent(array_map(static function (array $status): array {
+				return [
+					'id' => (string) ($status['id'] ?? ''),
+					'label' => (string) ($status['label'] ?? ''),
+					'active' => (bool) ($status['active'] ?? true),
+				];
+			}, $payload['statuses'])));
 			$this->settingMapper->update($setting);
 		}
 

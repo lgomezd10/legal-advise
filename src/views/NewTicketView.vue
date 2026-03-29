@@ -123,7 +123,7 @@ async function submit(payload: Record<string, unknown>) {
 						<strong class="gi-ticket-creation-card__type-path">{{ provinceSummary }}</strong>
 					</div>
 				</div>
-				<button class="gi-icon-button" type="button" aria-label="Modificar tipo de incidencia" title="Modificar tipo" @click="editType">
+				<button class="gi-icon-button" type="button" aria-label="Modificar tipo de ticket" title="Modificar tipo" @click="editType">
 					<span aria-hidden="true">&#9998;</span>
 				</button>
 			</header>

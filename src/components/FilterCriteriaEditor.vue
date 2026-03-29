@@ -173,6 +173,15 @@ function removeCriterion(key: CriteriaKey) {
 	else criteria.unassigned = false
 	if (Object.keys(activeCriteria.value).length === 0) emit('update:modelValue', {})
 }
+
+function isStatusSelectable(statusId: string) {
+	const status = safeStatuses.value.find((item: StatusOption) => item.id === statusId)
+	if (!status) {
+		return false
+	}
+
+	return status.active !== false || draftCriteria.status.includes(statusId)
+}
 </script>
 
 <template>
@@ -197,8 +206,8 @@ function removeCriterion(key: CriteriaKey) {
 				</label>
 				<div v-if="modalCriterionKey" class="gi-filter-modal__body">
 					<div v-if="modalCriterionKey === 'status'" class="gi-option-grid gi-option-grid--compact">
-						<label v-for="status in safeStatuses" :key="status.id" class="gi-check-tile">
-							<input :checked="draftCriteria.status.includes(status.id)" type="checkbox" @change="draftCriteria.status = ($event.target as HTMLInputElement).checked ? [...draftCriteria.status, status.id] : draftCriteria.status.filter((item) => item !== status.id)" />
+						<label v-for="status in safeStatuses" :key="status.id" class="gi-check-tile" :class="{ 'gi-check-tile--disabled': !isStatusSelectable(status.id) }">
+							<input :checked="draftCriteria.status.includes(status.id)" :disabled="!isStatusSelectable(status.id)" type="checkbox" @change="draftCriteria.status = ($event.target as HTMLInputElement).checked ? [...new Set([...draftCriteria.status, status.id])] : draftCriteria.status.filter((item) => item !== status.id)" />
 							<span>{{ status.label }}</span>
 						</label>
 					</div>
@@ -248,7 +257,7 @@ function removeCriterion(key: CriteriaKey) {
 
 .gi-filter-modal {
 	width: min(42rem, 100%);
-	min-height: min(32rem, calc(100vh - 2rem));
+	height: calc(100vh - 2rem);
 	max-height: calc(100vh - 2rem);
 	overflow: auto;
 	display: grid;
@@ -256,6 +265,10 @@ function removeCriterion(key: CriteriaKey) {
 	padding: 1rem;
 	border-radius: 22px;
 	background: rgba(255, 255, 255, .99);
+}
+
+.gi-check-tile--disabled {
+	opacity: .55;
 }
 
 .gi-modal-close {

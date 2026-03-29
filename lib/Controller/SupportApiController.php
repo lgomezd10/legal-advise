@@ -17,39 +17,51 @@ class SupportApiController extends BaseApiController {
 
 	#[NoAdminRequired]
 	public function filters(): DataResponse {
-		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		return $this->ok(['items' => $this->supportFilterService->listForConsole($uid)]);
+		return $this->respond(function (): array {
+			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			return ['items' => $this->supportFilterService->listForConsole($uid)];
+		});
 	}
 
 	#[NoAdminRequired]
 	public function saveFilter(): DataResponse {
-		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		return $this->created($this->supportFilterService->save($uid, $this->request->getParams()));
+		return $this->respond(function (): array {
+			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			return $this->supportFilterService->save($uid, $this->request->getParams());
+		}, 201);
 	}
 
 	#[NoAdminRequired]
 	public function filterSettings(): DataResponse {
-		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		return $this->ok(['items' => $this->supportFilterService->listForUserSettings($uid)]);
+		return $this->respond(function (): array {
+			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			return ['items' => $this->supportFilterService->listForUserSettings($uid)];
+		});
 	}
 
 	#[NoAdminRequired]
 	public function updateFilterSettings(): DataResponse {
-		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		$items = $this->request->getParam('items') ?? [];
-		return $this->ok(['items' => $this->supportFilterService->saveUserSettings($uid, is_array($items) ? $items : [])]);
+		return $this->respond(function (): array {
+			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$items = $this->request->getParam('items') ?? [];
+			return ['items' => $this->supportFilterService->saveUserSettings($uid, is_array($items) ? $items : [])];
+		});
 	}
 
 	#[NoAdminRequired]
 	public function restoreFilterSettings(): DataResponse {
-		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		return $this->ok(['items' => $this->supportFilterService->restoreUserSettings($uid)]);
+		return $this->respond(function (): array {
+			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			return ['items' => $this->supportFilterService->restoreUserSettings($uid)];
+		});
 	}
 
 	#[NoAdminRequired]
 	public function deleteFilter(int $id): DataResponse {
-		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		$this->supportFilterService->delete($uid, $id);
-		return $this->ok(['deleted' => true]);
+		return $this->respond(function () use ($id): array {
+			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$this->supportFilterService->delete($uid, $id);
+			return ['deleted' => true];
+		});
 	}
 }

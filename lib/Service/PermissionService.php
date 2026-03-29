@@ -56,7 +56,21 @@ class PermissionService {
 			return true;
 		}
 
-		return in_array(RoleService::SUPPORT, $roles, true);
+		if (!in_array(RoleService::SUPPORT, $roles, true)) {
+			return false;
+		}
+
+		$assignedUserUid = $this->normalizeOptionalString($ticket->getAssignedUserUid());
+		if ($assignedUserUid !== null && $assignedUserUid === $uid) {
+			return true;
+		}
+
+		$assignedGroupId = $this->normalizeOptionalString($ticket->getAssignedGroupId());
+		if ($assignedGroupId !== null) {
+			return $this->userBelongsToGroup($uid, $assignedGroupId);
+		}
+
+		return true;
 	}
 
 	public function canCommentOnTicket(string $uid, Ticket $ticket): bool {
@@ -81,7 +95,7 @@ class PermissionService {
 			return false;
 		}
 
-		return $this->groupManager->get($groupId) !== null;
+		return $this->userBelongsToGroup($uid, $groupId);
 	}
 
 	public function canSeeComment(string $uid, Ticket $ticket, string $visibility): bool {
@@ -91,5 +105,25 @@ class PermissionService {
 
 		$roles = $this->roleService->getEffectiveRoles($uid);
 		return in_array(RoleService::SUPPORT, $roles, true) || in_array(RoleService::ADMIN, $roles, true);
+	}
+
+	private function userBelongsToGroup(string $uid, string $groupId): bool {
+		$user = $this->userManager->get($uid);
+		$group = $this->groupManager->get($groupId);
+
+		if ($user === null || $group === null) {
+			return false;
+		}
+
+		return $group->inGroup($user);
+	}
+
+	private function normalizeOptionalString(?string $value): ?string {
+		if ($value === null) {
+			return null;
+		}
+
+		$normalized = trim($value);
+		return $normalized === '' ? null : $normalized;
 	}
 }

@@ -11,9 +11,18 @@ webpackConfig.output = {
 	clean: true,
 	filename: '[name].js',
 	chunkFilename: '[name].js',
+	publicPath: 'auto',
 }
 
 webpackConfig.cache = false
+
+webpackConfig.optimization = {
+	...(webpackConfig.optimization ?? {}),
+	splitChunks: {
+		...(webpackConfig.optimization?.splitChunks ?? {}),
+		chunks: 'async',
+	},
+}
 
 webpackConfig.resolve = {
 	...webpackConfig.resolve,

@@ -17,10 +17,12 @@ class ExportApiController extends BaseApiController {
 
 	#[NoAdminRequired]
 	public function tickets(): DataResponse {
-		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		$criteria = $this->request->getParam('criteria') ?? [];
-		$columns = $this->request->getParam('columns') ?? [];
-		$scope = (string) ($this->request->getParam('scope') ?? 'support');
-		return $this->ok($this->exportService->exportTickets($uid, is_array($criteria) ? $criteria : [], $scope === 'support', is_array($columns) ? $columns : []));
+		return $this->respond(function (): array {
+			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$criteria = $this->request->getParam('criteria') ?? [];
+			$columns = $this->request->getParam('columns') ?? [];
+			$scope = (string) ($this->request->getParam('scope') ?? 'support');
+			return $this->exportService->exportTickets($uid, is_array($criteria) ? $criteria : [], $scope === 'support', is_array($columns) ? $columns : []);
+		});
 	}
 }

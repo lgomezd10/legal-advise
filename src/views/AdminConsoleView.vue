@@ -315,7 +315,10 @@ function normalizeStatuses(entries: unknown): AdminStatusOption[] {
 		.map((entry) => ({
 			id: String(entry.id),
 			label: String(entry.label),
+			active: Boolean(entry.active ?? true),
+			closed: Boolean(entry.closed ?? false),
 			fixed: Boolean(entry.fixed ?? true),
+			toggleable: Boolean(entry.toggleable ?? false),
 			description: typeof entry.description === 'string' ? entry.description : '',
 		}))
 }
@@ -486,6 +489,7 @@ async function saveStatuses() {
 	const payload = statusDrafts.value.map(({ clientId, ...status }) => ({
 		id: status.id,
 		label: status.label.trim(),
+		active: status.toggleable ? Boolean(status.active) : true,
 	}))
 
 	await adminConfigStore.save({ statuses: payload })
@@ -670,7 +674,7 @@ async function saveAttachmentConfig() {
 				<div class="gi-admin-card__header">
 					<div>
 						<h2>Estados</h2>
-						<p>Los estados base son obligatorios y no se pueden eliminar. Solo se puede cambiar su etiqueta visible.</p>
+						<p>Los estados base no se eliminan. Puedes cambiar la etiqueta visible y activar o desactivar solo los estados permitidos.</p>
 					</div>
 					<div class="gi-admin-card__toolbar">
 						<button class="gi-primary-button" type="button" @click="saveStatuses">Guardar</button>
@@ -685,6 +689,10 @@ async function saveAttachmentConfig() {
 						<label class="gi-field gi-field--wide">
 							<span>Etiqueta visible</span>
 							<input v-model="status.label" class="gi-input" type="text" placeholder="Etiqueta del estado" />
+						</label>
+						<label class="gi-field gi-admin-row__toggle">
+							<span>Activo</span>
+							<input v-model="status.active" type="checkbox" :disabled="!status.toggleable" />
 						</label>
 					</li>
 				</ul>
@@ -863,7 +871,7 @@ async function saveAttachmentConfig() {
 				<div class="gi-admin-card__header">
 					<div>
 						<h2>Reglas de asignacion</h2>
-						<p>Asocia tipos de incidencia con usuarios o grupos reales de Nextcloud y permite excepciones por provincia.</p>
+						<p>Asocia tipos de ticket con usuarios o grupos reales de Nextcloud y permite excepciones por provincia.</p>
 					</div>
 					<div class="gi-admin-card__toolbar">
 						<button class="gi-secondary-button" type="button" @click="addRule">Anadir regla</button>

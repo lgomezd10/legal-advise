@@ -1,0 +1,58 @@
+import type { SupportColumnKey } from '@/types'
+
+export type SupportSortDirection = 'asc' | 'desc'
+
+export type SupportConsoleState = {
+	visibleColumns: SupportColumnKey[]
+	columnEditorOrder: SupportColumnKey[]
+	criteria: Record<string, unknown>
+	sortKey: SupportColumnKey | 'createdBy'
+	sortDirection: SupportSortDirection
+	selectedFilterId: number | null
+}
+
+const STORAGE_KEY = 'legal_advice:support_console_state'
+
+export const DEFAULT_SUPPORT_COLUMNS: SupportColumnKey[] = ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription']
+export const DEFAULT_COLUMN_EDITOR_ORDER: SupportColumnKey[] = ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription', 'status', 'urgency', 'createdAt']
+export const DEFAULT_SUPPORT_SORT: Pick<SupportConsoleState, 'sortKey' | 'sortDirection'> = {
+	sortKey: 'updatedAt',
+	sortDirection: 'desc',
+}
+
+const KNOWN_COLUMN_KEYS: SupportColumnKey[] = ['number', 'createdBy', 'title', 'userDescription', 'assignment', 'status', 'urgency', 'createdAt', 'updatedAt']
+
+export function loadSupportConsoleState(): SupportConsoleState | null {
+	if (typeof window === 'undefined') {
+		return null
+	}
+
+	try {
+		const raw = window.localStorage.getItem(STORAGE_KEY)
+		if (!raw) {
+			return null
+		}
+
+		return JSON.parse(raw) as SupportConsoleState
+	} catch {
+		return null
+	}
+}
+
+export function saveSupportConsoleState(value: SupportConsoleState) {
+	if (typeof window === 'undefined') {
+		return
+	}
+
+	window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
+}
+
+export function normalizeSupportColumns(value: unknown, fallback: SupportColumnKey[]) {
+	if (!Array.isArray(value)) {
+		return [...fallback]
+	}
+
+	const knownKeys = new Set<SupportColumnKey>(KNOWN_COLUMN_KEYS)
+	const normalized = value.filter((item): item is SupportColumnKey => typeof item === 'string' && knownKeys.has(item as SupportColumnKey))
+	return normalized.length > 0 ? Array.from(new Set(normalized)) : [...fallback]
+}

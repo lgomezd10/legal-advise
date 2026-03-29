@@ -1,20 +1,46 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useBootstrapStore } from '@/store/bootstrap'
+import { useSupportFiltersStore } from '@/store/supportFilters'
+import type { SavedFilter } from '@/types'
+
+const DEFAULT_SIDEBAR_WIDTH = 570
 
 const router = useRouter()
 const route = useRoute()
 const bootstrapStore = useBootstrapStore()
+const supportFiltersStore = useSupportFiltersStore()
+const initialHasSupportAccess = bootstrapStore.data.roles.includes('soporte')
+	|| bootstrapStore.data.roles.includes('administrador')
+	|| bootstrapStore.data.navigation.some((item) => item.route === '/soporte' && item.visible)
 const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
-const sidebarWidth = ref(380)
+const sidebarWidth = ref(DEFAULT_SIDEBAR_WIDTH)
 const shellRef = ref<HTMLElement | null>(null)
-const navigationVisible = ref(typeof window === 'undefined' ? true : window.innerWidth >= 1100)
+const navigationVisible = ref(typeof window === 'undefined' ? initialHasSupportAccess : window.innerWidth >= 1100 && initialHasSupportAccess)
 
 const navigation = computed(() => bootstrapStore.data.navigation)
+const hasNavigation = computed(() => navigation.value.length > 0)
 const mainNavigation = computed(() => navigation.value.filter((item) => item.id !== 'configuracion'))
 const configurationNavigationItem = computed(() => navigation.value.find((item) => item.id === 'configuracion') ?? null)
 const configurationRoute = computed(() => configurationNavigationItem.value?.route ?? '/configuracion')
+const supportNavigationItem = computed(() => navigation.value.find((item) => item.route === '/soporte') ?? null)
+const supportFilterItems = computed<SavedFilter[]>(() => {
+	if (supportFiltersStore.items.length > 0) {
+		return supportFiltersStore.items
+	}
+
+	return bootstrapStore.data.supportFilters ?? []
+})
+const supportSubmenuExpanded = ref(false)
+const currentSupportFilterId = computed(() => {
+	const raw = Array.isArray(route.query.filterId) ? route.query.filterId[0] : route.query.filterId
+	const parsed = Number(raw)
+	return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+})
+const hasSupportAccess = computed(() => bootstrapStore.data.roles.includes('soporte')
+	|| bootstrapStore.data.roles.includes('administrador')
+	|| bootstrapStore.data.navigation.some((item) => item.route === '/soporte' && item.visible))
 const currentNavigationItem = computed(() => {
 	const matched = [...navigation.value]
 		.sort((left, right) => right.route.length - left.route.length)
@@ -33,13 +59,40 @@ const isDesktopSidebar = computed(() => hasSidebar.value && viewportWidth.value 
 const isDesktopNavigation = computed(() => viewportWidth.value >= 1100)
 const shellStyle = computed(() => isDesktopSidebar.value ? { '--gi-sidebar-width': `${sidebarWidth.value}px` } : {})
 
+watch(hasSidebar, (nextHasSidebar, previousHasSidebar) => {
+	if (!nextHasSidebar || previousHasSidebar === nextHasSidebar) {
+		return
+	}
+
+	sidebarWidth.value = DEFAULT_SIDEBAR_WIDTH
+	navigationVisible.value = false
+})
+
+watch(hasSupportAccess, (nextHasSupportAccess) => {
+	if (!nextHasSupportAccess) {
+		navigationVisible.value = false
+	}
+})
+
 function updateViewportWidth() {
 	const previousDesktop = viewportWidth.value >= 1100
 	viewportWidth.value = window.innerWidth
 	if (window.innerWidth < 1100) {
 		navigationVisible.value = false
 	} else if (!previousDesktop) {
-		navigationVisible.value = true
+		navigationVisible.value = hasSupportAccess.value
+	}
+}
+
+function syncShellLayoutAfterResume() {
+	window.requestAnimationFrame(() => {
+		updateViewportWidth()
+	})
+}
+
+function onVisibilityChange() {
+	if (document.visibilityState === 'visible') {
+		syncShellLayoutAfterResume()
 	}
 }
 
@@ -50,7 +103,8 @@ function onPointerMove(event: MouseEvent) {
 
 	const bounds = shellRef.value.getBoundingClientRect()
 	const nextWidth = bounds.right - event.clientX
-	sidebarWidth.value = Math.max(320, Math.min(640, nextWidth))
+	const maxWidth = Math.max(320, Math.floor(bounds.width * 0.6))
+	sidebarWidth.value = Math.max(320, Math.min(maxWidth, nextWidth))
 }
 
 function stopResize() {
@@ -70,6 +124,10 @@ function startResize() {
 }
 
 function openNavigation() {
+	if (!hasNavigation.value) {
+		return
+	}
+
 	navigationVisible.value = true
 }
 
@@ -78,14 +136,32 @@ function closeNavigation() {
 }
 
 function toggleNavigation() {
+	if (!hasNavigation.value) {
+		return
+	}
+
 	navigationVisible.value = !navigationVisible.value
 }
 
-function navigateTo(target: string) {
+function navigateTo(target: string | { path: string, query?: Record<string, string> }) {
 	void router.push(target)
 	if (!isDesktopNavigation.value) {
 		navigationVisible.value = false
 	}
+}
+
+function navigateToSupportFilter(filterId: number) {
+	const baseRoute = supportNavigationItem.value?.route ?? '/soporte'
+	navigateTo({ path: baseRoute, query: { filterId: String(filterId) } })
+}
+
+function handleSupportNavigation(routePath: string) {
+	if (route.path.startsWith(routePath) && supportFilterItems.value.length > 0) {
+		supportSubmenuExpanded.value = !supportSubmenuExpanded.value
+		return
+	}
+
+	navigateTo(routePath)
 }
 
 function closeSidebar() {
@@ -101,10 +177,16 @@ function closeSidebar() {
 
 onMounted(() => {
 	window.addEventListener('resize', updateViewportWidth)
+	window.addEventListener('focus', syncShellLayoutAfterResume)
+	window.addEventListener('pageshow', syncShellLayoutAfterResume)
+	document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onBeforeUnmount(() => {
 	window.removeEventListener('resize', updateViewportWidth)
+	window.removeEventListener('focus', syncShellLayoutAfterResume)
+	window.removeEventListener('pageshow', syncShellLayoutAfterResume)
+	document.removeEventListener('visibilitychange', onVisibilityChange)
 	stopResize()
 })
 </script>
@@ -115,14 +197,29 @@ onBeforeUnmount(() => {
 		<aside v-if="navigationVisible" class="gi-navigation" :class="{ 'gi-navigation--overlay': !isDesktopNavigation }">
 			<nav class="gi-navigation__body" aria-label="Navegacion principal">
 				<div class="gi-nav-list">
-				<button
-					v-for="item in mainNavigation"
-					:key="item.id"
-					class="gi-nav-item"
-					:class="{ 'gi-nav-item--active': route.path.startsWith(item.route) }"
-					@click="navigateTo(item.route)">
-					{{ item.label }}
-				</button>
+					<div v-for="item in mainNavigation" :key="item.id" class="gi-nav-entry">
+						<button
+							class="gi-nav-item"
+							:class="{ 'gi-nav-item--active': route.path.startsWith(item.route), 'gi-nav-item--with-toggle': item.route === '/soporte' && supportFilterItems.length > 0 }"
+							:type="'button'"
+							:aria-expanded="item.route === '/soporte' && supportFilterItems.length > 0 ? (supportSubmenuExpanded ? 'true' : 'false') : undefined"
+							@click="item.route === '/soporte' ? handleSupportNavigation(item.route) : navigateTo(item.route)">
+							<span>{{ item.label }}</span>
+							<svg v-if="item.route === '/soporte' && supportFilterItems.length > 0" class="gi-nav-item__toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+								<path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+							</svg>
+						</button>
+						<div v-if="item.route === '/soporte' && supportFilterItems.length > 0 && supportSubmenuExpanded" class="gi-nav-submenu">
+							<button
+								v-for="filter in supportFilterItems"
+								:key="filter.id"
+								class="gi-nav-subitem"
+								:class="{ 'gi-nav-subitem--active': route.path.startsWith('/soporte') && currentSupportFilterId === filter.id }"
+								@click="navigateToSupportFilter(filter.id)">
+								{{ filter.name }}
+							</button>
+						</div>
+					</div>
 				</div>
 				<button
 					v-if="configurationNavigationItem"
@@ -138,7 +235,7 @@ onBeforeUnmount(() => {
 		</aside>
 		<main class="gi-content">
 			<header class="gi-content-header">
-				<button class="gi-nav-toggle gi-nav-toggle--surface" type="button" :aria-label="navigationVisible ? 'Ocultar menu' : 'Mostrar menu'" @click="toggleNavigation">
+				<button v-if="hasNavigation" class="gi-nav-toggle gi-nav-toggle--surface" type="button" :aria-label="navigationVisible ? 'Ocultar menu' : 'Mostrar menu'" @click="toggleNavigation">
 					<svg v-if="navigationVisible" class="gi-nav-toggle__icon gi-nav-toggle__icon--open" viewBox="0 0 24 24" aria-hidden="true">
 						<path d="M21,15.61L19.59,17L14.58,12L19.59,7L21,8.39L17.44,12L21,15.61M3,6H16V8H3V6M3,13V11H13V13H3M3,18V16H16V18H3Z" />
 					</svg>
@@ -233,6 +330,11 @@ onBeforeUnmount(() => {
 	padding: 0;
 }
 
+.gi-nav-entry {
+	display: grid;
+	gap: .3rem;
+}
+
 .gi-nav-item {
 	display: flex;
 	align-items: center;
@@ -247,6 +349,10 @@ onBeforeUnmount(() => {
 	font-weight: 500;
 	text-align: left;
 	cursor: pointer;
+}
+
+.gi-nav-item--with-toggle {
+	justify-content: space-between;
 }
 
 .gi-nav-item--settings {
@@ -266,6 +372,50 @@ onBeforeUnmount(() => {
 	background: var(--gi-nav-accent);
 	border-color: rgba(10, 110, 168, .28);
 	color: #fff;
+}
+
+.gi-nav-item__toggle-icon {
+	width: 1.2rem;
+	height: 1.2rem;
+	fill: currentColor;
+	flex: 0 0 auto;
+	margin-left: auto;
+	transition: transform .18s ease;
+}
+
+.gi-nav-item[aria-expanded='true'] .gi-nav-item__toggle-icon {
+	transform: rotate(180deg);
+}
+
+.gi-nav-submenu {
+	display: grid;
+	gap: .3rem;
+	padding-left: .9rem;
+}
+
+.gi-nav-subitem {
+	padding: .55rem .8rem;
+	border: 0;
+	border-radius: 14px;
+	background: rgba(255, 255, 255, .45);
+	color: rgba(15, 36, 51, .86);
+	font: inherit;
+	font-size: .93rem;
+	text-align: left;
+	cursor: pointer;
+	transition: background-color .18s ease, color .18s ease, transform .18s ease;
+}
+
+.gi-nav-subitem:hover {
+	background: rgba(255, 255, 255, .72);
+	color: #0c3650;
+	transform: translateX(2px);
+}
+
+.gi-nav-subitem--active {
+	background: rgba(10, 110, 168, .14);
+	color: #0b4f77;
+	font-weight: 700;
 }
 
 .gi-content {
@@ -398,6 +548,10 @@ onBeforeUnmount(() => {
 @media (min-width: 1100px) {
 	.gi-shell.gi-shell--with-sidebar {
 		grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem);
+	}
+
+	.gi-shell.gi-shell--desktop-sidebar.gi-shell--with-sidebar {
+		grid-template-columns: minmax(0, 1fr) .55rem minmax(20rem, var(--gi-sidebar-width));
 	}
 
 		.gi-shell.gi-shell--nav-open.gi-shell--with-sidebar {

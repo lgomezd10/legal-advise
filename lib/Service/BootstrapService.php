@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\ConsultasLegales\Service;
 
+use OCA\ConsultasLegales\AppInfo\Application;
+use OCP\App\IAppManager;
 use OCP\IGroupManager;
 use OCP\IUserManager;
 use OCP\IUserSession;
@@ -20,6 +22,7 @@ class BootstrapService {
 		private readonly PersonalConfigService $personalConfigService,
 		private readonly IGroupManager $groupManager,
 		private readonly IUserManager $userManager,
+		private readonly IAppManager $appManager,
 	) {
 	}
 
@@ -28,10 +31,14 @@ class BootstrapService {
 
 		$user = $this->userSession->getUser();
 		$uid = $user?->getUID() ?? '';
+		if ($user !== null && !$this->appManager->isEnabledForUser(Application::APP_ID, $user)) {
+			return $this->buildDisabledState($uid, $user?->getDisplayName() ?? '');
+		}
+
 		$roles = $uid === '' ? [] : $this->roleService->getEffectiveRoles($uid);
 
 		$navigation = [
-			['id' => 'mis-incidencias', 'label' => 'Mis incidencias', 'route' => '/mis-incidencias', 'visible' => in_array(RoleService::USER, $roles, true)],
+			['id' => 'mis-incidencias', 'label' => 'Mis tickets', 'route' => '/mis-incidencias', 'visible' => in_array(RoleService::USER, $roles, true)],
 			['id' => 'soporte', 'label' => 'Consola de soporte', 'route' => '/soporte', 'visible' => in_array(RoleService::SUPPORT, $roles, true) || in_array(RoleService::ADMIN, $roles, true)],
 			['id' => 'configuracion', 'label' => 'Configuracion', 'route' => '/configuracion', 'visible' => $roles !== []],
 		];
@@ -59,6 +66,32 @@ class BootstrapService {
 			'assignables' => [
 				'users' => $assignableUsers,
 				'groups' => $assignableGroups,
+			],
+			'tasksIntegration' => $this->taskSyncService->getIntegrationStatus(),
+		];
+	}
+
+	private function buildDisabledState(string $uid, string $displayName): array {
+		return [
+			'currentUser' => [
+				'uid' => $uid,
+				'displayName' => $displayName,
+			],
+			'roles' => [],
+			'navigation' => [],
+			'catalogs' => [
+				'statuses' => [],
+				'urgencies' => [],
+				'types' => [],
+				'fields' => [],
+				'provinces' => [],
+				'attachmentConfig' => ['allowedExtensions' => [], 'maxFileSizeMb' => 25],
+			],
+			'supportFilters' => [],
+			'personalConfig' => [],
+			'assignables' => [
+				'users' => [],
+				'groups' => [],
 			],
 			'tasksIntegration' => $this->taskSyncService->getIntegrationStatus(),
 		];

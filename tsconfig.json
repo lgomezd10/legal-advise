@@ -13,6 +13,10 @@
       "DOM"
     ],
     "baseUrl": ".",
+    "types": [
+      "vitest/globals",
+      "node"
+    ],
     "paths": {
       "@/*": [
         "src/*"
@@ -20,13 +24,14 @@
     }
   },
   "include": [
-  "src/**/*.d.ts",
+    "src/**/*.d.ts",
     "src/**/*.ts",
-  "src/**/*.vue"
+    "src/**/*.vue",
+    "tests/**/*.ts",
+    "tests/**/*.d.ts"
   ],
   "exclude": [
-  "tests/**/*.ts",
-  "node_modules",
-  "js"
+    "node_modules",
+    "js"
   ]
 }

@@ -16,6 +16,6 @@ class BootstrapApiController extends BaseApiController {
 
 	#[NoAdminRequired]
 	public function index(): DataResponse {
-		return $this->ok($this->bootstrapService->build());
+		return $this->respond(fn (): array => $this->bootstrapService->build());
 	}
 }

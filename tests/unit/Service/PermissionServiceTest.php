@@ -14,6 +14,29 @@ use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
 
 class PermissionServiceTest extends TestCase {
+	public function testSupportCanManageOwnAssignedGroupTicket(): void {
+		$roleService = $this->createMock(RoleService::class);
+		$roleService->method('getEffectiveRoles')->willReturn([RoleService::USER, RoleService::SUPPORT]);
+
+		$user = $this->createMock(IUser::class);
+		$group = $this->createMock(IGroup::class);
+		$group->method('inGroup')->with($user)->willReturn(true);
+
+		$groupManager = $this->createMock(IGroupManager::class);
+		$groupManager->method('get')->with('soporte')->willReturn($group);
+
+		$userManager = $this->createMock(IUserManager::class);
+		$userManager->method('get')->with('agent-1')->willReturn($user);
+
+		$service = new PermissionService($roleService, $groupManager, $userManager);
+
+		$ticket = new Ticket();
+		$ticket->setCreatorUid('creator-1');
+		$ticket->setAssignedGroupId('soporte');
+
+		self::assertTrue($service->canManageTicket('agent-1', $ticket));
+	}
+
 	public function testSupportCannotManageForeignGroupTicket(): void {
 		$roleService = $this->createMock(RoleService::class);
 		$roleService->method('getEffectiveRoles')->willReturn([RoleService::USER, RoleService::SUPPORT]);
@@ -35,6 +58,25 @@ class PermissionServiceTest extends TestCase {
 		$ticket->setAssignedGroupId('rrhh');
 
 		self::assertFalse($service->canManageTicket('agent-1', $ticket));
+	}
+
+	public function testSupportCanAssignOwnGroup(): void {
+		$roleService = $this->createMock(RoleService::class);
+		$roleService->method('getEffectiveRoles')->willReturn([RoleService::USER, RoleService::SUPPORT]);
+
+		$user = $this->createMock(IUser::class);
+		$group = $this->createMock(IGroup::class);
+		$group->method('inGroup')->with($user)->willReturn(true);
+
+		$groupManager = $this->createMock(IGroupManager::class);
+		$groupManager->method('get')->with('soporte')->willReturn($group);
+
+		$userManager = $this->createMock(IUserManager::class);
+		$userManager->method('get')->with('agent-1')->willReturn($user);
+
+		$service = new PermissionService($roleService, $groupManager, $userManager);
+
+		self::assertTrue($service->canAssignGroup('agent-1', 'soporte'));
 	}
 
 	public function testSupportCannotAssignForeignGroup(): void {

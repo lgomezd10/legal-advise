@@ -16,6 +16,6 @@ class TaskApiController extends BaseApiController {
 
 	#[NoAdminRequired]
 	public function status(): DataResponse {
-		return $this->ok($this->taskSyncService->getIntegrationStatus());
+		return $this->respond(fn (): array => $this->taskSyncService->getIntegrationStatus());
 	}
 }

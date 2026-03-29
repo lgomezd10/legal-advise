@@ -367,12 +367,11 @@ class Version000001Date20260310090000 extends SimpleMigrationStep {
 
 	private function seedFilters(): void {
 		$filters = [
-			['name' => 'Asignadas a mi', 'criteria' => ['assignedUser' => '__me__'], 'is_predefined' => true, 'sort_order' => 10],
-			['name' => 'Asignadas a mis grupos', 'criteria' => ['assignedGroup' => '__my_groups__'], 'is_predefined' => true, 'sort_order' => 20],
-			['name' => 'Sin asignar', 'criteria' => ['unassigned' => true], 'is_predefined' => true, 'sort_order' => 30],
-			['name' => 'Abiertas', 'criteria' => ['status' => ['nuevo', 'asignado', 'en_progreso']], 'is_predefined' => true, 'sort_order' => 40],
-			['name' => 'Pendientes de usuario', 'criteria' => ['status' => ['en_espera_usuario']], 'is_predefined' => true, 'sort_order' => 50],
-			['name' => 'Cerradas recientes', 'criteria' => ['status' => ['resuelto', 'cerrado'], 'updatedWithinDays' => 30], 'is_predefined' => true, 'sort_order' => 60],
+			['name' => 'Asignadas a mi', 'criteria' => ['assignedUser' => '__me__', 'status' => ['nuevo', 'asignado', 'en_progreso', 'en_espera_usuario']], 'is_predefined' => true, 'sort_order' => 10],
+			['name' => 'Asignadas a mis grupos', 'criteria' => ['assignedGroup' => '__my_groups__', 'status' => ['nuevo', 'asignado', 'en_progreso', 'en_espera_usuario']], 'is_predefined' => true, 'sort_order' => 20],
+			['name' => 'Sin asignar', 'criteria' => ['unassigned' => true, 'status' => ['nuevo', 'asignado', 'en_progreso', 'en_espera_usuario']], 'is_predefined' => true, 'sort_order' => 30],
+			['name' => 'Pendientes de usuario', 'criteria' => ['status' => ['en_espera_usuario']], 'is_predefined' => true, 'sort_order' => 40],
+			['name' => 'Cerradas recientes', 'criteria' => ['status' => ['resuelto', 'cerrado'], 'updatedWithinDays' => 30], 'is_predefined' => true, 'sort_order' => 50],
 		];
 
 		foreach ($filters as $filter) {

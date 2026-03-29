@@ -17,14 +17,18 @@ class NotificationApiController extends BaseApiController {
 
 	#[NoAdminRequired]
 	public function preferences(): DataResponse {
-		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		return $this->ok(['items' => $this->notificationService->getPreferencesForUser($uid)]);
+		return $this->respond(function (): array {
+			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			return ['items' => $this->notificationService->getPreferencesForUser($uid)];
+		});
 	}
 
 	#[NoAdminRequired]
 	public function updatePreferences(): DataResponse {
-		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		$items = $this->request->getParam('items') ?? [];
-		return $this->ok(['items' => $this->notificationService->updateUserPreferences($uid, is_array($items) ? $items : [])]);
+		return $this->respond(function (): array {
+			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$items = $this->request->getParam('items') ?? [];
+			return ['items' => $this->notificationService->updateUserPreferences($uid, is_array($items) ? $items : [])];
+		});
 	}
 }

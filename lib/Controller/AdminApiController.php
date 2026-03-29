@@ -18,14 +18,18 @@ class AdminApiController extends BaseApiController {
 
 	#[NoAdminRequired]
 	public function index(): DataResponse {
-		$this->assertAdmin();
-		return $this->ok($this->adminConfigService->getConfig());
+		return $this->respond(function (): array {
+			$this->assertAdmin();
+			return $this->adminConfigService->getConfig();
+		});
 	}
 
 	#[NoAdminRequired]
 	public function update(): DataResponse {
-		$this->assertAdmin();
-		return $this->ok($this->adminConfigService->update($this->request->getParams()));
+		return $this->respond(function (): array {
+			$this->assertAdmin();
+			return $this->adminConfigService->update($this->request->getParams());
+		});
 	}
 
 	private function assertAdmin(): void {

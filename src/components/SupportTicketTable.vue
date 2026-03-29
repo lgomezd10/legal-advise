@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive } from 'vue'
 import type { SupportColumnKey, Ticket } from '@/types'
+import { formatDateTime } from '@/utils/formatting'
+import { excerptRichText, richTextToPlainText } from '@/utils/richText'
 
 const MIN_COLUMN_WIDTH = 56
 
@@ -16,10 +18,13 @@ const props = defineProps<{
 	tickets: Ticket[]
 	emptyLabel: string
 	visibleColumns: SupportColumnKey[]
+	sortKey?: SupportColumnKey | 'createdBy'
+	sortDirection?: 'asc' | 'desc'
 }>()
 
 const emit = defineEmits<{
 	(e: 'open', id: number): void
+	(e: 'sort', payload: { key: SupportColumnKey | 'createdBy', direction: 'asc' | 'desc' }): void
 }>()
 
 const columnWidths = reactive<Record<SupportColumnKey, number>>({
@@ -43,29 +48,23 @@ let activeResize: {
 const columns = computed<SupportColumn[]>(() => {
 	const available: SupportColumn[] = [
 		{ key: 'number', label: 'Ticket', defaultVisible: true, sticky: true, defaultWidth: 160 },
+		{ key: 'updatedAt', label: 'Ultima modificacion', defaultVisible: true, defaultWidth: 210 },
+		{ key: 'assignment', label: 'Asignacion', defaultVisible: true, defaultWidth: 240 },
 		{ key: 'createdBy', label: 'Creado por', defaultVisible: true, defaultWidth: 180 },
 		{ key: 'title', label: 'Titulo', defaultVisible: true, defaultWidth: 260 },
 		{ key: 'userDescription', label: 'Descripcion', defaultVisible: true, defaultWidth: 380 },
-		{ key: 'assignment', label: 'Asignacion', defaultVisible: true, defaultWidth: 240 },
 		{ key: 'status', label: 'Estado', defaultVisible: false, defaultWidth: 150 },
 		{ key: 'urgency', label: 'Criticidad', defaultVisible: false, defaultWidth: 150 },
 		{ key: 'createdAt', label: 'Fecha apertura', defaultVisible: false, defaultWidth: 210 },
-		{ key: 'updatedAt', label: 'Fecha ultima edicion', defaultVisible: false, defaultWidth: 210 },
 	]
 
 	return available.filter((column) => props.visibleColumns.includes(column.key))
+		.sort((left, right) => props.visibleColumns.indexOf(left.key) - props.visibleColumns.indexOf(right.key))
 })
 
 const tableStyle = computed(() => ({
 	width: `${columns.value.reduce((total, column) => total + (columnWidths[column.key] ?? column.defaultWidth), 0)}px`,
 }))
-
-function formatDate(timestamp?: number | null) {
-	if (!timestamp) {
-		return 'Sin fecha'
-	}
-	return new Date(timestamp * 1000).toLocaleString()
-}
 
 function formatAssignment(ticket: Ticket) {
 	const parts = [ticket.assignedUserUid, ticket.assignedGroupId ? `Grupo ${ticket.assignedGroupId}` : '']
@@ -75,10 +74,7 @@ function formatAssignment(ticket: Ticket) {
 }
 
 function excerpt(text: string, maxLength = 140) {
-	if (text.length <= maxLength) {
-		return text
-	}
-	return `${text.slice(0, maxLength - 1)}...`
+	return excerptRichText(text, maxLength)
 }
 
 function getColumnStyle(column: SupportColumn) {
@@ -103,7 +99,7 @@ function getCellTitle(columnKey: SupportColumnKey, ticket: Ticket) {
 	}
 
 	if (columnKey === 'userDescription') {
-		return ticket.userDescription || ''
+		return richTextToPlainText(ticket.userDescription || '')
 	}
 
 	if (columnKey === 'assignment') {
@@ -119,14 +115,27 @@ function getCellTitle(columnKey: SupportColumnKey, ticket: Ticket) {
 	}
 
 	if (columnKey === 'createdAt') {
-		return formatDate(ticket.createdAt)
+		return formatDateTime(ticket.createdAt)
 	}
 
 	if (columnKey === 'updatedAt') {
-		return formatDate(ticket.updatedAt)
+		return formatDateTime(ticket.updatedAt)
 	}
 
 	return ''
+}
+
+function toggleSort(columnKey: SupportColumnKey) {
+	const nextDirection = props.sortKey === columnKey && props.sortDirection === 'asc' ? 'desc' : 'asc'
+	emit('sort', { key: columnKey, direction: nextDirection })
+}
+
+function sortIcon(columnKey: SupportColumnKey) {
+	if (props.sortKey !== columnKey) {
+		return '↕'
+	}
+
+	return props.sortDirection === 'asc' ? '↑' : '↓'
 }
 
 function onResizeMove(event: MouseEvent) {
@@ -177,7 +186,10 @@ onBeforeUnmount(() => {
 					<tr>
 						<th v-for="column in columns" :key="column.key" :class="{ 'gi-support-table__cell--sticky': column.sticky }" :style="getColumnStyle(column)">
 							<div class="gi-support-table__header-content">
-								<span class="gi-support-table__header-label">{{ column.label }}</span>
+								<button class="gi-support-table__sort-button" type="button" @click="toggleSort(column.key)">
+									<span class="gi-support-table__header-label">{{ column.label }}</span>
+									<span class="gi-support-table__sort-icon" aria-hidden="true">{{ sortIcon(column.key) }}</span>
+								</button>
 								<button class="gi-support-table__resize-handle" type="button" :aria-label="`Cambiar ancho de ${column.label}`" @mousedown="startResize($event, column)" />
 							</div>
 						</th>
@@ -208,10 +220,10 @@ onBeforeUnmount(() => {
 								<span class="gi-support-table__cell-text">{{ ticket.urgencyId ?? 'Sin criticidad' }}</span>
 							</template>
 							<template v-else-if="column.key === 'createdAt'">
-								<span class="gi-support-table__cell-text">{{ formatDate(ticket.createdAt) }}</span>
+								<span class="gi-support-table__cell-text">{{ formatDateTime(ticket.createdAt) }}</span>
 							</template>
 							<template v-else-if="column.key === 'updatedAt'">
-								<span class="gi-support-table__cell-text">{{ formatDate(ticket.updatedAt) }}</span>
+								<span class="gi-support-table__cell-text">{{ formatDateTime(ticket.updatedAt) }}</span>
 							</template>
 						</td>
 					</tr>
@@ -278,6 +290,27 @@ onBeforeUnmount(() => {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.gi-support-table__sort-button {
+	display: inline-flex;
+	align-items: center;
+	gap: .35rem;
+	max-width: calc(100% - 1rem);
+	min-width: 0;
+	border: none;
+	padding: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-transform: inherit;
+	letter-spacing: inherit;
+	cursor: pointer;
+}
+
+.gi-support-table__sort-icon {
+	flex: none;
+	font-size: .9rem;
 }
 
 .gi-support-table__resize-handle {

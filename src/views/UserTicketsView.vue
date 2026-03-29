@@ -1,37 +1,45 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import TicketList from '@/components/TicketList.vue'
 import { createDefaultTicketDraft } from '@/services/ticketDraft'
 import { useBootstrapStore } from '@/store/bootstrap'
 import { useTicketsStore } from '@/store/tickets'
 import type { Ticket } from '@/types'
+import { formatDateTime, getStatusLabel } from '@/utils/formatting'
+import { richTextToPlainText } from '@/utils/richText'
 
 const router = useRouter()
 const bootstrapStore = useBootstrapStore()
 const ticketsStore = useTicketsStore()
 const urgencies = computed(() => bootstrapStore.data.catalogs.urgencies)
+const statuses = computed(() => bootstrapStore.data.catalogs.statuses)
+const assignableUsers = computed(() => bootstrapStore.data.assignables.users)
+const assignableGroups = computed(() => bootstrapStore.data.assignables.groups)
 const searchText = ref('')
+const dateField = ref<'createdAt' | 'updatedAt'>('createdAt')
 const createdFrom = ref('')
 const createdTo = ref('')
 const openSections = ref({
-	open: true,
-	closed: true,
+	pending: false,
+	open: false,
+	closed: false,
 })
+const initializedDefaultSection = ref(false)
 const filteredTickets = computed(() => {
 	const term = searchText.value.trim().toLowerCase()
 	return ticketsStore.items.filter((ticket: Ticket) => {
-		const createdAt = new Date(ticket.createdAt * 1000)
+		const ticketDate = new Date((dateField.value === 'updatedAt' ? ticket.updatedAt : ticket.createdAt) * 1000)
 		if (createdFrom.value) {
 			const from = new Date(`${createdFrom.value}T00:00:00`)
-			if (createdAt < from) {
+			if (ticketDate < from) {
 				return false
 			}
 		}
 
 		if (createdTo.value) {
 			const to = new Date(`${createdTo.value}T23:59:59`)
-			if (createdAt > to) {
+			if (ticketDate > to) {
 				return false
 			}
 		}
@@ -43,20 +51,33 @@ const filteredTickets = computed(() => {
 		const haystack = [
 			ticket.number,
 			ticket.status,
+			getStatusLabel(ticket.status, statuses.value),
 			ticket.title,
-			ticket.userDescription,
+			richTextToPlainText(ticket.userDescription),
+			ticket.publicCommentSearchText ?? '',
 			ticket.province ?? '',
 			ticket.city ?? '',
-			ticket.assignedUserUid ?? '',
-			ticket.assignedGroupId ?? '',
-			formatDate(ticket.createdAt),
+			formatDateTime(ticket.createdAt),
+			formatDateTime(ticket.updatedAt),
 		].join(' ').toLowerCase()
 
 		return haystack.includes(term)
 	})
 })
-const openTickets = computed(() => filteredTickets.value.filter((ticket: Ticket) => !isClosedTicket(ticket)))
+const pendingTickets = computed(() => filteredTickets.value.filter((ticket: Ticket) => ticket.status === 'en_espera_usuario'))
+const openTickets = computed(() => filteredTickets.value.filter((ticket: Ticket) => !isClosedTicket(ticket) && ticket.status !== 'en_espera_usuario'))
 const closedTickets = computed(() => filteredTickets.value.filter((ticket: Ticket) => isClosedTicket(ticket)))
+
+watch(pendingTickets, (tickets) => {
+	if (tickets.length === 0 && openSections.value.pending) {
+		openSections.value.pending = false
+	}
+
+	if (!initializedDefaultSection.value) {
+		openSections.value.pending = tickets.length > 0
+		initializedDefaultSection.value = true
+	}
+}, { immediate: true })
 
 onMounted(() => {
 	void ticketsStore.load('user')
@@ -69,10 +90,6 @@ function openTicket(ticketId: number) {
 function createTicket() {
 	ticketsStore.replaceDraft(createDefaultTicketDraft(bootstrapStore.data.personalConfig, urgencies.value))
 	void router.push('/mis-incidencias/nuevo')
-}
-
-function formatDate(timestamp: number) {
-	return new Date(timestamp * 1000).toLocaleString()
 }
 
 function isClosedTicket(ticket: Ticket) {
@@ -89,7 +106,14 @@ function isClosedTicket(ticket: Ticket) {
 			<div class="gi-ticket-list-header__filters">
 				<label class="gi-search-box gi-ticket-list-header__search">
 					<span class="gi-search-box__label">Buscar</span>
-					<input v-model="searchText" class="gi-search-box__input" type="search" placeholder="Buscar por numero, estado, titulo, descripcion, fecha, provincia, ciudad o asignacion" />
+					<input v-model="searchText" class="gi-search-box__input" type="search" placeholder="Buscar por numero, estado, titulo, descripcion, comentarios publicos, fecha, provincia o ciudad" />
+				</label>
+				<label class="gi-field gi-ticket-list-header__date-field">
+					<span>Fecha</span>
+					<select v-model="dateField" class="gi-input gi-ticket-list-header__date-field-select">
+						<option value="createdAt">Creacion</option>
+						<option value="updatedAt">Ultima modificacion</option>
+					</select>
 				</label>
 				<label class="gi-field">
 					<span>Desde</span>
@@ -103,18 +127,25 @@ function isClosedTicket(ticket: Ticket) {
 		</header>
 		<div class="gi-ticket-sections">
 			<section class="gi-ticket-section">
+				<button class="gi-ticket-section__header" type="button" @click="openSections.pending = !openSections.pending">
+					<span>Pendiente de mi</span>
+					<strong>{{ pendingTickets.length }}</strong>
+				</button>
+				<TicketList v-if="openSections.pending" :tickets="pendingTickets" :statuses="statuses" :users="assignableUsers" :groups="assignableGroups" :empty-label="searchText.trim() === '' ? 'No hay tickets pendientes de ti' : 'No hay tickets pendientes de ti que coincidan con la busqueda'" @open="openTicket" />
+			</section>
+			<section class="gi-ticket-section">
 				<button class="gi-ticket-section__header" type="button" @click="openSections.open = !openSections.open">
-					<span>Incidencias abiertas</span>
+					<span>Tickets abiertos</span>
 					<strong>{{ openTickets.length }}</strong>
 				</button>
-				<TicketList v-if="openSections.open" :tickets="openTickets" :empty-label="searchText.trim() === '' ? 'No hay incidencias abiertas' : 'No hay incidencias abiertas que coincidan con la busqueda'" @open="openTicket" />
+				<TicketList v-if="openSections.open" :tickets="openTickets" :statuses="statuses" :users="assignableUsers" :groups="assignableGroups" :empty-label="searchText.trim() === '' ? 'No hay tickets abiertos' : 'No hay tickets abiertos que coincidan con la busqueda'" @open="openTicket" />
 			</section>
 			<section class="gi-ticket-section">
 				<button class="gi-ticket-section__header" type="button" @click="openSections.closed = !openSections.closed">
-					<span>Incidencias cerradas</span>
+					<span>Tickets cerrados</span>
 					<strong>{{ closedTickets.length }}</strong>
 				</button>
-				<TicketList v-if="openSections.closed" :tickets="closedTickets" :empty-label="searchText.trim() === '' ? 'No hay incidencias cerradas' : 'No hay incidencias cerradas que coincidan con la busqueda'" @open="openTicket" />
+				<TicketList v-if="openSections.closed" :tickets="closedTickets" :statuses="statuses" :users="assignableUsers" :groups="assignableGroups" :empty-label="searchText.trim() === '' ? 'No hay tickets cerrados' : 'No hay tickets cerrados que coincidan con la busqueda'" @open="openTicket" />
 			</section>
 		</div>
 	</section>
@@ -146,6 +177,14 @@ function isClosedTicket(ticket: Ticket) {
 	align-items: end;
 	gap: .85rem;
 	flex-wrap: wrap;
+}
+
+.gi-ticket-list-header__date-field {
+	min-width: 12rem;
+}
+
+.gi-ticket-list-header__date-field-select {
+	min-height: 2.7rem;
 }
 
 .gi-ticket-sections {

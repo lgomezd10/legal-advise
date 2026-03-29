@@ -13,6 +13,7 @@ return [
 		['name' => 'ticket_api#show', 'url' => '/api/v1/tickets/{id}', 'verb' => 'GET'],
 		['name' => 'ticket_api#create', 'url' => '/api/v1/tickets', 'verb' => 'POST'],
 		['name' => 'ticket_api#update', 'url' => '/api/v1/tickets/{id}', 'verb' => 'PUT'],
+		['name' => 'ticket_api#reopen', 'url' => '/api/v1/tickets/{id}/reopen', 'verb' => 'POST'],
 		['name' => 'ticket_api#comment', 'url' => '/api/v1/tickets/{id}/comments', 'verb' => 'POST'],
 		['name' => 'ticket_api#uploadAttachment', 'url' => '/api/v1/tickets/{id}/attachments', 'verb' => 'POST'],
 		['name' => 'ticket_api#downloadAttachment', 'url' => '/api/v1/attachments/{id}', 'verb' => 'GET'],

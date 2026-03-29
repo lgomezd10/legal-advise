@@ -14,11 +14,6 @@ body,
 	line-height: 1.4;
 }
 
-body {
-	background: linear-gradient(180deg, #7fb2c9 0%, #dfe8e1 24%, #f4f2e7 100%);
-	font-family: 'Segoe UI Variable', 'Aptos', 'Noto Sans', sans-serif;
-}
-
 .gi-page {
 	padding: 1.15rem 1.25rem 1.8rem;
 	width: 100%;
@@ -225,6 +220,116 @@ body {
 	border-radius: 12px;
 	background: rgba(11, 110, 79, .05);
 	margin-bottom: .75rem;
+}
+
+.gi-rich-text {
+	color: var(--color-main-text, #222);
+	word-break: break-word;
+	line-height: 1.5;
+}
+
+.gi-rich-text p {
+	margin: 0 0 .8rem;
+}
+
+.gi-rich-text p:last-child,
+.gi-rich-text h2:last-child,
+.gi-rich-text h3:last-child,
+.gi-rich-text ul:last-child,
+.gi-rich-text ol:last-child,
+.gi-rich-text blockquote:last-child {
+	margin-bottom: 0;
+}
+
+.gi-rich-text ul,
+.gi-rich-text ol {
+	margin: 0 0 .8rem;
+	padding-left: 1.5rem;
+	margin-left: 0;
+	list-style-position: outside !important;
+}
+
+.gi-rich-text ul {
+	list-style-type: disc !important;
+}
+
+.gi-rich-text ol {
+	list-style-type: decimal !important;
+}
+
+.gi-rich-text li {
+	display: list-item !important;
+	margin: 0 0 .3rem;
+	padding-left: 0;
+}
+
+.gi-rich-text ul > li::marker,
+.gi-rich-text ol > li::marker {
+	color: currentColor;
+	font-weight: 600;
+}
+
+.gi-rich-text li > p {
+	margin-bottom: .3rem;
+}
+
+.gi-rich-text li > p:last-child {
+	margin-bottom: 0;
+}
+
+.gi-rich-text h2,
+.gi-rich-text h3 {
+	margin: 0 0 .7rem;
+	line-height: 1.2;
+}
+
+.gi-rich-text h2 {
+	font-size: 1.2rem;
+}
+
+.gi-rich-text h3 {
+	font-size: 1.05rem;
+}
+
+.gi-rich-text blockquote {
+	margin: 0 0 .8rem;
+	padding-left: .9rem;
+	border-left: 3px solid rgba(11, 110, 79, .22);
+	color: #47625b;
+	font-style: italic;
+}
+
+.gi-rich-text img {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	margin-top: .65rem;
+	border-radius: 12px;
+	box-shadow: 0 12px 26px rgba(34, 62, 55, .12);
+}
+
+.gi-rich-text a {
+	color: #0a6ea8;
+	text-decoration: underline;
+	text-decoration-thickness: .08em;
+	text-underline-offset: .14em;
+	font-weight: 600;
+}
+
+.gi-rich-text a:hover {
+	color: #084f79;
+}
+
+.gi-rich-text .ql-align-center {
+	text-align: center;
+}
+
+.gi-rich-text .ql-align-right {
+	text-align: right;
+}
+
+.gi-rich-text .ql-align-justify {
+	text-align: justify;
 }
 
 .gi-empty-state {

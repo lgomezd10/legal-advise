@@ -3,16 +3,21 @@ import { computed, reactive, ref, watch } from 'vue'
 import type { AssignableOption, SavedFilter, SearchableSelectOption, StatusOption, TypeNode } from '@/types'
 import SearchableSelect from './SearchableSelect.vue'
 
-type CriteriaKey = 'status' | 'assignedUser' | 'assignedGroup' | 'typeId' | 'city' | 'text' | 'updatedWithinDays' | 'unassigned' | 'hasAttachments'
+type CriteriaKey = 'status' | 'createdBy' | 'assignedUser' | 'assignedGroup' | 'typeId' | 'city' | 'text' | 'updatedWithinDays' | 'createdAt' | 'updatedAt' | 'unassigned' | 'hasAttachments'
 
 type FilterCriteriaState = {
 	status: string[]
+	createdBy: string
 	assignedUser: string
 	assignedGroup: string
 	typeId: string
 	city: string
 	text: string
 	updatedWithinDays: string
+	createdAtFrom: string
+	createdAtTo: string
+	updatedAtFrom: string
+	updatedAtTo: string
 	unassigned: boolean
 	hasAttachments: boolean
 }
@@ -22,6 +27,8 @@ type FilterChip = {
 	label: string
 }
 
+type CriteriaNegationState = Record<CriteriaKey, boolean>
+
 const props = defineProps<{
 	filters: SavedFilter[]
 	statuses: StatusOption[]
@@ -29,46 +36,90 @@ const props = defineProps<{
 	users: AssignableOption[]
 	groups: AssignableOption[]
 	initialFilterId?: number | null
+	initialCriteria?: Record<string, unknown> | null
 }>()
 
 const emit = defineEmits<{
-	(e: 'apply', criteria: Record<string, unknown>): void
+	(e: 'apply', criteria: Record<string, unknown>, selectedFilterId?: number | null): void
 	(e: 'save', payload: Record<string, unknown>): void
 	(e: 'delete', id: number): void
 }>()
 
 const criteria = reactive<FilterCriteriaState>({
 	status: [],
+	createdBy: '',
 	assignedUser: '',
 	assignedGroup: '',
 	typeId: '',
 	city: '',
 	text: '',
 	updatedWithinDays: '',
+	createdAtFrom: '',
+	createdAtTo: '',
+	updatedAtFrom: '',
+	updatedAtTo: '',
 	unassigned: false,
 	hasAttachments: false,
 })
 
 const enabledCriteria = reactive<Record<CriteriaKey, boolean>>({
 	status: false,
+	createdBy: false,
 	assignedUser: false,
 	assignedGroup: false,
 	typeId: false,
 	city: false,
 	text: false,
 	updatedWithinDays: false,
+	createdAt: false,
+	updatedAt: false,
 	unassigned: false,
 	hasAttachments: false,
 })
 
 const draftCriteria = reactive<FilterCriteriaState>({
 	status: [],
+	createdBy: '',
 	assignedUser: '',
 	assignedGroup: '',
 	typeId: '',
 	city: '',
 	text: '',
 	updatedWithinDays: '',
+	createdAtFrom: '',
+	createdAtTo: '',
+	updatedAtFrom: '',
+	updatedAtTo: '',
+	unassigned: false,
+	hasAttachments: false,
+})
+
+const criteriaNegation = reactive<CriteriaNegationState>({
+	status: false,
+	createdBy: false,
+	assignedUser: false,
+	assignedGroup: false,
+	typeId: false,
+	city: false,
+	text: false,
+	updatedWithinDays: false,
+	createdAt: false,
+	updatedAt: false,
+	unassigned: false,
+	hasAttachments: false,
+})
+
+const draftNegation = reactive<CriteriaNegationState>({
+	status: false,
+	createdBy: false,
+	assignedUser: false,
+	assignedGroup: false,
+	typeId: false,
+	city: false,
+	text: false,
+	updatedWithinDays: false,
+	createdAt: false,
+	updatedAt: false,
 	unassigned: false,
 	hasAttachments: false,
 })
@@ -81,7 +132,9 @@ const saveModalOpen = ref(false)
 const saveModalError = ref('')
 const deleteModalOpen = ref(false)
 const overwriteCandidateId = ref<number | null>(null)
-const initializedDefault = ref(false)
+const initializedStateKey = ref('')
+const textSearchInput = ref('')
+const suppressApply = ref(false)
 
 function normalizeCollection<T>(items: T[] | Record<string, T> | undefined | null): T[] {
 	if (Array.isArray(items)) {
@@ -97,12 +150,15 @@ function normalizeCollection<T>(items: T[] | Record<string, T> | undefined | nul
 
 const criterionOptions: Array<{ key: CriteriaKey, label: string }> = [
 	{ key: 'status', label: 'Estado' },
+	{ key: 'createdBy', label: 'Creado por' },
 	{ key: 'assignedUser', label: 'Usuario asignado' },
 	{ key: 'assignedGroup', label: 'Grupo asignado' },
 	{ key: 'typeId', label: 'Tipo' },
 	{ key: 'city', label: 'Ciudad' },
 	{ key: 'text', label: 'Texto libre' },
 	{ key: 'updatedWithinDays', label: 'Fecha reciente' },
+	{ key: 'createdAt', label: 'Fecha de creacion' },
+	{ key: 'updatedAt', label: 'Fecha de ultima modificacion' },
 	{ key: 'unassigned', label: 'Sin asignar' },
 	{ key: 'hasAttachments', label: 'Documentos adjuntos' },
 ]
@@ -133,6 +189,7 @@ const draftUserOptions = computed<SearchableSelectOption[]>(() => [
 	{ value: '__me__', label: 'Asignadas a mi' },
 	...safeUsers.value.map((user: AssignableOption) => ({ value: user.id, label: user.displayName, searchText: [user.id, ...(user.groupIds ?? [])].join(' ') })),
 ])
+const createdByOptions = computed<SearchableSelectOption[]>(() => safeUsers.value.map((user: AssignableOption) => ({ value: user.id, label: user.displayName, searchText: [user.id, ...(user.groupIds ?? [])].join(' ') })))
 const draftGroupOptions = computed<SearchableSelectOption[]>(() => [
 	{ value: '__my_groups__', label: 'Mis grupos' },
 	...safeGroups.value.map((group: AssignableOption) => ({ value: group.id, label: group.displayName, searchText: [group.id, ...(group.userIds ?? [])].join(' ') })),
@@ -145,6 +202,9 @@ const activeCriteria = computed<Record<string, unknown>>(() => {
 	const next: Record<string, unknown> = {}
 	if (enabledCriteria.status && criteria.status.length > 0) {
 		next.status = [...criteria.status]
+	}
+	if (enabledCriteria.createdBy && criteria.createdBy) {
+		next.createdBy = criteria.createdBy
 	}
 	if (enabledCriteria.assignedUser && criteria.assignedUser) {
 		next.assignedUser = criteria.assignedUser
@@ -164,60 +224,119 @@ const activeCriteria = computed<Record<string, unknown>>(() => {
 	if (enabledCriteria.updatedWithinDays && criteria.updatedWithinDays) {
 		next.updatedWithinDays = Number(criteria.updatedWithinDays)
 	}
+	if (enabledCriteria.createdAt) {
+		if (criteria.createdAtFrom) {
+			next.createdAtFrom = criteria.createdAtFrom
+		}
+		if (criteria.createdAtTo) {
+			next.createdAtTo = criteria.createdAtTo
+		}
+	}
+	if (enabledCriteria.updatedAt) {
+		if (criteria.updatedAtFrom) {
+			next.updatedAtFrom = criteria.updatedAtFrom
+		}
+		if (criteria.updatedAtTo) {
+			next.updatedAtTo = criteria.updatedAtTo
+		}
+	}
 	if (enabledCriteria.unassigned && criteria.unassigned) {
 		next.unassigned = true
 	}
 	if (enabledCriteria.hasAttachments && criteria.hasAttachments) {
 		next.hasAttachments = true
 	}
+	const negatedCriteria = (Object.keys(criteriaNegation) as CriteriaKey[]).filter((key) => enabledCriteria[key] && criteriaNegation[key])
+	if (negatedCriteria.length > 0) {
+		next.negatedCriteria = negatedCriteria
+	}
 	return next
 })
 const activeFilterChips = computed<FilterChip[]>(() => {
 	const chips: FilterChip[] = []
 	if (enabledCriteria.status && criteria.status.length > 0) {
-		chips.push({ key: 'status', label: `Estado: ${formatStatusList(criteria.status)}` })
+		chips.push({ key: 'status', label: withNegationLabel('status', `Estado: ${formatStatusList(criteria.status)}`) })
+	}
+	if (enabledCriteria.createdBy && criteria.createdBy) {
+		chips.push({ key: 'createdBy', label: withNegationLabel('createdBy', `Creado por: ${formatAssignedUser(criteria.createdBy)}`) })
 	}
 	if (enabledCriteria.assignedUser && criteria.assignedUser) {
-		chips.push({ key: 'assignedUser', label: `Usuario: ${formatAssignedUser(criteria.assignedUser)}` })
+		chips.push({ key: 'assignedUser', label: withNegationLabel('assignedUser', `Usuario: ${formatAssignedUser(criteria.assignedUser)}`) })
 	}
 	if (enabledCriteria.assignedGroup && criteria.assignedGroup) {
-		chips.push({ key: 'assignedGroup', label: `Grupo: ${formatAssignedGroup(criteria.assignedGroup)}` })
+		chips.push({ key: 'assignedGroup', label: withNegationLabel('assignedGroup', `Grupo: ${formatAssignedGroup(criteria.assignedGroup)}`) })
 	}
 	if (enabledCriteria.typeId && criteria.typeId) {
-		chips.push({ key: 'typeId', label: `Tipo: ${formatType(criteria.typeId)}` })
+		chips.push({ key: 'typeId', label: withNegationLabel('typeId', `Tipo: ${formatType(criteria.typeId)}`) })
 	}
 	if (enabledCriteria.city && criteria.city.trim()) {
-		chips.push({ key: 'city', label: `Ciudad: ${criteria.city.trim()}` })
+		chips.push({ key: 'city', label: withNegationLabel('city', `Ciudad: ${criteria.city.trim()}`) })
 	}
 	if (enabledCriteria.text && criteria.text.trim()) {
-		chips.push({ key: 'text', label: `Texto: ${criteria.text.trim()}` })
+		chips.push({ key: 'text', label: withNegationLabel('text', `Texto: ${criteria.text.trim()}`) })
 	}
 	if (enabledCriteria.updatedWithinDays && criteria.updatedWithinDays) {
-		chips.push({ key: 'updatedWithinDays', label: `Ultimos ${criteria.updatedWithinDays} dias` })
+		chips.push({ key: 'updatedWithinDays', label: withNegationLabel('updatedWithinDays', `Ultimos ${criteria.updatedWithinDays} dias`) })
+	}
+	if (enabledCriteria.createdAt && (criteria.createdAtFrom || criteria.createdAtTo)) {
+		chips.push({ key: 'createdAt', label: withNegationLabel('createdAt', `Creacion: ${formatDateRange(criteria.createdAtFrom, criteria.createdAtTo)}`) })
+	}
+	if (enabledCriteria.updatedAt && (criteria.updatedAtFrom || criteria.updatedAtTo)) {
+		chips.push({ key: 'updatedAt', label: withNegationLabel('updatedAt', `Ultima modificacion: ${formatDateRange(criteria.updatedAtFrom, criteria.updatedAtTo)}`) })
 	}
 	if (enabledCriteria.unassigned && criteria.unassigned) {
-		chips.push({ key: 'unassigned', label: 'Sin asignar' })
+		chips.push({ key: 'unassigned', label: withNegationLabel('unassigned', 'Sin asignar') })
 	}
 	if (enabledCriteria.hasAttachments && criteria.hasAttachments) {
-		chips.push({ key: 'hasAttachments', label: 'Con adjuntos' })
+		chips.push({ key: 'hasAttachments', label: withNegationLabel('hasAttachments', 'Con adjuntos') })
 	}
 	return chips
 })
 
-watch(activeCriteria, (value) => emit('apply', value), { deep: true, immediate: true })
-
-watch(() => [props.initialFilterId, safeFilters.value], ([initialFilterId]) => {
-	if (initializedDefault.value || !initialFilterId) {
+watch(activeCriteria, (value) => {
+	if (suppressApply.value) {
 		return
 	}
 
-	const filter = safeFilters.value.find((item: SavedFilter) => item.id === Number(initialFilterId))
-	if (!filter) {
+	emit('apply', value, selectedFilter.value ? Number(selectedFilter.value) : null)
+}, { deep: true, immediate: true })
+
+watch(textSearchInput, (value) => {
+	criteria.text = value
+	enabledCriteria.text = value.trim() !== ''
+	selectedFilter.value = ''
+})
+
+watch(() => [props.initialFilterId, props.initialCriteria, safeFilters.value] as const, ([initialFilterId, initialCriteria]) => {
+	const normalizedFilterId = initialFilterId ? Number(initialFilterId) : null
+	const normalizedCriteria = normalizeCriteria(initialCriteria ?? {})
+	const criteriaKey = JSON.stringify(normalizedCriteria)
+	const nextStateKey = normalizedFilterId !== null
+		? `filter:${normalizedFilterId}`
+		: `criteria:${criteriaKey}`
+
+	if (initializedStateKey.value === nextStateKey) {
 		return
 	}
 
-	initializedDefault.value = true
-	applyFilter(filter)
+	if (normalizedFilterId !== null) {
+		const filter = safeFilters.value.find((item: SavedFilter) => item.id === normalizedFilterId)
+		if (!filter) {
+			return
+		}
+
+		initializedStateKey.value = nextStateKey
+		applyFilter(filter, false)
+		return
+	}
+
+	if (Object.keys(normalizedCriteria).length === 0) {
+		initializedStateKey.value = nextStateKey
+		return
+	}
+
+	initializedStateKey.value = nextStateKey
+	applyCriteria(normalizedCriteria, null, '', false)
 }, { deep: true, immediate: true })
 
 function flattenTypes(types: TypeNode[], prefix = ''): Array<{ id: number, label: string }> {
@@ -228,6 +347,10 @@ function flattenTypes(types: TypeNode[], prefix = ''): Array<{ id: number, label
 }
 
 function toggleDraftStatus(statusId: string, checked: boolean) {
+	if (checked && !isDraftStatusSelectable(statusId)) {
+		return
+	}
+
 	draftCriteria.status = checked
 		? Array.from(new Set([...draftCriteria.status, statusId]))
 		: draftCriteria.status.filter((item) => item !== statusId)
@@ -236,6 +359,8 @@ function toggleDraftStatus(statusId: string, checked: boolean) {
 function clearCriterionValue(key: CriteriaKey) {
 	if (key === 'status') {
 		criteria.status = []
+	} else if (key === 'createdBy') {
+		criteria.createdBy = ''
 	} else if (key === 'assignedUser') {
 		criteria.assignedUser = ''
 	} else if (key === 'assignedGroup') {
@@ -248,6 +373,12 @@ function clearCriterionValue(key: CriteriaKey) {
 		criteria.text = ''
 	} else if (key === 'updatedWithinDays') {
 		criteria.updatedWithinDays = ''
+	} else if (key === 'createdAt') {
+		criteria.createdAtFrom = ''
+		criteria.createdAtTo = ''
+	} else if (key === 'updatedAt') {
+		criteria.updatedAtFrom = ''
+		criteria.updatedAtTo = ''
 	} else if (key === 'hasAttachments') {
 		criteria.hasAttachments = false
 	} else {
@@ -257,32 +388,54 @@ function clearCriterionValue(key: CriteriaKey) {
 
 function resetDraft() {
 	draftCriteria.status = []
+	draftCriteria.createdBy = ''
 	draftCriteria.assignedUser = ''
 	draftCriteria.assignedGroup = ''
 	draftCriteria.typeId = ''
 	draftCriteria.city = ''
 	draftCriteria.text = ''
 	draftCriteria.updatedWithinDays = ''
+	draftCriteria.createdAtFrom = ''
+	draftCriteria.createdAtTo = ''
+	draftCriteria.updatedAtFrom = ''
+	draftCriteria.updatedAtTo = ''
 	draftCriteria.unassigned = false
 	draftCriteria.hasAttachments = false
+	for (const key of Object.keys(draftNegation) as CriteriaKey[]) {
+		draftNegation[key] = false
+	}
 	modalCriterionKey.value = ''
 }
 
 function loadDraftForCriterion(key: CriteriaKey) {
 	draftCriteria.status = key === 'status' ? [...criteria.status] : []
+	draftCriteria.createdBy = key === 'createdBy' ? criteria.createdBy : ''
 	draftCriteria.assignedUser = key === 'assignedUser' ? criteria.assignedUser : ''
 	draftCriteria.assignedGroup = key === 'assignedGroup' ? criteria.assignedGroup : ''
 	draftCriteria.typeId = key === 'typeId' ? criteria.typeId : ''
 	draftCriteria.city = key === 'city' ? criteria.city : ''
 	draftCriteria.text = key === 'text' ? criteria.text : ''
 	draftCriteria.updatedWithinDays = key === 'updatedWithinDays' ? criteria.updatedWithinDays : ''
+	draftCriteria.createdAtFrom = key === 'createdAt' ? criteria.createdAtFrom : ''
+	draftCriteria.createdAtTo = key === 'createdAt' ? criteria.createdAtTo : ''
+	draftCriteria.updatedAtFrom = key === 'updatedAt' ? criteria.updatedAtFrom : ''
+	draftCriteria.updatedAtTo = key === 'updatedAt' ? criteria.updatedAtTo : ''
 	draftCriteria.unassigned = key === 'unassigned' ? criteria.unassigned : true
 	draftCriteria.hasAttachments = key === 'hasAttachments' ? criteria.hasAttachments : true
+	for (const draftKey of Object.keys(draftNegation) as CriteriaKey[]) {
+		draftNegation[draftKey] = false
+	}
+	draftNegation[key] = criteriaNegation[key]
 	modalCriterionKey.value = key
 }
 
 function openAddCriterionModal() {
 	resetDraft()
+	modalOpen.value = true
+}
+
+function editCriterion(key: CriteriaKey) {
+	loadDraftForCriterion(key)
 	modalOpen.value = true
 }
 
@@ -330,6 +483,9 @@ function hasDraftValue(key: CriteriaKey) {
 	if (key === 'status') {
 		return draftCriteria.status.length > 0
 	}
+	if (key === 'createdBy') {
+		return Boolean(draftCriteria.createdBy)
+	}
 	if (key === 'assignedUser') {
 		return Boolean(draftCriteria.assignedUser)
 	}
@@ -348,6 +504,12 @@ function hasDraftValue(key: CriteriaKey) {
 	if (key === 'updatedWithinDays') {
 		return Boolean(draftCriteria.updatedWithinDays)
 	}
+	if (key === 'createdAt') {
+		return Boolean(draftCriteria.createdAtFrom || draftCriteria.createdAtTo)
+	}
+	if (key === 'updatedAt') {
+		return Boolean(draftCriteria.updatedAtFrom || draftCriteria.updatedAtTo)
+	}
 	if (key === 'hasAttachments') {
 		return draftCriteria.hasAttachments
 	}
@@ -363,6 +525,8 @@ function applyDraftCriterion() {
 	enabledCriteria[key] = true
 	if (key === 'status') {
 		criteria.status = [...draftCriteria.status]
+	} else if (key === 'createdBy') {
+		criteria.createdBy = draftCriteria.createdBy
 	} else if (key === 'assignedUser') {
 		criteria.assignedUser = draftCriteria.assignedUser
 	} else if (key === 'assignedGroup') {
@@ -375,11 +539,18 @@ function applyDraftCriterion() {
 		criteria.text = draftCriteria.text.trim()
 	} else if (key === 'updatedWithinDays') {
 		criteria.updatedWithinDays = draftCriteria.updatedWithinDays
+	} else if (key === 'createdAt') {
+		criteria.createdAtFrom = draftCriteria.createdAtFrom
+		criteria.createdAtTo = draftCriteria.createdAtTo
+	} else if (key === 'updatedAt') {
+		criteria.updatedAtFrom = draftCriteria.updatedAtFrom
+		criteria.updatedAtTo = draftCriteria.updatedAtTo
 	} else if (key === 'hasAttachments') {
 		criteria.hasAttachments = true
 	} else {
 		criteria.unassigned = true
 	}
+	criteriaNegation[key] = draftNegation[key]
 
 	closeAddCriterionModal()
 	selectedFilter.value = ''
@@ -395,22 +566,30 @@ function applyDraftCriterion() {
 
 function removeCriterion(key: CriteriaKey) {
 	enabledCriteria[key] = false
+	criteriaNegation[key] = false
 	clearCriterionValue(key)
 	selectedFilter.value = ''
 }
 
 function resetBuilder() {
 	criteria.status = []
+	criteria.createdBy = ''
 	criteria.assignedUser = ''
 	criteria.assignedGroup = ''
 	criteria.typeId = ''
 	criteria.city = ''
 	criteria.text = ''
+	textSearchInput.value = ''
 	criteria.updatedWithinDays = ''
+	criteria.createdAtFrom = ''
+	criteria.createdAtTo = ''
+	criteria.updatedAtFrom = ''
+	criteria.updatedAtTo = ''
 	criteria.unassigned = false
 	criteria.hasAttachments = false
 	for (const key of Object.keys(enabledCriteria) as CriteriaKey[]) {
 		enabledCriteria[key] = false
+		criteriaNegation[key] = false
 	}
 	saveName.value = ''
 	selectedFilter.value = ''
@@ -418,16 +597,51 @@ function resetBuilder() {
 	resetDraft()
 }
 
-function applyFilter(filter: SavedFilter) {
+function normalizeCriteria(source: Record<string, unknown>) {
+	const normalized: Record<string, unknown> = {}
+	for (const [key, value] of Object.entries(source)) {
+		normalized[key] = Array.isArray(value) ? [...value] : value
+	}
+
+	return normalized
+}
+
+function applyCriteria(nextCriteria: Record<string, unknown>, filterId: number | null, saveLabel: string, shouldEmit: boolean) {
+	suppressApply.value = true
 	resetBuilder()
-	const nextCriteria = filter.criteria ?? {}
+	const negatedCriteria = Array.isArray(nextCriteria.negatedCriteria)
+		? nextCriteria.negatedCriteria.map(String).filter((key): key is CriteriaKey => key in criteriaNegation)
+		: []
 	for (const [key, rawValue] of Object.entries(nextCriteria)) {
+		if (key === 'negatedCriteria') {
+			continue
+		}
+		if (key === 'createdAtFrom' || key === 'createdAtTo') {
+			enabledCriteria.createdAt = true
+			if (key === 'createdAtFrom') {
+				criteria.createdAtFrom = String(rawValue)
+			} else {
+				criteria.createdAtTo = String(rawValue)
+			}
+			continue
+		}
+		if (key === 'updatedAtFrom' || key === 'updatedAtTo') {
+			enabledCriteria.updatedAt = true
+			if (key === 'updatedAtFrom') {
+				criteria.updatedAtFrom = String(rawValue)
+			} else {
+				criteria.updatedAtTo = String(rawValue)
+			}
+			continue
+		}
 		if (!(key in enabledCriteria)) {
 			continue
 		}
 		enabledCriteria[key as CriteriaKey] = true
 		if (key === 'status') {
 			criteria.status = Array.isArray(rawValue) ? rawValue.map(String) : String(rawValue).split(',').map((item: string) => item.trim()).filter(Boolean)
+		} else if (key === 'createdBy') {
+			criteria.createdBy = String(rawValue)
 		} else if (key === 'assignedUser') {
 			criteria.assignedUser = String(rawValue)
 		} else if (key === 'assignedGroup') {
@@ -438,6 +652,7 @@ function applyFilter(filter: SavedFilter) {
 			criteria.city = String(rawValue)
 		} else if (key === 'text') {
 			criteria.text = String(rawValue)
+			textSearchInput.value = criteria.text
 		} else if (key === 'updatedWithinDays') {
 			criteria.updatedWithinDays = String(rawValue)
 		} else if (key === 'hasAttachments') {
@@ -446,8 +661,19 @@ function applyFilter(filter: SavedFilter) {
 			criteria.unassigned = Boolean(rawValue)
 		}
 	}
-	saveName.value = filter.isPredefined ? `Copia de ${filter.name}` : filter.name
-	selectedFilter.value = String(filter.id)
+	for (const key of negatedCriteria) {
+		criteriaNegation[key] = true
+	}
+	saveName.value = saveLabel
+	selectedFilter.value = filterId === null ? '' : String(filterId)
+	suppressApply.value = false
+	if (shouldEmit) {
+		emit('apply', activeCriteria.value, filterId)
+	}
+}
+
+function applyFilter(filter: SavedFilter, shouldEmit = true) {
+	applyCriteria(filter.criteria ?? {}, filter.id, filter.isPredefined ? `Copia de ${filter.name}` : filter.name, shouldEmit)
 }
 
 function saveCurrentFilter(overwrite = false) {
@@ -520,8 +746,55 @@ function onDraftTypeSelect(value: string | number | null) {
 	draftCriteria.typeId = value ? String(value) : ''
 }
 
+function syncDraftDateRange(key: 'createdAt' | 'updatedAt', changedBoundary: 'from' | 'to') {
+	const fromKey = key === 'createdAt' ? 'createdAtFrom' : 'updatedAtFrom'
+	const toKey = key === 'createdAt' ? 'createdAtTo' : 'updatedAtTo'
+	const fromValue = draftCriteria[fromKey]
+	const toValue = draftCriteria[toKey]
+
+	if (!fromValue || !toValue) {
+		return
+	}
+
+	if (fromValue <= toValue) {
+		return
+	}
+
+	if (changedBoundary === 'from') {
+		draftCriteria[toKey] = fromValue
+		return
+	}
+
+	draftCriteria[fromKey] = toValue
+}
+
 function formatStatusList(statusIds: string[]) {
 	return statusIds.map((statusId) => statusLabelMap.value.get(statusId) ?? statusId).join(', ')
+}
+
+function withNegationLabel(key: CriteriaKey, label: string) {
+	return criteriaNegation[key] ? `Excluir ${label}` : label
+}
+
+function getDraftNegation(key: CriteriaKey | '') {
+	return key ? draftNegation[key] : false
+}
+
+function setDraftNegation(key: CriteriaKey | '', value: boolean) {
+	if (!key) {
+		return
+	}
+
+	draftNegation[key] = value
+}
+
+function isDraftStatusSelectable(statusId: string) {
+	const status = safeStatuses.value.find((item: StatusOption) => item.id === statusId)
+	if (!status) {
+		return false
+	}
+
+	return status.active !== false || draftCriteria.status.includes(statusId)
 }
 
 function formatAssignedUser(userId: string) {
@@ -543,6 +816,35 @@ function formatType(typeId: string) {
 	return selected?.label ?? typeId
 }
 
+function formatDateLabel(value: string) {
+	if (!value) {
+		return ''
+	}
+
+	const [year, month, day] = value.split('-')
+	if (!year || !month || !day) {
+		return value
+	}
+
+	return `${day}/${month}/${year}`
+}
+
+function formatDateRange(from: string, to: string) {
+	if (from && to) {
+		return `del ${formatDateLabel(from)} al ${formatDateLabel(to)}`
+	}
+
+	if (from) {
+		return `desde ${formatDateLabel(from)}`
+	}
+
+	if (to) {
+		return `hasta ${formatDateLabel(to)}`
+	}
+
+	return 'sin definir'
+}
+
 function normalizeFilterName(name: string) {
 	return name.trim().toLocaleLowerCase()
 }
@@ -560,6 +862,10 @@ function getSuggestedSaveName() {
 <template>
 	<section class="gi-filter-panel">
 		<div class="gi-filter-toolbar">
+			<label class="gi-field gi-filter-toolbar__field gi-filter-toolbar__field--search">
+				<span class="gi-filter-toolbar__label">Buscar</span>
+				<input v-model="textSearchInput" class="gi-input gi-filter-toolbar__search-input" type="search" placeholder="Buscar en cualquier campo del ticket y en comentarios" />
+			</label>
 			<label class="gi-field gi-filter-toolbar__field">
 				<span class="gi-filter-toolbar__label">Filtros guardados</span>
 				<SearchableSelect :model-value="selectedFilter || null" :options="filterOptions" placeholder="Selecciona un filtro" @update:modelValue="onFilterSelect" />
@@ -567,16 +873,18 @@ function getSuggestedSaveName() {
 			<button v-if="canDeleteSelectedFilter" class="gi-filter-toolbar__delete-button" type="button" @click="openDeleteModal">Eliminar filtro</button>
 		</div>
 
-		<div class="gi-filter-chip-bar">
-			<span class="gi-filter-chip-bar__label">Aplicando</span>
+		<div class="gi-filter-chip-group">
+			<span class="gi-filter-toolbar__label gi-filter-chip-group__label">Aplicando</span>
+			<div class="gi-filter-chip-bar">
 			<div class="gi-filter-chip-bar__items">
 				<div v-if="activeFilterChips.length === 0" class="gi-filter-chip gi-filter-chip--empty">
 					<span>Sin filtros activos</span>
 				</div>
-				<div v-for="chip in activeFilterChips" :key="chip.key" class="gi-filter-chip">
+				<button v-for="chip in activeFilterChips" :key="chip.key" class="gi-filter-chip gi-filter-chip--action" type="button" @click="editCriterion(chip.key)">
 					<span class="gi-filter-chip__text">{{ chip.label }}</span>
-					<button class="gi-filter-chip__remove" type="button" :aria-label="`Quitar ${chip.label}`" @click="removeCriterion(chip.key)">x</button>
-				</div>
+					<span class="gi-filter-chip__edit">Editar</span>
+					<span class="gi-filter-chip__remove" role="button" :aria-label="`Quitar ${chip.label}`" @click.stop="removeCriterion(chip.key)">x</span>
+				</button>
 				<button class="gi-filter-chip-bar__add" type="button" aria-label="Anadir condicion" @click="openAddCriterionModal">+</button>
 			</div>
 			<div class="gi-filter-chip-bar__actions">
@@ -585,6 +893,7 @@ function getSuggestedSaveName() {
 				</button>
 				<button class="gi-ghost-button gi-filter-chip-bar__text-action" type="button" @click="resetBuilder">Limpiar</button>
 			</div>
+		</div>
 		</div>
 
 		<div v-if="modalOpen" class="gi-filter-modal-backdrop" @click.self="closeAddCriterionModal">
@@ -601,8 +910,8 @@ function getSuggestedSaveName() {
 
 				<div v-if="modalCriterionKey" class="gi-filter-modal__body">
 					<div v-if="modalCriterionKey === 'status'" class="gi-option-grid gi-option-grid--compact">
-						<label v-for="status in props.statuses" :key="status.id" class="gi-check-tile">
-							<input :checked="draftCriteria.status.includes(status.id)" type="checkbox" @change="toggleDraftStatus(status.id, ($event.target as HTMLInputElement).checked)" />
+						<label v-for="status in safeStatuses" :key="status.id" class="gi-check-tile" :class="{ 'gi-check-tile--disabled': !isDraftStatusSelectable(status.id) }">
+							<input :checked="draftCriteria.status.includes(status.id)" :disabled="!isDraftStatusSelectable(status.id)" type="checkbox" @change="toggleDraftStatus(status.id, ($event.target as HTMLInputElement).checked)" />
 							<span>{{ status.label }}</span>
 						</label>
 					</div>
@@ -610,6 +919,11 @@ function getSuggestedSaveName() {
 					<label v-else-if="modalCriterionKey === 'assignedUser'" class="gi-field">
 						<span>Usuario asignado</span>
 						<SearchableSelect :model-value="draftCriteria.assignedUser || null" :options="draftUserOptions" placeholder="Selecciona un usuario" @update:modelValue="onDraftAssignedUserSelect" />
+					</label>
+
+					<label v-else-if="modalCriterionKey === 'createdBy'" class="gi-field">
+						<span>Creado por</span>
+						<SearchableSelect :model-value="draftCriteria.createdBy || null" :options="createdByOptions" placeholder="Selecciona un usuario" @update:modelValue="draftCriteria.createdBy = $event ? String($event) : ''" />
 					</label>
 
 					<label v-else-if="modalCriterionKey === 'assignedGroup'" class="gi-field">
@@ -637,6 +951,28 @@ function getSuggestedSaveName() {
 						<input v-model="draftCriteria.updatedWithinDays" class="gi-input" inputmode="numeric" placeholder="30" />
 					</label>
 
+					<div v-else-if="modalCriterionKey === 'createdAt'" class="gi-filter-modal__date-range">
+						<label class="gi-field">
+							<span>Fecha de inicio</span>
+							<input v-model="draftCriteria.createdAtFrom" class="gi-input" type="date" @input="syncDraftDateRange('createdAt', 'from')" />
+						</label>
+						<label class="gi-field">
+							<span>Fecha de fin</span>
+							<input v-model="draftCriteria.createdAtTo" class="gi-input" type="date" @input="syncDraftDateRange('createdAt', 'to')" />
+						</label>
+					</div>
+
+					<div v-else-if="modalCriterionKey === 'updatedAt'" class="gi-filter-modal__date-range">
+						<label class="gi-field">
+							<span>Fecha de inicio</span>
+							<input v-model="draftCriteria.updatedAtFrom" class="gi-input" type="date" @input="syncDraftDateRange('updatedAt', 'from')" />
+						</label>
+						<label class="gi-field">
+							<span>Fecha de fin</span>
+							<input v-model="draftCriteria.updatedAtTo" class="gi-input" type="date" @input="syncDraftDateRange('updatedAt', 'to')" />
+						</label>
+					</div>
+
 					<label v-else-if="modalCriterionKey === 'hasAttachments'" class="gi-switch-row gi-switch-row--modal">
 						<input v-model="draftCriteria.hasAttachments" type="checkbox" />
 						<span>Solo tickets con adjuntos o rutas URL</span>
@@ -645,6 +981,11 @@ function getSuggestedSaveName() {
 					<label v-else class="gi-switch-row gi-switch-row--modal">
 						<input v-model="draftCriteria.unassigned" type="checkbox" />
 						<span>Mostrar solo tickets sin usuario ni grupo asignado</span>
+					</label>
+
+					<label class="gi-switch-row gi-switch-row--modal">
+						<input :checked="getDraftNegation(modalCriterionKey)" type="checkbox" @change="setDraftNegation(modalCriterionKey, ($event.target as HTMLInputElement).checked)" />
+						<span>Negar este filtro</span>
 					</label>
 				</div>
 
@@ -743,6 +1084,24 @@ function getSuggestedSaveName() {
 	flex: 1 1 22rem;
 }
 
+.gi-filter-toolbar__field--search {
+	flex: 2 1 28rem;
+}
+
+.gi-filter-toolbar__search-input {
+	min-height: 2.9rem;
+	border-radius: 16px;
+}
+
+.gi-filter-chip-group {
+	display: grid;
+	gap: .45rem;
+}
+
+.gi-filter-chip-group__label {
+	padding-left: .15rem;
+}
+
 .gi-filter-toolbar__delete-button {
 	flex: 0 0 auto;
 	min-height: 2.25rem;
@@ -774,6 +1133,12 @@ function getSuggestedSaveName() {
 	padding: .42rem .7rem;
 	border-radius: 999px;
 	font-size: .94rem;
+}
+
+.gi-filter-modal__date-range {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+	gap: .75rem;
 }
 
 .gi-filter-chip-bar {
@@ -821,6 +1186,12 @@ function getSuggestedSaveName() {
 	font-size: .88rem;
 }
 
+.gi-filter-chip--action {
+	border: none;
+	font: inherit;
+	cursor: pointer;
+}
+
 .gi-filter-chip--empty {
 	background: rgba(49, 96, 91, .05);
 	color: #5f726b;
@@ -831,6 +1202,12 @@ function getSuggestedSaveName() {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	max-width: 100%;
+}
+
+.gi-filter-chip__edit {
+	font-size: .78rem;
+	color: #45675e;
+	white-space: nowrap;
 }
 
 .gi-filter-chip-bar__add {
@@ -868,6 +1245,8 @@ function getSuggestedSaveName() {
 }
 
 .gi-filter-chip__remove {
+	display: inline-grid;
+	place-items: center;
 	border: none;
 	background: rgba(33, 79, 69, .12);
 	color: #214f45;
@@ -899,6 +1278,10 @@ function getSuggestedSaveName() {
 	padding: .7rem .8rem;
 	border-radius: 14px;
 	background: rgba(226, 235, 232, .66);
+}
+
+.gi-check-tile--disabled {
+	opacity: .55;
 }
 
 .gi-switch-row--modal {
@@ -943,7 +1326,7 @@ function getSuggestedSaveName() {
 
 .gi-filter-modal {
 	width: min(40rem, 100%);
-	min-height: min(32rem, calc(100vh - 2rem));
+	height: calc(100vh - 2rem);
 	max-height: calc(100vh - 2rem);
 	overflow: auto;
 	display: grid;
@@ -956,7 +1339,7 @@ function getSuggestedSaveName() {
 
 .gi-filter-save-modal {
 	width: min(28rem, 100%);
-	min-height: min(20rem, calc(100vh - 2rem));
+	height: calc(100vh - 2rem);
 	max-height: calc(100vh - 2rem);
 	overflow: auto;
 	display: grid;

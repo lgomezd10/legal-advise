@@ -5,6 +5,7 @@ export const fetchTickets = async(scope: 'user' | 'support', criteria: Record<st
 export const fetchTicket = async(id: number) => apiGet<Ticket>(`/api/v1/tickets/${id}`)
 export const createTicket = async(payload: Record<string, unknown>) => apiPost<Ticket>('/api/v1/tickets', payload)
 export const updateTicket = async(id: number, payload: Record<string, unknown>) => apiPut<Ticket>(`/api/v1/tickets/${id}`, payload)
+export const reopenTicket = async(id: number) => apiPost<Ticket>(`/api/v1/tickets/${id}/reopen`)
 export const addComment = async(id: number, payload: Record<string, unknown>) => apiPost<TicketComment>(`/api/v1/tickets/${id}/comments`, payload)
 export const uploadAttachment = async(id: number, file: File, commentId: number) => {
 	const formData = new FormData()
