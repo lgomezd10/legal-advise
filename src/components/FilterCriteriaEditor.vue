@@ -194,17 +194,17 @@ function isStatusSelectable(statusId: string) {
 				Quitar {{ option.label }}
 			</button>
 		</div>
-		<div v-if="modalOpen" class="gi-filter-modal-backdrop" @click.self="modalOpen = false; resetDraft()">
-			<section class="gi-filter-modal">
-				<header class="gi-filter-modal__header">
-					<h3>Anadir criterio</h3>
+		<div v-if="modalOpen" class="gi-dialog-backdrop" @click.self="modalOpen = false; resetDraft()">
+			<section class="gi-dialog gi-dialog--wide">
+				<header class="gi-dialog__header">
+					<h3 class="gi-dialog__title">Anadir criterio</h3>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="modalOpen = false; resetDraft()">x</button>
 				</header>
 				<label class="gi-field">
 					<span>Tipo de filtro</span>
 					<SearchableSelect :model-value="modalCriterionKey || null" :options="criterionTypeOptions" placeholder="Selecciona un criterio" @update:modelValue="modalCriterionKey = String($event ?? '') as CriteriaKey" />
 				</label>
-				<div v-if="modalCriterionKey" class="gi-filter-modal__body">
+				<div v-if="modalCriterionKey" class="gi-dialog__body">
 					<div v-if="modalCriterionKey === 'status'" class="gi-option-grid gi-option-grid--compact">
 						<label v-for="status in safeStatuses" :key="status.id" class="gi-check-tile" :class="{ 'gi-check-tile--disabled': !isStatusSelectable(status.id) }">
 							<input :checked="draftCriteria.status.includes(status.id)" :disabled="!isStatusSelectable(status.id)" type="checkbox" @change="draftCriteria.status = ($event.target as HTMLInputElement).checked ? [...new Set([...draftCriteria.status, status.id])] : draftCriteria.status.filter((item) => item !== status.id)" />
@@ -220,7 +220,7 @@ function isStatusSelectable(statusId: string) {
 					<label v-else-if="modalCriterionKey === 'hasAttachments'" class="gi-switch-row"><input v-model="draftCriteria.hasAttachments" type="checkbox" /><span>Solo con adjuntos o rutas URL</span></label>
 					<label v-else class="gi-switch-row"><input v-model="draftCriteria.unassigned" type="checkbox" /><span>Solo sin asignar</span></label>
 				</div>
-				<footer class="gi-filter-modal__footer">
+				<footer class="gi-dialog__footer">
 					<button class="gi-primary-button" type="button" :disabled="!modalCriterionKey || !hasDraftValue(modalCriterionKey)" @click="applyDraftCriterion">Anadir</button>
 				</footer>
 			</section>
@@ -245,53 +245,7 @@ function isStatusSelectable(statusId: string) {
 	cursor: pointer;
 }
 
-.gi-filter-modal-backdrop {
-	position: fixed;
-	inset: 0;
-	display: grid;
-	place-items: center;
-	background: rgba(24, 38, 34, .34);
-	z-index: 95;
-	padding: 1rem;
-}
-
-.gi-filter-modal {
-	width: min(42rem, 100%);
-	height: calc(100vh - 2rem);
-	max-height: calc(100vh - 2rem);
-	overflow: auto;
-	display: grid;
-	gap: .9rem;
-	padding: 1rem;
-	border-radius: 22px;
-	background: rgba(255, 255, 255, .99);
-}
-
 .gi-check-tile--disabled {
 	opacity: .55;
-}
-
-.gi-modal-close {
-	width: 2rem;
-	height: 2rem;
-	display: inline-grid;
-	place-items: center;
-	border: 1px solid rgba(33, 79, 69, .18);
-	border-radius: 999px;
-	background: rgba(255, 255, 255, .9);
-	color: #255d52;
-	font: inherit;
-	line-height: 1;
-	padding: 0;
-	cursor: pointer;
-	flex: none;
-}
-
-.gi-filter-modal__header,
-.gi-filter-modal__footer {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	gap: .75rem;
 }
 </style>

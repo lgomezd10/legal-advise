@@ -173,7 +173,7 @@ function saveUrl() {
 			<input ref="fileInputRef" class="gi-attachment-picker__input" type="file" multiple :accept="allowedExtensionsAccept" @change="onFileChange" />
 			<button class="gi-secondary-button" type="button" @click="openUrlModal">Adjuntar URL</button>
 			<div v-if="allowedExtensionsLabel" class="gi-attachment-picker__helper-info">
-				<button class="gi-attachment-picker__helper-button" type="button" aria-label="Ver tipos de archivo permitidos" :aria-expanded="extensionsInfoOpen" @click="extensionsInfoOpen = !extensionsInfoOpen">
+				<button class="gi-round-icon-button gi-attachment-picker__helper-button" type="button" aria-label="Ver tipos de archivo permitidos" :aria-expanded="extensionsInfoOpen" @click="extensionsInfoOpen = !extensionsInfoOpen">
 					<svg viewBox="0 0 20 20" aria-hidden="true">
 						<path d="M10 1.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 0 0 0-17Zm0 12.3a1 1 0 1 1 0 2a1 1 0 0 1 0-2Zm1.2-2.7c-.65.42-.8.7-.8 1.2v.25H9v-.35c0-1.02.43-1.66 1.24-2.18c.73-.47 1.09-.81 1.09-1.43c0-.75-.6-1.2-1.46-1.2c-.84 0-1.49.34-2.07.95L6.9 7.3c.74-.9 1.8-1.45 3.23-1.45c1.77 0 3 .99 3 2.5c0 1.24-.7 1.93-1.93 2.75Z" />
 					</svg>
@@ -187,11 +187,11 @@ function saveUrl() {
 		</div>
 
 		<ul v-if="files.length || links.length" class="gi-attachment-picker__list">
-			<li v-for="(file, index) in files" :key="`${file.name}-${file.size}-${file.lastModified}`" class="gi-attachment-picker__item">
+			<li v-for="(file, index) in files" :key="`${file.name}-${file.size}-${file.lastModified}`" class="gi-row-card gi-attachment-picker__item">
 				<span>{{ file.name }}</span>
 				<button class="gi-tertiary-button" type="button" @click="removeFile(index)">Quitar</button>
 			</li>
-			<li v-for="(link, index) in links" :key="`${link.url}-${index}`" class="gi-attachment-picker__item">
+			<li v-for="(link, index) in links" :key="`${link.url}-${index}`" class="gi-row-card gi-attachment-picker__item">
 				<span>{{ link.label }}</span>
 				<button class="gi-tertiary-button" type="button" @click="removeLink(index)">Quitar</button>
 			</li>
@@ -199,26 +199,26 @@ function saveUrl() {
 
 		<p v-if="errorMessage" class="gi-form-error">{{ errorMessage }}</p>
 
-		<div v-if="oversizeModalOpen" class="gi-filter-modal-backdrop" @click.self="closeOversizeModal">
-			<section class="gi-filter-save-modal" aria-label="Archivo demasiado grande">
-				<header class="gi-filter-modal__header">
-					<h3>Archivo demasiado grande</h3>
+		<div v-if="oversizeModalOpen" class="gi-dialog-backdrop" @click.self="closeOversizeModal">
+			<section class="gi-dialog gi-dialog--compact" aria-label="Archivo demasiado grande">
+				<header class="gi-dialog__header">
+					<h3 class="gi-dialog__title">Archivo demasiado grande</h3>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeOversizeModal">x</button>
 				</header>
-				<p class="gi-filter-save-modal__message gi-filter-save-modal__message--neutral">
+				<p class="gi-dialog__message gi-dialog__message--neutral">
 					{{ oversizeFileName }} supera el tamano maximo configurado. Para videos grandes, adjunta la ruta web del archivo.
 				</p>
-				<footer class="gi-filter-modal__footer">
+				<footer class="gi-dialog__footer">
 					<button class="gi-ghost-button" type="button" @click="closeOversizeModal">Cancelar</button>
 					<button class="gi-primary-button" type="button" @click="openUrlModal">Adjuntar URL</button>
 				</footer>
 			</section>
 		</div>
 
-		<div v-if="urlModalOpen" class="gi-filter-modal-backdrop" @click.self="closeUrlModal">
-			<section class="gi-filter-save-modal" aria-label="Adjuntar URL">
-				<header class="gi-filter-modal__header">
-					<h3>Adjuntar URL</h3>
+		<div v-if="urlModalOpen" class="gi-dialog-backdrop" @click.self="closeUrlModal">
+			<section class="gi-dialog gi-dialog--compact" aria-label="Adjuntar URL">
+				<header class="gi-dialog__header">
+					<h3 class="gi-dialog__title">Adjuntar URL</h3>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeUrlModal">x</button>
 				</header>
 				<label class="gi-field">
@@ -230,7 +230,7 @@ function saveUrl() {
 					<input v-model="urlDraft.label" class="gi-input" placeholder="Video reunion.mp4" />
 				</label>
 				<p v-if="urlError" class="gi-form-error">{{ urlError }}</p>
-				<footer class="gi-filter-modal__footer">
+				<footer class="gi-dialog__footer">
 					<button class="gi-ghost-button" type="button" @click="closeUrlModal">Cancelar</button>
 					<button class="gi-primary-button" type="button" @click="saveUrl">Guardar URL</button>
 				</footer>
@@ -247,10 +247,8 @@ function saveUrl() {
 }
 
 .gi-attachment-picker__toolbar {
-	display: flex;
 	gap: .65rem;
 	align-items: center;
-	flex-wrap: wrap;
 	min-width: 0;
 }
 
@@ -275,25 +273,6 @@ function saveUrl() {
 	position: relative;
 	display: inline-flex;
 	align-items: center;
-}
-
-.gi-attachment-picker__helper-button {
-	width: 2rem;
-	height: 2rem;
-	display: inline-grid;
-	place-items: center;
-	border: 1px solid rgba(33, 79, 69, .18);
-	border-radius: 999px;
-	background: rgba(255, 255, 255, .92);
-	color: #214f45;
-	cursor: pointer;
-	padding: 0;
-}
-
-.gi-attachment-picker__helper-button svg {
-	width: 1rem;
-	height: 1rem;
-	fill: currentColor;
 }
 
 .gi-attachment-picker__helper-popover {
@@ -321,18 +300,6 @@ function saveUrl() {
 	gap: .45rem;
 }
 
-.gi-attachment-picker__item {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	gap: .75rem;
-	min-width: 0;
-	padding: .65rem .8rem;
-	border: 1px solid rgba(33, 53, 68, .12);
-	border-radius: 12px;
-	background: rgba(255, 255, 255, .7);
-}
-
 .gi-attachment-picker__item span {
 	min-width: 0;
 	overflow: hidden;
@@ -340,64 +307,4 @@ function saveUrl() {
 	white-space: nowrap;
 }
 
-.gi-filter-modal-backdrop {
-	position: fixed;
-	inset: 0;
-	background: rgba(24, 38, 34, .34);
-	display: grid;
-	place-items: center;
-	padding: 1rem;
-	z-index: 80;
-}
-
-.gi-filter-save-modal {
-	width: min(30rem, 100%);
-	height: calc(100vh - 2rem);
-	max-height: calc(100vh - 2rem);
-	overflow: auto;
-	display: grid;
-	gap: 1rem;
-	padding: 1rem;
-	border-radius: 22px;
-	background: rgba(255, 255, 255, .99);
-	box-shadow: 0 24px 64px rgba(20, 34, 30, .18);
-}
-
-.gi-filter-modal__header,
-.gi-filter-modal__footer {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	gap: .75rem;
-}
-
-.gi-filter-modal__header h3 {
-	margin: 0;
-}
-
-.gi-filter-save-modal__message {
-	margin: 0;
-	color: #7b3d23;
-	font-weight: 600;
-}
-
-.gi-filter-save-modal__message--neutral {
-	color: #2b4c44;
-}
-
-.gi-modal-close {
-	width: 2rem;
-	height: 2rem;
-	display: inline-grid;
-	place-items: center;
-	border: 1px solid rgba(33, 79, 69, .18);
-	border-radius: 999px;
-	background: rgba(255, 255, 255, .9);
-	color: #255d52;
-	font: inherit;
-	line-height: 1;
-	padding: 0;
-	cursor: pointer;
-	flex: none;
-}
 </style>

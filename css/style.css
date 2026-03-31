@@ -114,6 +114,16 @@ body,
 	padding: 1rem 0;
 }
 
+.gi-option-grid {
+	display: grid;
+	gap: .6rem;
+	grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.gi-option-grid--compact {
+	grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+
 .gi-field--wide {
 	grid-column: 1 / -1;
 }
@@ -172,6 +182,15 @@ body,
 	color: #1f574c;
 }
 
+.gi-ghost-button {
+	border: none;
+	background: transparent;
+	color: #255d52;
+	font: inherit;
+	cursor: pointer;
+	padding: 0;
+}
+
 .gi-chip:disabled {
 	opacity: .5;
 	cursor: not-allowed;
@@ -181,6 +200,184 @@ body,
 	display: flex;
 	gap: .5rem;
 	flex-wrap: wrap;
+}
+
+.gi-switch-row {
+	display: flex;
+	align-items: center;
+	gap: .65rem;
+	padding: .7rem .8rem;
+	border-radius: 14px;
+	background: rgba(226, 235, 232, .66);
+}
+
+.gi-check-tile {
+	display: flex;
+	align-items: center;
+	gap: .65rem;
+	padding: .7rem .8rem;
+	border-radius: 14px;
+	background: rgba(226, 235, 232, .66);
+}
+
+.gi-meta-pill {
+	display: inline-flex;
+	align-items: center;
+	padding: .2rem .55rem;
+	border-radius: 999px;
+	background: rgba(49, 96, 91, .08);
+	color: #4d635d;
+	font-size: .82rem;
+}
+
+.gi-row-card {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: .75rem;
+	min-width: 0;
+	padding: .65rem .8rem;
+	border: 1px solid rgba(33, 53, 68, .12);
+	border-radius: 12px;
+	background: rgba(255, 255, 255, .7);
+}
+
+.gi-round-icon-button {
+	display: inline-grid;
+	place-items: center;
+	width: 2rem;
+	height: 2rem;
+	padding: 0;
+	border: 1px solid rgba(33, 79, 69, .18);
+	border-radius: 999px;
+	background: rgba(255, 255, 255, .92);
+	color: #214f45;
+	cursor: pointer;
+	font: inherit;
+	line-height: 1;
+}
+
+.gi-round-icon-button svg {
+	width: 1rem;
+	height: 1rem;
+	fill: currentColor;
+}
+
+.gi-round-icon-button:hover {
+	background: rgba(239, 245, 241, .98);
+}
+
+.gi-round-icon-button--large {
+	width: 2.5rem;
+	height: 2.5rem;
+	font-size: 1rem;
+	box-shadow: 0 10px 22px rgba(34, 62, 55, .06);
+	border-color: rgba(11, 110, 79, .16);
+	background: rgba(239, 245, 241, .98);
+	color: #0b6e4f;
+}
+
+.gi-surface-elevated {
+	border: 1px solid rgba(49, 96, 91, .12);
+	background: rgba(255, 255, 255, .94);
+	box-shadow: 0 20px 48px rgba(34, 62, 55, .06);
+}
+
+.gi-surface-elevated--soft {
+	background: rgba(255, 255, 255, .92);
+	box-shadow: 0 20px 48px rgba(34, 62, 55, .08);
+}
+
+.gi-modal-close {
+	width: 2rem;
+	height: 2rem;
+	display: inline-grid;
+	place-items: center;
+	border: 1px solid rgba(33, 79, 69, .18);
+	border-radius: 999px;
+	background: rgba(255, 255, 255, .9);
+	color: #255d52;
+	font: inherit;
+	line-height: 1;
+	padding: 0;
+	cursor: pointer;
+	flex: none;
+}
+
+.gi-dialog-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 120;
+	display: grid;
+	place-items: center;
+	padding: 1rem;
+	background: rgba(24, 38, 34, .34);
+}
+
+.gi-dialog {
+	width: min(32rem, 100%);
+	max-height: calc(100vh - 2rem);
+	overflow: auto;
+	display: grid;
+	gap: 1rem;
+	padding: 1rem;
+	border-radius: 22px;
+	background: rgba(255, 255, 255, .99);
+	border: 1px solid rgba(49, 96, 91, .14);
+	box-shadow: 0 24px 64px rgba(20, 34, 30, .18);
+	box-sizing: border-box;
+	align-content: start;
+}
+
+.gi-dialog--compact {
+	width: min(28rem, 100%);
+}
+
+.gi-dialog--medium {
+	width: min(34rem, 100%);
+}
+
+.gi-dialog--wide {
+	width: min(42rem, 100%);
+}
+
+.gi-dialog--min-tall {
+	min-height: min(24rem, calc(100vh - 2rem));
+}
+
+.gi-dialog__header,
+.gi-dialog__footer {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: .75rem;
+}
+
+.gi-dialog__title {
+	margin: 0;
+	font-size: 1.15rem;
+	line-height: 1.2;
+}
+
+.gi-dialog__body {
+	display: grid;
+	gap: .8rem;
+}
+
+.gi-dialog__message {
+	margin: 0;
+	color: #7b3d23;
+	font-weight: 600;
+	line-height: 1.45;
+}
+
+.gi-dialog__message--neutral {
+	color: #2b4c44;
+}
+
+.gi-dialog__danger {
+	background: rgba(148, 55, 31, .12);
+	color: #8f391d;
 }
 
 .gi-actions {
@@ -341,6 +538,17 @@ body,
 	color: var(--color-text-maxcontrast);
 }
 
+.gi-filter-toolbar,
+.gi-support-header-actions,
+.gi-admin-header-actions,
+.gi-admin-card__toolbar,
+.gi-filter-catalog-row__header,
+.gi-filter-catalog-row__actions {
+	display: flex;
+	gap: .75rem;
+	flex-wrap: wrap;
+}
+
 @media (max-width: 900px) {
 	.gi-page {
 		padding: .9rem .9rem 1.35rem;
@@ -349,5 +557,11 @@ body,
 	.gi-page__header {
 		align-items: flex-start;
 		flex-direction: column;
+	}
+
+	.gi-dialog__header,
+	.gi-dialog__footer {
+		flex-direction: column;
+		align-items: stretch;
 	}
 }

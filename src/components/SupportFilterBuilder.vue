@@ -860,7 +860,7 @@ function getSuggestedSaveName() {
 </script>
 
 <template>
-	<section class="gi-filter-panel">
+	<section class="gi-filter-panel gi-surface-elevated gi-surface-elevated--soft">
 		<div class="gi-filter-toolbar">
 			<label class="gi-field gi-filter-toolbar__field gi-filter-toolbar__field--search">
 				<span class="gi-filter-toolbar__label">Buscar</span>
@@ -888,7 +888,7 @@ function getSuggestedSaveName() {
 				<button class="gi-filter-chip-bar__add" type="button" aria-label="Anadir condicion" @click="openAddCriterionModal">+</button>
 			</div>
 			<div class="gi-filter-chip-bar__actions">
-				<button class="gi-filter-chip-bar__icon-action" type="button" aria-label="Guardar filtro" title="Guardar filtro" @click="openSaveModal">
+				<button class="gi-round-icon-button gi-filter-chip-bar__icon-action" type="button" aria-label="Guardar filtro" title="Guardar filtro" @click="openSaveModal">
 					<span aria-hidden="true">&#128190;</span>
 				</button>
 				<button class="gi-ghost-button gi-filter-chip-bar__text-action" type="button" @click="resetBuilder">Limpiar</button>
@@ -896,10 +896,10 @@ function getSuggestedSaveName() {
 		</div>
 		</div>
 
-		<div v-if="modalOpen" class="gi-filter-modal-backdrop" @click.self="closeAddCriterionModal">
-			<section class="gi-filter-modal" aria-label="Anadir filtro">
-				<header class="gi-filter-modal__header">
-					<h3>Anadir filtro</h3>
+		<div v-if="modalOpen" class="gi-dialog-backdrop" @click.self="closeAddCriterionModal">
+			<section class="gi-dialog gi-dialog--wide" aria-label="Anadir filtro">
+				<header class="gi-dialog__header">
+					<h3 class="gi-dialog__title">Anadir filtro</h3>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeAddCriterionModal">x</button>
 				</header>
 
@@ -908,7 +908,7 @@ function getSuggestedSaveName() {
 					<SearchableSelect :model-value="modalCriterionKey || null" :options="criterionTypeOptions" placeholder="Selecciona un criterio" @update:modelValue="onModalCriterionChange(String($event ?? ''))" />
 				</label>
 
-				<div v-if="modalCriterionKey" class="gi-filter-modal__body">
+				<div v-if="modalCriterionKey" class="gi-dialog__body">
 					<div v-if="modalCriterionKey === 'status'" class="gi-option-grid gi-option-grid--compact">
 						<label v-for="status in safeStatuses" :key="status.id" class="gi-check-tile" :class="{ 'gi-check-tile--disabled': !isDraftStatusSelectable(status.id) }">
 							<input :checked="draftCriteria.status.includes(status.id)" :disabled="!isDraftStatusSelectable(status.id)" type="checkbox" @change="toggleDraftStatus(status.id, ($event.target as HTMLInputElement).checked)" />
@@ -989,17 +989,17 @@ function getSuggestedSaveName() {
 					</label>
 				</div>
 
-				<footer class="gi-filter-modal__footer">
+				<footer class="gi-dialog__footer">
 					<button class="gi-ghost-button" type="button" @click="closeAddCriterionModal">Cancelar</button>
 					<button class="gi-primary-button" type="button" :disabled="!modalCriterionKey || !hasDraftValue(modalCriterionKey)" @click="applyDraftCriterion">Anadir</button>
 				</footer>
 			</section>
 		</div>
 
-		<div v-if="saveModalOpen" class="gi-filter-modal-backdrop" @click.self="closeSaveModal">
-			<section class="gi-filter-save-modal" aria-label="Guardar filtro">
-				<header class="gi-filter-modal__header">
-					<h3>Guardar filtro</h3>
+		<div v-if="saveModalOpen" class="gi-dialog-backdrop" @click.self="closeSaveModal">
+			<section class="gi-dialog gi-dialog--compact" aria-label="Guardar filtro">
+				<header class="gi-dialog__header">
+					<h3 class="gi-dialog__title">Guardar filtro</h3>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeSaveModal">x</button>
 				</header>
 
@@ -1008,9 +1008,9 @@ function getSuggestedSaveName() {
 					<input v-model="saveName" class="gi-input" placeholder="Nombre del filtro" />
 				</label>
 
-				<p v-if="saveModalError" class="gi-filter-save-modal__message">{{ saveModalError }}</p>
+				<p v-if="saveModalError" class="gi-dialog__message">{{ saveModalError }}</p>
 
-				<footer class="gi-filter-modal__footer">
+				<footer class="gi-dialog__footer">
 					<button class="gi-ghost-button" type="button" @click="closeSaveModal">Cancelar</button>
 					<button v-if="overwriteCandidateId !== null" class="gi-secondary-button" type="button" @click="saveCurrentFilter(true)">Sobrescribir</button>
 					<button class="gi-primary-button" type="button" @click="saveCurrentFilter(false)">Guardar</button>
@@ -1018,20 +1018,20 @@ function getSuggestedSaveName() {
 			</section>
 		</div>
 
-		<div v-if="deleteModalOpen" class="gi-filter-modal-backdrop" @click.self="closeDeleteModal">
-			<section class="gi-filter-save-modal" aria-label="Eliminar filtro guardado">
-				<header class="gi-filter-modal__header">
-					<h3>Eliminar filtro</h3>
+		<div v-if="deleteModalOpen" class="gi-dialog-backdrop" @click.self="closeDeleteModal">
+			<section class="gi-dialog gi-dialog--compact" aria-label="Eliminar filtro guardado">
+				<header class="gi-dialog__header">
+					<h3 class="gi-dialog__title">Eliminar filtro</h3>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeDeleteModal">x</button>
 				</header>
 
-				<p class="gi-filter-save-modal__message gi-filter-save-modal__message--neutral">
+				<p class="gi-dialog__message gi-dialog__message--neutral">
 					¿Quieres eliminar <strong>{{ selectedSavedFilter?.name }}</strong>?
 				</p>
 
-				<footer class="gi-filter-modal__footer">
+				<footer class="gi-dialog__footer">
 					<button class="gi-ghost-button" type="button" @click="closeDeleteModal">Cancelar</button>
-					<button class="gi-secondary-button gi-filter-save-modal__danger" type="button" @click="deleteSelectedFilter">Eliminar</button>
+					<button class="gi-secondary-button gi-dialog__danger" type="button" @click="deleteSelectedFilter">Eliminar</button>
 				</footer>
 			</section>
 		</div>
@@ -1044,23 +1044,16 @@ function getSuggestedSaveName() {
 	gap: .9rem;
 	padding: 1rem 1.1rem;
 	border-radius: 24px;
-	background: rgba(255, 255, 255, .92);
-	border: 1px solid rgba(49, 96, 91, .12);
-	box-shadow: 0 20px 48px rgba(34, 62, 55, .08);
 	margin-bottom: 1.2rem;
 }
 
 .gi-filter-panel__actions,
-.gi-filter-modal__header,
-.gi-filter-modal__footer,
 .gi-filter-chip,
 .gi-filter-chip-bar {
 	display: flex;
 	gap: .75rem;
 }
 
-.gi-filter-modal__header,
-.gi-filter-modal__footer,
 .gi-filter-chip,
 .gi-filter-chip-bar {
 	align-items: center;
@@ -1073,10 +1066,7 @@ function getSuggestedSaveName() {
 }
 
 .gi-filter-toolbar {
-	display: flex;
-	gap: .75rem;
 	align-items: flex-end;
-	flex-wrap: wrap;
 }
 
 .gi-filter-toolbar__field {
@@ -1225,21 +1215,6 @@ function getSuggestedSaveName() {
 	flex: none;
 }
 
-.gi-filter-chip-bar__icon-action {
-	width: 2rem;
-	height: 2rem;
-	display: inline-grid;
-	place-items: center;
-	border: 1px solid rgba(33, 79, 69, .18);
-	background: rgba(255, 255, 255, .9);
-	color: #214f45;
-	border-radius: 999px;
-	cursor: pointer;
-	font: inherit;
-	line-height: 1;
-	padding: 0;
-}
-
 .gi-filter-chip-bar__text-action {
 	white-space: nowrap;
 }
@@ -1260,26 +1235,6 @@ function getSuggestedSaveName() {
 	flex: none;
 }
 
-.gi-option-grid {
-	display: grid;
-	gap: .6rem;
-	grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-}
-
-.gi-option-grid--compact {
-	grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-}
-
-.gi-check-tile,
-.gi-switch-row {
-	display: flex;
-	align-items: center;
-	gap: .65rem;
-	padding: .7rem .8rem;
-	border-radius: 14px;
-	background: rgba(226, 235, 232, .66);
-}
-
 .gi-check-tile--disabled {
 	opacity: .55;
 }
@@ -1288,90 +1243,13 @@ function getSuggestedSaveName() {
 	margin-top: .35rem;
 }
 
-.gi-inline-action,
-.gi-ghost-button {
+.gi-inline-action {
 	border: none;
 	background: transparent;
 	color: #255d52;
 	font: inherit;
 	cursor: pointer;
 	padding: 0;
-}
-
-.gi-modal-close {
-	width: 2rem;
-	height: 2rem;
-	display: inline-grid;
-	place-items: center;
-	border: 1px solid rgba(33, 79, 69, .18);
-	border-radius: 999px;
-	background: rgba(255, 255, 255, .9);
-	color: #255d52;
-	font: inherit;
-	line-height: 1;
-	padding: 0;
-	cursor: pointer;
-	flex: none;
-}
-
-.gi-filter-modal-backdrop {
-	position: fixed;
-	inset: 0;
-	background: rgba(24, 38, 34, .34);
-	display: grid;
-	place-items: center;
-	padding: 1rem;
-	z-index: 80;
-}
-
-.gi-filter-modal {
-	width: min(40rem, 100%);
-	height: calc(100vh - 2rem);
-	max-height: calc(100vh - 2rem);
-	overflow: auto;
-	display: grid;
-	gap: 1rem;
-	padding: 1rem;
-	border-radius: 22px;
-	background: rgba(255, 255, 255, .99);
-	box-shadow: 0 24px 64px rgba(20, 34, 30, .18);
-}
-
-.gi-filter-save-modal {
-	width: min(28rem, 100%);
-	height: calc(100vh - 2rem);
-	max-height: calc(100vh - 2rem);
-	overflow: auto;
-	display: grid;
-	gap: 1rem;
-	padding: 1rem;
-	border-radius: 22px;
-	background: rgba(255, 255, 255, .99);
-	box-shadow: 0 24px 64px rgba(20, 34, 30, .18);
-}
-
-.gi-filter-save-modal__message {
-	margin: 0;
-	color: #7b3d23;
-	font-weight: 600;
-}
-
-.gi-filter-save-modal__message--neutral {
-	color: #2b4c44;
-}
-
-.gi-filter-save-modal__danger {
-	background: rgba(148, 55, 31, .12);
-	color: #8f391d;
-}
-
-.gi-filter-modal__header h3 {
-	margin: 0;
-}
-
-.gi-filter-modal__body {
-	display: grid;
-	gap: .8rem;
 }
 
 @media (max-width: 900px) {
@@ -1383,8 +1261,6 @@ function getSuggestedSaveName() {
 		flex: 1 1 auto;
 	}
 
-	.gi-filter-modal__header,
-	.gi-filter-modal__footer,
 	.gi-filter-chip-bar,
 	.gi-filter-panel__actions {
 		flex-direction: column;

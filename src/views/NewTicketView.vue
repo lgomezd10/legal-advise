@@ -86,7 +86,7 @@ async function submit(payload: Record<string, unknown>) {
 			</div>
 			<button class="gi-secondary-button" type="button" @click="cancel">Cancelar</button>
 		</header>
-		<section v-if="step === 'type'" class="gi-ticket-creation-card">
+		<section v-if="step === 'type'" class="gi-ticket-creation-card gi-surface-elevated">
 			<div class="gi-ticket-creation-card__header">
 				<div>
 					<h2>Seleccion de tipo</h2>
@@ -111,7 +111,7 @@ async function submit(payload: Record<string, unknown>) {
 				<button class="gi-primary-button" type="button" :disabled="selectedPath.length === 0" @click="continueToDetails">Continuar</button>
 			</div>
 		</section>
-		<section v-else class="gi-ticket-creation-card gi-ticket-creation-card--details">
+		<section v-else class="gi-ticket-creation-card gi-ticket-creation-card--details gi-surface-elevated">
 			<header class="gi-ticket-creation-card__header gi-ticket-creation-card__header--summary">
 				<div class="gi-ticket-creation-card__summary-grid">
 					<div class="gi-ticket-creation-card__type-line">
@@ -123,7 +123,7 @@ async function submit(payload: Record<string, unknown>) {
 						<strong class="gi-ticket-creation-card__type-path">{{ provinceSummary }}</strong>
 					</div>
 				</div>
-				<button class="gi-icon-button" type="button" aria-label="Modificar tipo de ticket" title="Modificar tipo" @click="editType">
+				<button class="gi-round-icon-button gi-round-icon-button--large gi-icon-button" type="button" aria-label="Modificar tipo de ticket" title="Modificar tipo" @click="editType">
 					<span aria-hidden="true">&#9998;</span>
 				</button>
 			</header>
@@ -147,10 +147,7 @@ async function submit(payload: Record<string, unknown>) {
 	display: grid;
 	gap: 1rem;
 	padding: 1.25rem;
-	border: 1px solid rgba(49, 96, 91, .12);
 	border-radius: 22px;
-	background: rgba(255, 255, 255, .94);
-	box-shadow: 0 20px 48px rgba(34, 62, 55, .06);
 }
 
 .gi-ticket-creation-card__header h2,
@@ -211,22 +208,4 @@ async function submit(payload: Record<string, unknown>) {
 	color: #60746d;
 }
 
-.gi-icon-button {
-	width: 2.5rem;
-	height: 2.5rem;
-	display: inline-grid;
-	place-items: center;
-	border: 1px solid rgba(11, 110, 79, .16);
-	border-radius: 999px;
-	background: rgba(239, 245, 241, .98);
-	color: #0b6e4f;
-	cursor: pointer;
-	font: inherit;
-	font-size: 1rem;
-	box-shadow: 0 10px 22px rgba(34, 62, 55, .06);
-}
-
-.gi-icon-button:hover {
-	background: rgba(227, 238, 232, .98);
-}
 </style>

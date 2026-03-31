@@ -609,7 +609,7 @@ function assignToCurrentUser() {
 				<div v-if="composerVisible" class="gi-sidebar-panel__comment-composer">
 					<div class="gi-sidebar-panel__comment-composer-header">
 						<strong>Nuevo comentario</strong>
-						<button class="gi-sidebar-panel__icon-button" type="button" aria-label="Ocultar nuevo comentario" title="Ocultar nuevo comentario" @click="hideComposer">
+						<button class="gi-round-icon-button gi-sidebar-panel__icon-button" type="button" aria-label="Ocultar nuevo comentario" title="Ocultar nuevo comentario" @click="hideComposer">
 							<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z" fill="currentColor" /></svg>
 						</button>
 					</div>
@@ -900,26 +900,10 @@ function assignToCurrentUser() {
 	gap: .45rem;
 }
 
-.gi-sidebar-panel__icon-button {
-	justify-content: center;
-	width: 2rem;
-	height: 2rem;
-	padding: 0;
-	border: 1px solid rgba(49, 96, 91, .14);
-	border-radius: 999px;
-	background: rgba(255, 255, 255, .92);
-	color: #355e55;
-	cursor: pointer;
-}
-
 .gi-sidebar-panel__icon-button svg,
 .gi-sidebar-panel__composer-toggle-button svg {
 	width: 1rem;
 	height: 1rem;
-}
-
-.gi-sidebar-panel__icon-button:hover {
-	background: rgba(239, 245, 241, .98);
 }
 
 .gi-sidebar-panel__comments-toolbar {

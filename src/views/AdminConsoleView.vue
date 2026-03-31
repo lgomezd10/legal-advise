@@ -989,14 +989,9 @@ async function saveAttachmentConfig() {
 	color: #0b6e4f;
 }
 
-.gi-admin-header-actions,
-.gi-admin-card__toolbar,
 .gi-admin-card__header {
 	display: flex;
 	gap: .75rem;
-}
-
-.gi-admin-card__header {
 	justify-content: space-between;
 	align-items: flex-start;
 	margin-bottom: 1rem;
@@ -1016,7 +1011,6 @@ async function saveAttachmentConfig() {
 
 .gi-admin-card__toolbar {
 	align-items: center;
-	flex-wrap: wrap;
 }
 
 .gi-admin-overview {

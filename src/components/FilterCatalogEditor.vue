@@ -98,19 +98,13 @@ function save() {
 	background: rgba(255, 255, 255, .86);
 }
 
-.gi-filter-catalog-row__header,
-.gi-filter-catalog-row__actions {
-	display: flex;
-	gap: .75rem;
-	align-items: center;
-	flex-wrap: wrap;
-}
-
 .gi-filter-catalog-row__header {
+	align-items: center;
 	justify-content: space-between;
 }
 
 .gi-filter-catalog-row__actions {
+	align-items: center;
 	justify-content: flex-end;
 }
 </style>

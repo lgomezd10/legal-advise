@@ -96,16 +96,6 @@ function buildPath(node: EditableTypeNode): string {
 	flex-wrap: wrap;
 }
 
-.gi-meta-pill {
-	display: inline-flex;
-	align-items: center;
-	padding: .2rem .55rem;
-	border-radius: 999px;
-	background: rgba(49, 96, 91, .08);
-	color: #4d635d;
-	font-size: .82rem;
-}
-
 @media (max-width: 900px) {
 	.gi-admin-tree__row {
 		grid-template-columns: 1fr;

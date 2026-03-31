@@ -301,10 +301,10 @@ function closeColumnEditor() {
 			@sort="onSortChange"
 		/>
 
-		<div v-if="columnEditorOpen" class="gi-support-column-editor-modal" @click.self="closeColumnEditor">
-			<section class="gi-support-column-editor-modal__panel" aria-label="Editar columnas visibles">
-				<header class="gi-support-column-editor-modal__header">
-					<h2>Editar columnas</h2>
+		<div v-if="columnEditorOpen" class="gi-dialog-backdrop" @click.self="closeColumnEditor">
+			<section class="gi-dialog gi-dialog--medium gi-dialog--min-tall" aria-label="Editar columnas visibles">
+				<header class="gi-dialog__header">
+					<h2 class="gi-dialog__title">Editar columnas</h2>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeColumnEditor">x</button>
 				</header>
 				<div class="gi-support-column-editor-modal__grid">
@@ -317,7 +317,7 @@ function closeColumnEditor() {
 						</div>
 					</div>
 				</div>
-				<footer class="gi-support-column-editor-modal__footer">
+				<footer class="gi-dialog__footer">
 					<button class="gi-ghost-button" type="button" @click="restoreDefaultColumns">Restaurar por defecto</button>
 					<button class="gi-secondary-button" type="button" @click="closeColumnEditor">Listo</button>
 				</footer>
@@ -337,10 +337,7 @@ function closeColumnEditor() {
 }
 
 .gi-support-header-actions {
-	display: flex;
-	gap: .75rem;
 	align-items: flex-start;
-	flex-wrap: wrap;
 }
 
 .gi-support-column-editor__item {
@@ -355,58 +352,6 @@ function closeColumnEditor() {
 	display: flex;
 	gap: .4rem;
 	margin-left: auto;
-}
-
-.gi-support-column-editor-modal {
-	position: fixed;
-	inset: 0;
-	z-index: 90;
-	display: grid;
-	place-items: center;
-	padding: 1rem;
-	background: rgba(24, 38, 34, .34);
-}
-
-.gi-support-column-editor-modal__panel {
-	width: min(34rem, 100%);
-	min-height: min(24rem, calc(100vh - 2rem));
-	max-height: calc(100vh - 2rem);
-	overflow: auto;
-	display: grid;
-	gap: .9rem;
-	padding: 1rem;
-	border-radius: 22px;
-	background: rgba(255, 255, 255, .99);
-	border: 1px solid rgba(49, 96, 91, .14);
-	box-shadow: 0 24px 64px rgba(20, 34, 30, .18);
-}
-
-.gi-support-column-editor-modal__header,
-.gi-support-column-editor-modal__footer {
-	display: flex;
-	justify-content: space-between;
-	gap: .75rem;
-	align-items: center;
-}
-
-.gi-support-column-editor-modal__header h2 {
-	margin: 0;
-}
-
-.gi-modal-close {
-	width: 2rem;
-	height: 2rem;
-	display: inline-grid;
-	place-items: center;
-	border: 1px solid rgba(33, 79, 69, .18);
-	border-radius: 999px;
-	background: rgba(255, 255, 255, .9);
-	color: #255d52;
-	font: inherit;
-	line-height: 1;
-	padding: 0;
-	cursor: pointer;
-	flex: none;
 }
 
 .gi-support-column-editor-modal__grid {
@@ -424,10 +369,5 @@ function closeColumnEditor() {
 		gap: .75rem;
 	}
 
-	.gi-support-column-editor-modal__header,
-	.gi-support-column-editor-modal__footer {
-		flex-direction: column;
-		align-items: flex-start;
-	}
 }
 </style>
