@@ -1,22 +1,24 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import type { AssignableOption, SearchableSelectOption, StatusOption, Ticket, TicketAttachment, TicketAttachmentLinkDraft, TicketComment, UrgencyCatalogItem } from '@/types'
+import type { AssignableOption, CatalogField, SearchableSelectOption, StatusOption, Ticket, TicketAttachment, TicketAttachmentLinkDraft, TicketComment, UrgencyCatalogItem } from '@/types'
 import { formatDateTime } from '@/utils/formatting'
 import { formatHistoryEntries } from '@/utils/history'
 import { excerptRichText, isRichTextEmpty, richTextToPlainText, sanitizeRichText } from '@/utils/richText'
+import { getTicketPersonalDataRecord } from '@/services/ticketDraft'
 import AttachmentPicker from './AttachmentPicker.vue'
 import RichTextContent from './RichTextContent.vue'
 import SearchableSelect from './SearchableSelect.vue'
 
 const RichTextEditor = defineAsyncComponent(() => import(/* webpackChunkName: "rich-text-editor" */ './RichTextEditor.vue'))
 
-type SupportTabId = 'detail' | 'comments' | 'history'
+type SupportTabId = 'detail' | 'requester' | 'comments' | 'history'
 
 const props = defineProps<{
 	ticket: Ticket | null
 	roles: string[]
 	users?: AssignableOption[]
 	groups?: AssignableOption[]
+	fields?: CatalogField[]
 	currentUserUid?: string
 	statuses?: StatusOption[]
 	urgencies?: UrgencyCatalogItem[]
@@ -101,6 +103,18 @@ function normalizeUrgencies(urgencies: UrgencyCatalogItem[] | Record<string, Urg
 	return []
 }
 
+function normalizeFields(fields: CatalogField[] | Record<string, CatalogField> | undefined | null): CatalogField[] {
+	if (Array.isArray(fields)) {
+		return fields
+	}
+
+	if (fields && typeof fields === 'object') {
+		return Object.values(fields)
+	}
+
+	return []
+}
+
 const canManage = computed(() => !props.readOnly && (props.ticket?.canManage ?? (props.roles.includes('soporte') || props.roles.includes('administrador'))))
 const canComment = computed(() => props.ticket?.canComment ?? true)
 const isClosedTicket = computed(() => {
@@ -121,6 +135,10 @@ const canAssignToCurrentUser = computed(() => Boolean(canEditTicket.value && pro
 const showSupportTabs = computed(() => canManage.value)
 const safeUsers = computed(() => normalizeAssignableOptions(props.users))
 const safeGroups = computed(() => normalizeAssignableOptions(props.groups))
+const safeFields = computed(() => normalizeFields(props.fields)
+	.filter((field: CatalogField) => field.active !== false)
+	.slice()
+	.sort((left: CatalogField, right: CatalogField) => left.sortOrder - right.sortOrder))
 const safeStatuses = computed(() => normalizeStatuses(props.statuses))
 const safeUrgencies = computed(() => normalizeUrgencies(props.urgencies))
 const statusOptions = computed<SearchableSelectOption[]>(() => safeStatuses.value.filter((status: StatusOption) => status.active !== false || status.id === props.ticket?.status).map((status: StatusOption) => ({
@@ -131,7 +149,9 @@ const urgencyOptions = computed<SearchableSelectOption[]>(() => safeUrgencies.va
 	value: String(urgency.id),
 	label: urgency.name,
 })))
-const userOptions = computed<SearchableSelectOption[]>(() => safeUsers.value.map((user: AssignableOption) => ({
+const userOptions = computed<SearchableSelectOption[]>(() => safeUsers.value
+	.filter((user: AssignableOption) => !editableTicket.assignedGroupId || user.groupIds?.includes(editableTicket.assignedGroupId))
+	.map((user: AssignableOption) => ({
 	value: user.id,
 	label: user.displayName,
 	searchText: [user.id, ...(user.groupIds ?? [])].join(' '),
@@ -148,8 +168,33 @@ const visibilityOptions: SearchableSelectOption[] = [
 const supportTabs = computed(() => ([
 	{ id: 'detail', label: 'Detalle' },
 	{ id: 'comments', label: 'Comentarios' },
+	{ id: 'requester', label: 'Solicitante' },
 	{ id: 'history', label: 'Historial' },
 ] as Array<{ id: SupportTabId, label: string }>))
+const requesterData = computed<Record<string, string>>(() => getTicketPersonalDataRecord(props.ticket))
+const requesterContactEntries = computed(() => {
+	const entries: Array<{ key: string, label: string, value: string }> = []
+	const remainingKeys = new Set(Object.keys(requesterData.value))
+
+	for (const field of safeFields.value) {
+		const value = String(requesterData.value[field.fieldKey] ?? '').trim()
+		remainingKeys.delete(field.fieldKey)
+		if (value === '') {
+			continue
+		}
+		entries.push({ key: field.fieldKey, label: field.label, value })
+	}
+
+	for (const key of remainingKeys) {
+		const value = String(requesterData.value[key] ?? '').trim()
+		if (value === '') {
+			continue
+		}
+		entries.push({ key, label: formatPersonalDataLabel(key), value })
+	}
+
+	return entries
+})
 const commentAuthorOptions = computed((): SearchableSelectOption[] => {
 	const seen = new Set<string>()
 	return (props.ticket?.comments ?? []).reduce((options: SearchableSelectOption[], item: TicketComment) => {
@@ -402,6 +447,14 @@ function hideComposer() {
 	composerVisible.value = false
 }
 
+function openRequesterTab() {
+	if (!showSupportTabs.value) {
+		return
+	}
+
+	activeTab.value = 'requester'
+}
+
 function showComposer() {
 	composerVisible.value = true
 }
@@ -477,6 +530,27 @@ function resolveGroupLabel(groupId: string | null | undefined) {
 	return safeGroups.value.find((item) => item.id === groupId)?.displayName ?? groupId
 }
 
+function formatPersonalDataLabel(key: string) {
+	if (key === 'email') {
+		return 'Correo'
+	}
+
+	if (key === 'phone') {
+		return 'Telefono'
+	}
+
+	if (key === 'location') {
+		return 'Direccion'
+	}
+
+	return key
+		.replace(/[_-]+/g, ' ')
+		.replace(/([a-z])([A-Z])/g, '$1 $2')
+		.replace(/\s+/g, ' ')
+		.trim()
+		.replace(/^./, (char) => char.toUpperCase())
+}
+
 function saveChanges() {
 	if (!dirty.value) {
 		return
@@ -500,7 +574,8 @@ function assignToCurrentUser() {
 		return
 	}
 
-	editableTicket.assignedUserUid = props.currentUserUid
+	onAssignedUserChange(props.currentUserUid)
+	waitingForSaveSync.value = true
 	emit('assign-to-me')
 }
 </script>
@@ -509,7 +584,15 @@ function assignToCurrentUser() {
 	<div v-if="ticket" class="gi-sidebar-panel" :class="{ 'gi-sidebar-panel--fullscreen': fullscreen }">
 		<header class="gi-sidebar-panel__header">
 			<div class="gi-sidebar-panel__title-block">
-				<strong>{{ ticket.number }}</strong>
+				<div class="gi-sidebar-panel__ticket-line">
+					<strong>{{ ticket.number }}</strong>
+					<span v-if="showSupportTabs && ticket.creatorUid" class="gi-sidebar-panel__requester-inline">
+						<span class="gi-sidebar-panel__requester-label">Creado por</span>
+						<button class="gi-sidebar-panel__requester-button" type="button" @click="openRequesterTab">
+							{{ resolveUserLabel(ticket.creatorUid) }}
+						</button>
+					</span>
+				</div>
 				<h2>{{ ticket.title }}</h2>
 				<div class="gi-sidebar-panel__actions">
 					<button v-if="showRepeat" class="gi-secondary-button gi-sidebar-panel__fullscreen-button" type="button" @click="emit('repeat')">
@@ -563,10 +646,6 @@ function assignToCurrentUser() {
 					<SearchableSelect :model-value="editableTicket.assignedGroupId" :options="groupOptions" placeholder="Sin grupo" clearable @update:modelValue="onAssignedGroupChange" />
 				</label>
 			</div>
-			<div v-if="ticket.assignedUserUid || ticket.assignedGroupId" class="gi-sidebar-panel__assignment-summary">
-				<div v-if="ticket.assignedUserUid"><span class="gi-sidebar-panel__summary-label">Asignado a usuario</span><strong>{{ resolveUserLabel(ticket.assignedUserUid) }}</strong></div>
-				<div v-if="ticket.assignedGroupId"><span class="gi-sidebar-panel__summary-label">Asignado a grupo</span><strong>{{ resolveGroupLabel(ticket.assignedGroupId) }}</strong></div>
-			</div>
 			<div class="gi-sidebar-panel__description-stack">
 				<div>
 					<h3>Descripcion del ticket</h3>
@@ -598,6 +677,21 @@ function assignToCurrentUser() {
 				<button v-for="attachment in ticket.attachments || []" :key="attachment.id" class="gi-secondary-button gi-attachment-link" @click="openAttachment(attachment)">{{ attachment.originalName }}</button>
 				<p v-if="!(ticket.attachments || []).length" class="gi-sidebar-panel__muted">No hay adjuntos publicados.</p>
 			</div>
+		</section>
+		<section v-if="showSupportTabs && activeTab === 'requester'" class="gi-sidebar-panel__block gi-sidebar-panel__requester-block">
+			<div class="gi-sidebar-panel__requester-header">
+				<div>
+					<p class="gi-sidebar-panel__section-kicker">Solicitante</p>
+					<h3>{{ ticket.creatorUid ? resolveUserLabel(ticket.creatorUid) : 'Sin solicitante' }}</h3>
+				</div>
+			</div>
+			<div v-if="requesterContactEntries.length" class="gi-sidebar-panel__requester-grid">
+				<article v-for="entry in requesterContactEntries" :key="entry.key" class="gi-sidebar-panel__requester-card">
+					<span class="gi-sidebar-panel__summary-label">{{ entry.label }}</span>
+					<strong>{{ entry.value }}</strong>
+				</article>
+			</div>
+			<p v-else class="gi-sidebar-panel__muted">No hay datos de contacto disponibles para este solicitante.</p>
 		</section>
 		<section v-if="!showSupportTabs || activeTab === 'comments'" class="gi-sidebar-panel__block">
 			<div class="gi-sidebar-panel__comments-header">				
@@ -699,6 +793,43 @@ function assignToCurrentUser() {
 	min-width: 0;
 }
 
+.gi-sidebar-panel__ticket-line {
+	display: flex;
+	align-items: center;
+	gap: .75rem;
+	flex-wrap: wrap;
+}
+
+.gi-sidebar-panel__requester-inline {
+	display: inline-flex;
+	align-items: center;
+	gap: .45rem;
+	flex-wrap: wrap;
+	color: #48645d;
+	font-size: .92rem;
+}
+
+.gi-sidebar-panel__requester-label {
+	font-weight: 600;
+}
+
+.gi-sidebar-panel__requester-button {
+	border: 0;
+	background: transparent;
+	padding: 0;
+	font: inherit;
+	font-weight: 700;
+	color: #0b6e4f;
+	text-decoration: underline;
+	text-underline-offset: .15em;
+	cursor: pointer;
+}
+
+.gi-sidebar-panel__requester-button:hover,
+.gi-sidebar-panel__requester-button:focus-visible {
+	color: #084f39;
+}
+
 .gi-sidebar-panel__header h2 {
 	margin: .3rem 0 0;
 }
@@ -759,16 +890,6 @@ function assignToCurrentUser() {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
 	gap: .85rem;
-}
-
-.gi-sidebar-panel__assignment-summary {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-	gap: .85rem;
-	padding: .85rem 1rem;
-	border: 1px solid rgba(49, 96, 91, .12);
-	border-radius: 16px;
-	background: rgba(242, 246, 243, .82);
 }
 
 .gi-sidebar-panel__summary-label {
@@ -854,6 +975,30 @@ function assignToCurrentUser() {
 
 .gi-sidebar-panel__comments-header {
 	justify-content: space-between;
+}
+
+.gi-sidebar-panel__requester-block,
+.gi-sidebar-panel__requester-grid {
+	display: grid;
+	gap: 1rem;
+}
+
+.gi-sidebar-panel__requester-header h3 {
+	margin: 0;
+}
+
+.gi-sidebar-panel__requester-grid {
+	grid-template-columns: 1fr;
+}
+
+.gi-sidebar-panel__requester-card {
+	padding: .95rem 1rem;
+	border-radius: 16px;
+	background: rgba(245, 249, 247, .96);
+	border: 1px solid rgba(49, 96, 91, .12);
+	display: grid;
+	gap: .35rem;
+	justify-items: start;
 }
 
 .gi-sidebar-panel__comments-header-actions,

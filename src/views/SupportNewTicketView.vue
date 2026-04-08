@@ -21,7 +21,9 @@ const provinceOptions = computed<SearchableSelectOption[]>(() => bootstrapStore.
 	value: province,
 	label: province,
 })))
-const userOptions = computed<SearchableSelectOption[]>(() => assignableUsers.value.map((user: AssignableOption) => ({
+const userOptions = computed<SearchableSelectOption[]>(() => assignableUsers.value
+	.filter((user: AssignableOption) => !assignedGroupId.value || user.groupIds?.includes(assignedGroupId.value))
+	.map((user: AssignableOption) => ({
 	value: user.id,
 	label: user.displayName,
 	searchText: [user.id, ...(user.groupIds ?? [])].join(' '),

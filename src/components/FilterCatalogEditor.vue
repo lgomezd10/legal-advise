@@ -3,7 +3,7 @@ import { ref, watch } from 'vue'
 import type { AssignableOption, SavedFilter, StatusOption, TypeNode } from '@/types'
 import FilterCriteriaEditor from './FilterCriteriaEditor.vue'
 
-type FilterDraft = SavedFilter & { clientId: string, expanded: boolean }
+type FilterDraft = SavedFilter & { clientId: string }
 
 const props = defineProps<{
 	filters: SavedFilter[]
@@ -28,11 +28,11 @@ const drafts = ref<FilterDraft[]>([])
 const defaultGroupName = `default-filter-${Math.random().toString(36).slice(2, 8)}`
 
 watch(() => props.filters, (value) => {
-	drafts.value = value.map((filter: SavedFilter, index: number) => ({ ...filter, active: filter.active ?? true, isDefault: filter.isDefault ?? false, clientId: `${filter.id}-${index}-${Math.random().toString(36).slice(2, 8)}`, expanded: index === 0 }))
+	drafts.value = value.map((filter: SavedFilter, index: number) => ({ ...filter, active: filter.active ?? true, isDefault: filter.isDefault ?? false, clientId: `${filter.id}-${index}-${Math.random().toString(36).slice(2, 8)}` }))
 }, { deep: true, immediate: true })
 
 function addFilter() {
-	drafts.value.push({ id: -(drafts.value.length + 1), name: '', criteria: {}, isPredefined: true, active: true, isDefault: drafts.value.length === 0, sortOrder: (drafts.value.length + 1) * 10, clientId: `new-${Math.random().toString(36).slice(2, 8)}`, expanded: true })
+	drafts.value.push({ id: -(drafts.value.length + 1), name: '', criteria: {}, isPredefined: true, active: true, isDefault: drafts.value.length === 0, sortOrder: (drafts.value.length + 1) * 10, clientId: `new-${Math.random().toString(36).slice(2, 8)}` })
 }
 
 function removeFilter(clientId: string) {
@@ -52,7 +52,7 @@ function setDefault(clientId: string) {
 }
 
 function save() {
-	emit('save', drafts.value.map(({ clientId, expanded, ...filter }) => filter))
+	emit('save', drafts.value.map(({ clientId, ...filter }) => filter))
 }
 </script>
 
@@ -80,11 +80,10 @@ function save() {
 					<label class="gi-switch-row"><input v-model="filter.active" type="checkbox" /><span>Activo</span></label>
 					<label class="gi-switch-row"><input :checked="Boolean(filter.isDefault)" :disabled="!filter.active" type="radio" :name="defaultGroupName" @change="setDefault(filter.clientId)" /><span>Predeterminado</span></label>
 					<div class="gi-filter-catalog-row__actions">
-						<button class="gi-secondary-button" type="button" @click="filter.expanded = !filter.expanded">{{ filter.expanded ? 'Ocultar criterios' : 'Editar criterios' }}</button>
 						<button v-if="canRemove(filter)" class="gi-ghost-button" type="button" @click="removeFilter(filter.clientId)">Eliminar</button>
 					</div>
 				</div>
-				<FilterCriteriaEditor v-if="filter.expanded" v-model="filter.criteria" :statuses="statuses" :types="types" :users="users" :groups="groups" />
+				<FilterCriteriaEditor v-model="filter.criteria" :statuses="statuses" :types="types" :users="users" :groups="groups" />
 			</li>
 		</ul>
 	</section>

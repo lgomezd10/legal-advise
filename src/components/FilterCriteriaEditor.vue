@@ -17,6 +17,11 @@ type FilterCriteriaState = {
 	hasAttachments: boolean
 }
 
+type FilterChip = {
+	key: CriteriaKey
+	label: string
+}
+
 const props = defineProps<{
 	modelValue: Record<string, unknown>
 	statuses: StatusOption[]
@@ -65,6 +70,9 @@ const draftUserOptions = computed<SearchableSelectOption[]>(() => [{ value: '__m
 const draftGroupOptions = computed<SearchableSelectOption[]>(() => [{ value: '__my_groups__', label: 'Mis grupos' }, ...safeGroups.value.map((group: AssignableOption) => ({ value: group.id, label: group.displayName }))])
 const typeOptions = computed(() => flattenTypes(safeTypes.value))
 const typeSelectOptions = computed<SearchableSelectOption[]>(() => typeOptions.value.map((item) => ({ value: String(item.id), label: item.label })))
+const userLabelMap = computed(() => new Map(safeUsers.value.map((user: AssignableOption) => [user.id, user.displayName])))
+const groupLabelMap = computed(() => new Map(safeGroups.value.map((group: AssignableOption) => [group.id, group.displayName])))
+const statusLabelMap = computed(() => new Map(safeStatuses.value.map((status: StatusOption) => [status.id, status.label])))
 const activeCriteria = computed<Record<string, unknown>>(() => {
 	const next: Record<string, unknown> = {}
 	if (enabledCriteria.status && criteria.status.length > 0) next.status = [...criteria.status]
@@ -77,6 +85,19 @@ const activeCriteria = computed<Record<string, unknown>>(() => {
 	if (enabledCriteria.unassigned && criteria.unassigned) next.unassigned = true
 	if (enabledCriteria.hasAttachments && criteria.hasAttachments) next.hasAttachments = true
 	return next
+})
+const activeFilterChips = computed<FilterChip[]>(() => {
+	const chips: FilterChip[] = []
+	if (enabledCriteria.status && criteria.status.length > 0) chips.push({ key: 'status', label: `Estado: ${formatStatusList(criteria.status)}` })
+	if (enabledCriteria.assignedUser && criteria.assignedUser) chips.push({ key: 'assignedUser', label: `Usuario: ${formatAssignedUser(criteria.assignedUser)}` })
+	if (enabledCriteria.assignedGroup && criteria.assignedGroup) chips.push({ key: 'assignedGroup', label: `Grupo: ${formatAssignedGroup(criteria.assignedGroup)}` })
+	if (enabledCriteria.typeId && criteria.typeId) chips.push({ key: 'typeId', label: `Tipo: ${formatType(criteria.typeId)}` })
+	if (enabledCriteria.city && criteria.city.trim()) chips.push({ key: 'city', label: `Ciudad: ${criteria.city.trim()}` })
+	if (enabledCriteria.text && criteria.text.trim()) chips.push({ key: 'text', label: `Texto: ${criteria.text.trim()}` })
+	if (enabledCriteria.updatedWithinDays && criteria.updatedWithinDays) chips.push({ key: 'updatedWithinDays', label: `Ultimos ${criteria.updatedWithinDays} dias` })
+	if (enabledCriteria.unassigned && criteria.unassigned) chips.push({ key: 'unassigned', label: 'Sin asignar' })
+	if (enabledCriteria.hasAttachments && criteria.hasAttachments) chips.push({ key: 'hasAttachments', label: 'Con adjuntos' })
+	return chips
 })
 
 watch(() => props.modelValue, (value) => {
@@ -131,6 +152,19 @@ function resetDraft() {
 	modalCriterionKey.value = ''
 }
 
+function loadDraftForCriterion(key: CriteriaKey) {
+	draftCriteria.status = key === 'status' ? [...criteria.status] : []
+	draftCriteria.assignedUser = key === 'assignedUser' ? criteria.assignedUser : ''
+	draftCriteria.assignedGroup = key === 'assignedGroup' ? criteria.assignedGroup : ''
+	draftCriteria.typeId = key === 'typeId' ? criteria.typeId : ''
+	draftCriteria.city = key === 'city' ? criteria.city : ''
+	draftCriteria.text = key === 'text' ? criteria.text : ''
+	draftCriteria.updatedWithinDays = key === 'updatedWithinDays' ? criteria.updatedWithinDays : ''
+	draftCriteria.unassigned = key === 'unassigned' ? criteria.unassigned : true
+	draftCriteria.hasAttachments = key === 'hasAttachments' ? criteria.hasAttachments : true
+	modalCriterionKey.value = key
+}
+
 function hasDraftValue(key: CriteriaKey) {
 	if (key === 'status') return draftCriteria.status.length > 0
 	if (key === 'assignedUser') return Boolean(draftCriteria.assignedUser)
@@ -160,6 +194,11 @@ function applyDraftCriterion() {
 	resetDraft()
 }
 
+function editCriterion(key: CriteriaKey) {
+	loadDraftForCriterion(key)
+	modalOpen.value = true
+}
+
 function removeCriterion(key: CriteriaKey) {
 	enabledCriteria[key] = false
 	if (key === 'status') criteria.status = []
@@ -182,17 +221,49 @@ function isStatusSelectable(statusId: string) {
 
 	return status.active !== false || draftCriteria.status.includes(statusId)
 }
+
+function formatStatusList(statusIds: string[]) {
+	return statusIds.map((statusId) => statusLabelMap.value.get(statusId) ?? statusId).join(', ')
+}
+
+function formatAssignedUser(userId: string) {
+	if (userId === '__me__') {
+		return 'Asignadas a mi'
+	}
+
+	return userLabelMap.value.get(userId) ?? userId
+}
+
+function formatAssignedGroup(groupId: string) {
+	if (groupId === '__my_groups__') {
+		return 'Mis grupos'
+	}
+
+	return groupLabelMap.value.get(groupId) ?? groupId
+}
+
+function formatType(typeId: string) {
+	const selected = typeOptions.value.find((item) => item.id === Number(typeId))
+	return selected?.label ?? typeId
+}
 </script>
 
 <template>
 	<div class="gi-filter-criteria-editor">
-		<div class="gi-filter-criteria-editor__actions">
-			<button class="gi-secondary-button" type="button" @click="modalOpen = true">Anadir criterio</button>
-		</div>
-		<div class="gi-filter-criteria-editor__remove-grid">
-			<button v-for="option in criterionOptions.filter((item) => enabledCriteria[item.key])" :key="option.key" class="gi-filter-remove-button" type="button" @click="removeCriterion(option.key)">
-				Quitar {{ option.label }}
-			</button>
+		<div class="gi-filter-chip-bar">
+			<div class="gi-filter-chip-bar__items">
+				<div v-if="activeFilterChips.length === 0" class="gi-filter-chip gi-filter-chip--empty">
+					<span>Sin filtros activos</span>
+				</div>
+				<button v-for="chip in activeFilterChips" :key="chip.key" class="gi-filter-chip gi-filter-chip--action" type="button" @click="editCriterion(chip.key)">
+					<span class="gi-filter-chip__text">{{ chip.label }}</span>
+					<span class="gi-filter-chip__edit">Editar</span>
+					<span class="gi-filter-chip__remove" role="button" :aria-label="`Quitar ${chip.label}`" @click.stop="removeCriterion(chip.key)">x</span>
+				</button>
+				<button class="gi-filter-chip-bar__add" type="button" aria-label="Anadir criterio" @click="modalOpen = true">
+					+
+				</button>
+			</div>
 		</div>
 		<div v-if="modalOpen" class="gi-dialog-backdrop" @click.self="modalOpen = false; resetDraft()">
 			<section class="gi-dialog gi-dialog--wide">
@@ -229,20 +300,97 @@ function isStatusSelectable(statusId: string) {
 </template>
 
 <style scoped>
-.gi-filter-criteria-editor,
-.gi-filter-criteria-editor__actions,
-.gi-filter-criteria-editor__remove-grid {
+.gi-filter-criteria-editor {
 	display: grid;
 	gap: .75rem;
 }
 
-.gi-filter-remove-button {
-	border: 1px dashed rgba(15, 36, 51, .16);
-	background: rgba(255, 255, 255, .82);
+.gi-filter-chip-bar {
+	display: flex;
+	align-items: center;
+	gap: .75rem;
+	padding: .55rem .75rem;
 	border-radius: 999px;
-	padding: .5rem .75rem;
+	background: rgba(242, 246, 243, .92);
+	border: 1px solid rgba(49, 96, 91, .1);
+}
+
+.gi-filter-chip-bar__items {
+	display: flex;
+	gap: .5rem;
+	flex-wrap: wrap;
+	align-items: center;
+	min-width: 0;
+	flex: 1;
+}
+
+.gi-filter-chip {
+	display: flex;
+	gap: .75rem;
+	align-items: center;
+	justify-content: flex-start;
+	max-width: 100%;
+	padding: .3rem .48rem .3rem .7rem;
+	border-radius: 999px;
+	background: rgba(49, 96, 91, .1);
+	color: #214f45;
+	min-height: 2rem;
+	font-size: .88rem;
+}
+
+.gi-filter-chip--action {
+	border: none;
 	font: inherit;
 	cursor: pointer;
+}
+
+.gi-filter-chip--empty {
+	background: rgba(49, 96, 91, .05);
+	color: #5f726b;
+}
+
+.gi-filter-chip__text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+}
+
+.gi-filter-chip__edit {
+	font-size: .78rem;
+	color: #45675e;
+	white-space: nowrap;
+}
+
+.gi-filter-chip__remove {
+	display: inline-grid;
+	place-items: center;
+	border: none;
+	background: rgba(33, 79, 69, .12);
+	color: #214f45;
+	width: 1.6rem;
+	height: 1.6rem;
+	border-radius: 999px;
+	cursor: pointer;
+	font: inherit;
+	line-height: 1;
+	padding: 0;
+	flex: none;
+}
+
+.gi-filter-chip-bar__add {
+	width: 2rem;
+	height: 2rem;
+	border: 1px dashed rgba(33, 79, 69, .2);
+	background: rgba(255, 255, 255, .86);
+	color: #214f45;
+	border-radius: 999px;
+	cursor: pointer;
+	font: inherit;
+	font-size: 1.05rem;
+	line-height: 1;
+	padding: 0;
+	flex: none;
 }
 
 .gi-check-tile--disabled {

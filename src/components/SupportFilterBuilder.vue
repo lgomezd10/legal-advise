@@ -897,9 +897,9 @@ function getSuggestedSaveName() {
 		</div>
 
 		<div v-if="modalOpen" class="gi-dialog-backdrop" @click.self="closeAddCriterionModal">
-			<section class="gi-dialog gi-dialog--wide" aria-label="Anadir filtro">
+			<section class="gi-dialog gi-dialog--wide" aria-label="Añadir filtro">
 				<header class="gi-dialog__header">
-					<h3 class="gi-dialog__title">Anadir filtro</h3>
+					<h3 class="gi-dialog__title">Añadir filtro</h3>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeAddCriterionModal">x</button>
 				</header>
 

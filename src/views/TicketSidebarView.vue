@@ -110,6 +110,7 @@ function repeatTicket() {
 		:roles="panelRoles"
 		:users="bootstrapStore.data.assignables.users"
 		:groups="bootstrapStore.data.assignables.groups"
+		:fields="bootstrapStore.data.catalogs.fields"
 		:current-user-uid="bootstrapStore.data.currentUser.uid"
 		:statuses="bootstrapStore.data.catalogs.statuses"
 		:urgencies="bootstrapStore.data.catalogs.urgencies"

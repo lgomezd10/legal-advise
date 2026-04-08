@@ -103,6 +103,7 @@ function backToSupport() {
 			:roles="bootstrapStore.data.roles"
 			:users="assignableUsers"
 			:groups="assignableGroups"
+			:fields="bootstrapStore.data.catalogs.fields"
 			:current-user-uid="bootstrapStore.data.currentUser.uid"
 			:statuses="statuses"
 			:urgencies="urgencies"
