@@ -119,6 +119,7 @@ class SupportFilterService {
 	private function ensureGlobalFilters(): void {
 		$rows = $this->savedFilterMapper->findAllOrdered('sort_order', 'ASC');
 		$byName = [];
+		$globalRows = [];
 		$hasGlobalDefault = false;
 		foreach ($rows as $row) {
 			if (!$row instanceof SavedFilter) {
@@ -147,33 +148,34 @@ class SupportFilterService {
 				continue;
 			}
 
+			$globalRows[] = $row;
 			$byName[$row->getName()] = $row;
 		}
 
 		if (isset($byName['Abiertas'])) {
 			$this->savedFilterMapper->delete($byName['Abiertas']);
 			unset($byName['Abiertas']);
+			$globalRows = array_values(array_filter($globalRows, static fn (SavedFilter $row): bool => $row->getName() !== 'Abiertas'));
+		}
+
+		if ($globalRows !== []) {
+			if (!$hasGlobalDefault) {
+				foreach ($globalRows as $row) {
+					if (!(bool) $row->getActive()) {
+						continue;
+					}
+
+					$row->setIsDefault(true);
+					$this->savedFilterMapper->update($row);
+					$hasGlobalDefault = true;
+					break;
+				}
+			}
+
+			return;
 		}
 
 		foreach (self::PREDEFINED_FILTERS as $definition) {
-			$existing = $byName[$definition['name']] ?? null;
-			if ($existing instanceof SavedFilter) {
-				$existing->setIsPredefined(true);
-				$existing->setScopeType('global');
-				$existing->setCriteria($definition['criteria']);
-				if ($existing->getActive() === null) {
-					$existing->setActive(true);
-				}
-				if (!$hasGlobalDefault && (bool) $definition['isDefault']) {
-					$existing->setIsDefault(true);
-					$hasGlobalDefault = true;
-				}
-				$existing->setSortOrder($definition['sortOrder']);
-				$existing->setOwnerUid(null);
-				$this->savedFilterMapper->update($existing);
-				continue;
-			}
-
 			$filter = new SavedFilter();
 			$filter->setOwnerUid(null);
 			$filter->setScopeType('global');

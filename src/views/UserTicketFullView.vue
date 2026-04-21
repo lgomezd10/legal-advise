@@ -84,6 +84,7 @@ function repeatTicket() {
 			:roles="['usuario']"
 			:users="bootstrapStore.data.assignables.users"
 			:groups="bootstrapStore.data.assignables.groups"
+			:types="bootstrapStore.data.catalogs.types"
 			:fields="bootstrapStore.data.catalogs.fields"
 			:current-user-uid="bootstrapStore.data.currentUser.uid"
 			:allowed-extensions="bootstrapStore.data.catalogs.attachmentConfig.allowedExtensions"

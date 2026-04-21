@@ -40,7 +40,7 @@ class BootstrapService {
 		$navigation = [
 			['id' => 'mis-incidencias', 'label' => 'Mis tickets', 'route' => '/mis-incidencias', 'visible' => in_array(RoleService::USER, $roles, true)],
 			['id' => 'soporte', 'label' => 'Consola de soporte', 'route' => '/soporte', 'visible' => in_array(RoleService::SUPPORT, $roles, true) || in_array(RoleService::ADMIN, $roles, true)],
-			['id' => 'configuracion', 'label' => 'Configuracion', 'route' => '/configuracion', 'visible' => $roles !== []],
+			['id' => 'configuracion', 'label' => 'Configuración', 'route' => '/configuracion', 'visible' => $roles !== []],
 		];
 
 		$assignableUsers = $this->loadAssignableUsers();

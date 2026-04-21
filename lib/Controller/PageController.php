@@ -38,6 +38,10 @@ class PageController extends Controller {
 		}
 
 		$bootstrap = $this->bootstrapService->build();
+		if (($bootstrap['roles'] ?? []) === []) {
+			return new RedirectResponse($this->urlGenerator->linkToDefaultPageUrl());
+		}
+
 		$navigation = $bootstrap['navigation'] ?? [];
 		$landingRoute = '/';
 
@@ -58,7 +62,12 @@ class PageController extends Controller {
 			return new RedirectResponse($this->urlGenerator->linkToDefaultPageUrl());
 		}
 
-		$this->initialState->provideInitialState('bootstrap', $this->bootstrapService->build());
+		$bootstrap = $this->bootstrapService->build();
+		if (($bootstrap['roles'] ?? []) === []) {
+			return new RedirectResponse($this->urlGenerator->linkToDefaultPageUrl());
+		}
+
+		$this->initialState->provideInitialState('bootstrap', $bootstrap);
 
 		Util::addStyle(Application::APP_ID, 'style');
 		Util::addScript(Application::APP_ID, 'main');

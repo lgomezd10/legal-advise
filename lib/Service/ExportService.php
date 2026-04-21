@@ -12,10 +12,11 @@ class ExportService {
 		$rows = $this->ticketService->list($uid, $criteria, $supportScope);
 		$selectedColumns = $this->normalizeColumns($columns);
 		$handle = fopen('php://temp', 'r+');
-		fputcsv($handle, array_map(fn (string $column) => $this->columnLabel($column), $selectedColumns));
+		fwrite($handle, "\xEF\xBB\xBF");
+		fputcsv($handle, array_map(fn (string $column) => $this->columnLabel($column), $selectedColumns), ';');
 
 		foreach ($rows as $row) {
-			fputcsv($handle, array_map(fn (string $column) => $this->columnValue($column, $row), $selectedColumns));
+			fputcsv($handle, array_map(fn (string $column) => $this->columnValue($column, $row), $selectedColumns), ';');
 		}
 
 		rewind($handle);
@@ -24,13 +25,13 @@ class ExportService {
 
 		return [
 			'filename' => 'tickets-' . date('Ymd-His') . '.csv',
-			'mimeType' => 'text/csv',
+			'mimeType' => 'text/csv; charset=UTF-8',
 			'content' => base64_encode($content),
 		];
 	}
 
 	private function normalizeColumns(array $columns): array {
-		$allowed = ['number', 'createdBy', 'title', 'userDescription', 'assignment', 'status', 'urgency', 'createdAt', 'updatedAt'];
+		$allowed = ['number', 'createdBy', 'province', 'title', 'userDescription', 'assignment', 'status', 'urgency', 'createdAt', 'updatedAt'];
 		$selected = array_values(array_filter($columns, static fn (string $column) => in_array($column, $allowed, true)));
 
 		return $selected !== [] ? $selected : ['number', 'createdBy', 'title', 'userDescription', 'assignment'];
@@ -40,6 +41,7 @@ class ExportService {
 		return match ($column) {
 			'number' => 'numero_ticket',
 			'createdBy' => 'creado_por',
+			'province' => 'provincia',
 			'title' => 'titulo',
 			'userDescription' => 'descripcion',
 			'assignment' => 'asignacion',
@@ -55,6 +57,7 @@ class ExportService {
 		return match ($column) {
 			'number' => (string) ($row['number'] ?? ''),
 			'createdBy' => (string) ($row['creatorUid'] ?? ''),
+			'province' => (string) ($row['province'] ?? ''),
 			'title' => (string) ($row['title'] ?? ''),
 			'userDescription' => (string) ($row['userDescription'] ?? ''),
 			'assignment' => $this->formatAssignment($row),

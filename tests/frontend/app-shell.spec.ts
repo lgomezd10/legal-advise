@@ -17,7 +17,7 @@ describe('Shell de la aplicacion', () => {
 			navigation: [
 				{ id: 'mis-incidencias', label: 'Mis tickets', route: '/mis-incidencias', visible: true },
 				{ id: 'soporte', label: 'Consola de soporte', route: '/soporte', visible: true },
-				{ id: 'configuracion', label: 'Configuracion', route: '/configuracion', visible: true },
+				{ id: 'configuracion', label: 'Configuración', route: '/configuracion', visible: true },
 			],
 			supportFilters: [
 				{ id: 10, name: 'Asignadas a mi', criteria: { assignedUser: '__me__' }, isPredefined: true, active: true, isDefault: true, sortOrder: 10 },

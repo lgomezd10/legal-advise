@@ -1,23 +1,24 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import type { AssignableOption, CatalogField, SearchableSelectOption, StatusOption, Ticket, TicketAttachment, TicketAttachmentLinkDraft, TicketComment, UrgencyCatalogItem } from '@/types'
+import type { AssignableOption, CatalogField, SearchableSelectOption, StatusOption, Ticket, TicketAttachment, TicketAttachmentLinkDraft, TicketComment, TypeNode, UrgencyCatalogItem } from '@/types'
 import { formatDateTime } from '@/utils/formatting'
 import { formatHistoryEntries } from '@/utils/history'
 import { excerptRichText, isRichTextEmpty, richTextToPlainText, sanitizeRichText } from '@/utils/richText'
-import { getTicketPersonalDataRecord } from '@/services/ticketDraft'
+import { getTicketPersonalDataRecord, getTypeLabel } from '@/services/ticketDraft'
 import AttachmentPicker from './AttachmentPicker.vue'
 import RichTextContent from './RichTextContent.vue'
 import SearchableSelect from './SearchableSelect.vue'
 
 const RichTextEditor = defineAsyncComponent(() => import(/* webpackChunkName: "rich-text-editor" */ './RichTextEditor.vue'))
 
-type SupportTabId = 'detail' | 'requester' | 'comments' | 'history'
+type TicketSidebarTabId = 'comments' | 'detail' | 'attachments' | 'requester' | 'history'
 
 const props = defineProps<{
 	ticket: Ticket | null
 	roles: string[]
 	users?: AssignableOption[]
 	groups?: AssignableOption[]
+	types?: TypeNode[]
 	fields?: CatalogField[]
 	currentUserUid?: string
 	statuses?: StatusOption[]
@@ -28,7 +29,7 @@ const props = defineProps<{
 	readOnly?: boolean
 	showFullscreen?: boolean
 	showRepeat?: boolean
-	initialTab?: SupportTabId
+	initialTab?: TicketSidebarTabId
 	initialComposerVisible?: boolean
 }>()
 
@@ -51,9 +52,11 @@ const commentsSortDirection = ref<'desc' | 'asc'>('desc')
 const commentsDateFrom = ref('')
 const commentsDateTo = ref('')
 const commentsAuthorUid = ref<string | null>(null)
-const composerVisible = ref(props.initialComposerVisible ?? true)
+const commentsMobileMenuOpen = ref(false)
 const expandedCommentIds = ref<number[]>([])
-const activeTab = ref<SupportTabId>(props.initialTab ?? 'detail')
+const discardChangesDialogOpen = ref(false)
+const discardChangesResolver = ref<((confirmed: boolean) => void) | null>(null)
+const closeReasonDialogOpen = ref(false)
 const editableTicket = reactive({
 	title: '',
 	status: '',
@@ -115,6 +118,18 @@ function normalizeFields(fields: CatalogField[] | Record<string, CatalogField> |
 	return []
 }
 
+function normalizeTypes(types: TypeNode[] | Record<string, TypeNode> | undefined | null): TypeNode[] {
+	if (Array.isArray(types)) {
+		return types
+	}
+
+	if (types && typeof types === 'object') {
+		return Object.values(types)
+	}
+
+	return []
+}
+
 const canManage = computed(() => !props.readOnly && (props.ticket?.canManage ?? (props.roles.includes('soporte') || props.roles.includes('administrador'))))
 const canComment = computed(() => props.ticket?.canComment ?? true)
 const isClosedTicket = computed(() => {
@@ -133,8 +148,13 @@ const canEditTicket = computed(() => canManage.value && !isClosedTicket.value)
 const canPublishComment = computed(() => canComment.value && !isClosedTicket.value)
 const canAssignToCurrentUser = computed(() => Boolean(canEditTicket.value && props.currentUserUid && editableTicket.assignedUserUid !== props.currentUserUid))
 const showSupportTabs = computed(() => canManage.value)
+const defaultComposerVisible = computed(() => props.initialComposerVisible ?? true)
+const defaultTab = computed<TicketSidebarTabId>(() => props.initialTab ?? (showSupportTabs.value ? 'detail' : 'comments'))
+const composerVisible = ref(defaultComposerVisible.value)
+const activeTab = ref<TicketSidebarTabId>(defaultTab.value)
 const safeUsers = computed(() => normalizeAssignableOptions(props.users))
 const safeGroups = computed(() => normalizeAssignableOptions(props.groups))
+const safeTypes = computed(() => normalizeTypes(props.types))
 const safeFields = computed(() => normalizeFields(props.fields)
 	.filter((field: CatalogField) => field.active !== false)
 	.slice()
@@ -162,7 +182,7 @@ const groupOptions = computed<SearchableSelectOption[]>(() => safeGroups.value.m
 	searchText: [group.id, ...(group.userIds ?? [])].join(' '),
 })))
 const visibilityOptions: SearchableSelectOption[] = [
-	{ value: 'publico', label: 'Publico' },
+	{ value: 'publico', label: 'Público' },
 	{ value: 'interno', label: 'Interno' },
 ]
 const supportTabs = computed(() => ([
@@ -170,7 +190,14 @@ const supportTabs = computed(() => ([
 	{ id: 'comments', label: 'Comentarios' },
 	{ id: 'requester', label: 'Solicitante' },
 	{ id: 'history', label: 'Historial' },
-] as Array<{ id: SupportTabId, label: string }>))
+	] as Array<{ id: TicketSidebarTabId, label: string }>))
+const userTabs = computed(() => ([
+	{ id: 'comments', label: 'Comentarios' },
+	{ id: 'detail', label: 'Detalles' },
+	{ id: 'attachments', label: 'Adjuntos' },
+	] as Array<{ id: TicketSidebarTabId, label: string }>))
+const visibleTabs = computed(() => showSupportTabs.value ? supportTabs.value : userTabs.value)
+const shouldCollapseCommentOptions = computed(() => !showSupportTabs.value)
 const requesterData = computed<Record<string, string>>(() => getTicketPersonalDataRecord(props.ticket))
 const requesterContactEntries = computed(() => {
 	const entries: Array<{ key: string, label: string, value: string }> = []
@@ -195,6 +222,7 @@ const requesterContactEntries = computed(() => {
 
 	return entries
 })
+const ticketTypeLabel = computed(() => getTypeLabel(safeTypes.value, props.ticket?.typeId ?? null) || 'Sin tipo')
 const commentAuthorOptions = computed((): SearchableSelectOption[] => {
 	const seen = new Set<string>()
 	return (props.ticket?.comments ?? []).reduce((options: SearchableSelectOption[], item: TicketComment) => {
@@ -284,7 +312,16 @@ function confirmDiscardChanges() {
 		return true
 	}
 
-	return window.confirm('Hay cambios sin guardar en esta incidencia. Si sales ahora, se perderan. Quieres continuar?')
+	return new Promise<boolean>((resolve) => {
+		discardChangesResolver.value = resolve
+		discardChangesDialogOpen.value = true
+	})
+}
+
+function resolveDiscardChangesDialog(confirmed: boolean) {
+	discardChangesDialogOpen.value = false
+	discardChangesResolver.value?.(confirmed)
+	discardChangesResolver.value = null
 }
 
 function onBeforeWindowUnload(event: BeforeUnloadEvent) {
@@ -302,16 +339,35 @@ defineExpose({
 })
 
 watch(() => props.initialTab, (nextTab) => {
-	if (nextTab) {
-		activeTab.value = nextTab
-	}
+	activeTab.value = nextTab ?? defaultTab.value
 })
 
-watch(() => props.ticket?.id, () => {
-	composerVisible.value = props.initialComposerVisible ?? true
-	composerError.value = ''
+watch(defaultComposerVisible, (nextValue) => {
+	composerVisible.value = nextValue
+})
+
+function resetTransientTicketPanelState() {
 	comment.value = ''
+	visibility.value = 'publico'
 	attachmentsDraft.value = { files: [], links: [] }
+	composerError.value = ''
+	commentsSearchText.value = ''
+	commentsSortDirection.value = 'desc'
+	commentsDateFrom.value = ''
+	commentsDateTo.value = ''
+	commentsAuthorUid.value = null
+	commentsMobileMenuOpen.value = false
+	composerVisible.value = defaultComposerVisible.value
+	activeTab.value = defaultTab.value
+	closeReason.value = ''
+	closeReasonDialogOpen.value = false
+}
+
+watch(() => props.ticket?.id, () => {
+	resetTransientTicketPanelState()
+	if (discardChangesDialogOpen.value) {
+		resolveDiscardChangesDialog(false)
+	}
 })
 
 watch(() => (props.ticket?.comments ?? []).map((item: TicketComment) => item.id).join(','), () => {
@@ -443,6 +499,14 @@ function toggleCommentsSortDirection() {
 	commentsSortDirection.value = commentsSortDirection.value === 'desc' ? 'asc' : 'desc'
 }
 
+function toggleCommentsMobileMenu() {
+	commentsMobileMenuOpen.value = !commentsMobileMenuOpen.value
+}
+
+function closeCommentsMobileMenu() {
+	commentsMobileMenuOpen.value = false
+}
+
 function hideComposer() {
 	composerVisible.value = false
 }
@@ -536,11 +600,11 @@ function formatPersonalDataLabel(key: string) {
 	}
 
 	if (key === 'phone') {
-		return 'Telefono'
+		return 'Teléfono'
 	}
 
 	if (key === 'location') {
-		return 'Direccion'
+		return 'Dirección'
 	}
 
 	return key
@@ -557,7 +621,7 @@ function saveChanges() {
 	}
 
 	if (requiresCloseReason.value && closeReason.value.trim() === '') {
-		window.alert('Debes indicar el motivo del cierre antes de guardar.')
+		closeReasonDialogOpen.value = true
 		return
 	}
 
@@ -602,7 +666,7 @@ function assignToCurrentUser() {
 						Pantalla completa
 					</button>
 					<button v-if="canAssignToCurrentUser" class="gi-secondary-button gi-sidebar-panel__fullscreen-button" type="button" @click="assignToCurrentUser">
-						Asignarme a mi
+						Asignarme a mí
 					</button>
 					<button v-if="ticket.canReopen" class="gi-secondary-button gi-sidebar-panel__fullscreen-button" type="button" @click="emit('reopen')">
 						Reabrir ticket
@@ -614,64 +678,71 @@ function assignToCurrentUser() {
 				</div>
 			</div>
 		</header>
-		<nav v-if="showSupportTabs" class="gi-sidebar-panel__tabs" aria-label="Secciones del ticket">
-			<button v-for="tab in supportTabs" :key="tab.id" class="gi-sidebar-panel__tab" :class="{ 'gi-sidebar-panel__tab--active': activeTab === tab.id }" type="button" @click="activeTab = tab.id">
+		<nav v-if="visibleTabs.length" class="gi-sidebar-panel__tabs" aria-label="Secciones del ticket">
+			<button v-for="tab in visibleTabs" :key="tab.id" class="gi-sidebar-panel__tab" :class="{ 'gi-sidebar-panel__tab--active': activeTab === tab.id }" type="button" @click="activeTab = tab.id">
 				{{ tab.label }}
 			</button>
 		</nav>
-		<section v-if="!showSupportTabs || activeTab === 'detail'" class="gi-sidebar-panel__block gi-sidebar-panel__detail-block">
-			<div v-if="canEditTicket" class="gi-form-grid">
+		<section v-if="activeTab === 'detail'" class="gi-sidebar-panel__block gi-sidebar-panel__detail-block">
+			<div v-if="canEditTicket" class="gi-sidebar-panel__editor-form">
 				<label class="gi-field gi-field--wide">
-					<span>Titulo</span>
+					<span>Título</span>
 					<input v-model="editableTicket.title" class="gi-input" type="text" />
 				</label>
-				<label class="gi-field">
-					<span>Estado</span>
-					<SearchableSelect :model-value="editableTicket.status" :options="statusOptions" placeholder="Estado" @update:modelValue="onStatusChange" />
-				</label>
+				<div class="gi-sidebar-panel__compact-select-grid">
+					<label class="gi-field gi-sidebar-panel__compact-field">
+						<span>Estado</span>
+						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.status" :options="statusOptions" placeholder="Estado" @update:modelValue="onStatusChange" />
+					</label>
+					<label class="gi-field gi-sidebar-panel__compact-field">
+						<span>Criticidad</span>
+						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.urgencyId" :options="urgencyOptions" placeholder="Sin criticidad" clearable @update:modelValue="onUrgencyChange" />
+					</label>
+					<label class="gi-field gi-sidebar-panel__compact-field">
+						<span>Asignado a usuario</span>
+						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.assignedUserUid" :options="userOptions" placeholder="Sin usuario" clearable @update:modelValue="onAssignedUserChange" />
+					</label>
+					<label class="gi-field gi-sidebar-panel__compact-field">
+						<span>Asignado a grupo</span>
+						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.assignedGroupId" :options="groupOptions" placeholder="Sin grupo" clearable @update:modelValue="onAssignedGroupChange" />
+					</label>
+				</div>
 				<label v-if="requiresCloseReason" class="gi-field gi-field--wide">
 					<span>Motivo del cierre</span>
-					<textarea v-model="closeReason" class="gi-textarea gi-textarea--plain" rows="4" placeholder="Explica el motivo del cierre. Se publicara como un comentario." />
-				</label>
-				<label class="gi-field">
-					<span>Criticidad</span>
-					<SearchableSelect :model-value="editableTicket.urgencyId" :options="urgencyOptions" placeholder="Sin criticidad" clearable @update:modelValue="onUrgencyChange" />
-				</label>
-				<label class="gi-field">
-					<span>Asignado a usuario</span>
-					<SearchableSelect :model-value="editableTicket.assignedUserUid" :options="userOptions" placeholder="Sin usuario" clearable @update:modelValue="onAssignedUserChange" />
-				</label>
-				<label class="gi-field">
-					<span>Asignado a grupo</span>
-					<SearchableSelect :model-value="editableTicket.assignedGroupId" :options="groupOptions" placeholder="Sin grupo" clearable @update:modelValue="onAssignedGroupChange" />
+					<textarea v-model="closeReason" class="gi-textarea gi-textarea--plain" rows="4" placeholder="Explica el motivo del cierre. Se publicará como un comentario." />
 				</label>
 			</div>
 			<div class="gi-sidebar-panel__description-stack">
-				<div>
-					<h3>Descripcion del ticket</h3>
+				<label class="gi-field gi-field--wide">
+					<span>Tipo</span>
+					<div class="gi-sidebar-panel__type-chip">{{ ticketTypeLabel }}</div>
+				</label>
+				<label class="gi-field gi-field--wide">
+					<span>Descripción del ticket</span>
 					<RichTextContent :value="ticket.userDescription" surface />
-				</div>
+				</label>
 			</div>
 			<div v-if="canEditTicket" class="gi-form-grid gi-sidebar-panel__support-editor-grid">
-				<label class="gi-field gi-field--wide">
-					<span>Descripcion de soporte</span>
-					<RichTextEditor v-model="editableTicket.supportDescription" placeholder="Anade contexto interno, pasos realizados o capturas" :min-height="220" />
-				</label>
+				<div class="gi-field gi-field--wide">
+					<span>Descripción de soporte</span>
+					<RichTextEditor v-model="editableTicket.supportDescription" placeholder="Añade contexto interno, pasos realizados o capturas" :min-height="220" />
+				</div>
 			</div>
 			<div v-else-if="canManage" class="gi-sidebar-panel__closed-summary">
 				<div class="gi-sidebar-panel__summary-grid">
+					<div><span class="gi-sidebar-panel__summary-label">Tipo</span><strong>{{ ticketTypeLabel }}</strong></div>
 					<div><span class="gi-sidebar-panel__summary-label">Estado</span><strong>{{ ticket.status }}</strong></div>
 					<div><span class="gi-sidebar-panel__summary-label">Criticidad</span><strong>{{ ticket.urgencyId ?? 'Sin criticidad' }}</strong></div>
 					<div><span class="gi-sidebar-panel__summary-label">Asignado a usuario</span><strong>{{ resolveUserLabel(ticket.assignedUserUid) }}</strong></div>
 					<div><span class="gi-sidebar-panel__summary-label">Asignado a grupo</span><strong>{{ resolveGroupLabel(ticket.assignedGroupId) }}</strong></div>
 				</div>
 				<div>
-					<h3>Descripcion de soporte</h3>
+					<h3>Descripción de soporte</h3>
 					<RichTextContent :value="ticket.supportDescription" surface />
 				</div>
 			</div>
 		</section>
-		<section v-if="!showSupportTabs || activeTab === 'detail'" class="gi-sidebar-panel__block">
+		<section v-if="showSupportTabs ? activeTab === 'detail' : activeTab === 'attachments'" class="gi-sidebar-panel__block">
 			<h3>Adjuntos</h3>
 			<div class="gi-sidebar-panel__attachment-list">
 				<button v-for="attachment in ticket.attachments || []" :key="attachment.id" class="gi-secondary-button gi-attachment-link" @click="openAttachment(attachment)">{{ attachment.originalName }}</button>
@@ -693,12 +764,7 @@ function assignToCurrentUser() {
 			</div>
 			<p v-else class="gi-sidebar-panel__muted">No hay datos de contacto disponibles para este solicitante.</p>
 		</section>
-		<section v-if="!showSupportTabs || activeTab === 'comments'" class="gi-sidebar-panel__block">
-			<div class="gi-sidebar-panel__comments-header">				
-				<div class="gi-sidebar-panel__comments-header-actions">
-					<button v-if="!fullscreen" class="gi-secondary-button" type="button" @click="emit('fullscreen')">Expandir comentarios</button>
-				</div>
-			</div>
+		<section v-if="activeTab === 'comments'" class="gi-sidebar-panel__block">
 			<template v-if="canPublishComment">
 				<div v-if="composerVisible" class="gi-sidebar-panel__comment-composer">
 					<div class="gi-sidebar-panel__comment-composer-header">
@@ -707,7 +773,7 @@ function assignToCurrentUser() {
 							<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z" fill="currentColor" /></svg>
 						</button>
 					</div>
-					<RichTextEditor v-model="comment" placeholder="Anade un comentario, pega una captura o inserta una imagen" :min-height="180" />
+					<RichTextEditor v-model="comment" placeholder="Añade un comentario, pega una captura o inserta una imagen" :min-height="180" />
 					<AttachmentPicker v-model="attachmentsDraft" :allowed-extensions="allowedExtensions" :max-file-size-mb="maxFileSizeMb || 25" />
 					<p v-if="composerError" class="gi-form-error">{{ composerError }}</p>
 					<div class="gi-sidebar-panel__comment-composer-actions">
@@ -722,23 +788,46 @@ function assignToCurrentUser() {
 					</button>
 				</div>
 			</template>
-			<p v-else-if="isClosedTicket" class="gi-sidebar-panel__muted">Este ticket esta cerrado. Reabre el ticket para volver a actuar sobre el.</p>
+			<p v-else-if="isClosedTicket" class="gi-sidebar-panel__muted">Este ticket está cerrado. Reabre el ticket para volver a actuar sobre él.</p>
 			<h3>Histórico</h3>
 			<div class="gi-sidebar-panel__comments-toolbar">
 				<label class="gi-field gi-field--wide gi-sidebar-panel__comments-search"><span>Buscar texto</span><input v-model="commentsSearchText" class="gi-input" type="search" /></label>
-				<div class="gi-sidebar-panel__comments-toolbar-actions">
+				<button class="gi-secondary-button gi-sidebar-panel__comments-mobile-toggle" :class="{ 'gi-sidebar-panel__comments-mobile-toggle--always': shouldCollapseCommentOptions }" type="button" :aria-expanded="commentsMobileMenuOpen ? 'true' : 'false'" @click="toggleCommentsMobileMenu">
+					{{ commentsMobileMenuOpen ? 'Cerrar opciones' : 'Opciones' }}
+				</button>
+				<div v-if="showSupportTabs" class="gi-sidebar-panel__comments-toolbar-actions">
 					<button v-if="filteredComments.length" class="gi-secondary-button" type="button" @click="exportComments">
 						Exportar comentarios
 					</button>
 					<button class="gi-secondary-button gi-sidebar-panel__sort-button" type="button" @click="toggleCommentsSortDirection">
-						{{ commentsSortDirection === 'desc' ? 'Fecha: mas recientes primero' : 'Fecha: mas antiguas primero' }}
+						{{ commentsSortDirection === 'desc' ? 'Fecha: más recientes primero' : 'Fecha: más antiguas primero' }}
 					</button>
+					<button v-if="!fullscreen" class="gi-secondary-button" type="button" @click="emit('fullscreen')">Expandir comentarios</button>
 					<button v-if="orderedComments.length" class="gi-secondary-button" type="button" @click="toggleAllVisibleComments">
 						{{ allVisibleCommentsExpanded ? 'Ocultar todos' : 'Expandir todos' }}
 					</button>
 				</div>
 			</div>
-			<div class="gi-form-grid gi-sidebar-panel__comments-filters">
+			<div v-if="commentsMobileMenuOpen" class="gi-sidebar-panel__comments-mobile-menu" :class="{ 'gi-sidebar-panel__comments-mobile-menu--always': shouldCollapseCommentOptions }">
+				<div class="gi-sidebar-panel__comments-mobile-actions">
+					<button v-if="filteredComments.length" class="gi-secondary-button" type="button" @click="exportComments(); closeCommentsMobileMenu()">
+						Exportar comentarios
+					</button>
+					<button class="gi-secondary-button gi-sidebar-panel__sort-button" type="button" @click="toggleCommentsSortDirection(); closeCommentsMobileMenu()">
+						{{ commentsSortDirection === 'desc' ? 'Fecha: más recientes primero' : 'Fecha: más antiguas primero' }}
+					</button>
+					<button v-if="!fullscreen" class="gi-secondary-button" type="button" @click="emit('fullscreen'); closeCommentsMobileMenu()">Expandir comentarios</button>
+					<button v-if="orderedComments.length" class="gi-secondary-button" type="button" @click="toggleAllVisibleComments(); closeCommentsMobileMenu()">
+						{{ allVisibleCommentsExpanded ? 'Ocultar todos' : 'Expandir todos' }}
+					</button>
+				</div>
+				<div class="gi-form-grid gi-sidebar-panel__comments-mobile-filters">
+					<label class="gi-field"><span>Desde</span><input v-model="commentsDateFrom" class="gi-input" type="date" /></label>
+					<label class="gi-field"><span>Hasta</span><input v-model="commentsDateTo" class="gi-input" type="date" /></label>
+					<label class="gi-field"><span>Usuario</span><SearchableSelect :model-value="commentsAuthorUid" :options="commentAuthorOptions" placeholder="Todos" clearable @update:modelValue="commentsAuthorUid = $event ? String($event) : null" /></label>
+				</div>
+			</div>
+			<div v-if="showSupportTabs" class="gi-form-grid gi-sidebar-panel__comments-filters">
 				<label class="gi-field"><span>Desde</span><input v-model="commentsDateFrom" class="gi-input" type="date" /></label>
 				<label class="gi-field"><span>Hasta</span><input v-model="commentsDateTo" class="gi-input" type="date" /></label>
 				<label class="gi-field"><span>Usuario</span><SearchableSelect :model-value="commentsAuthorUid" :options="commentAuthorOptions" placeholder="Todos" clearable @update:modelValue="commentsAuthorUid = $event ? String($event) : null" /></label>
@@ -773,9 +862,34 @@ function assignToCurrentUser() {
 						<li v-for="detail in entry.details" :key="detail">{{ detail }}</li>
 					</ul>
 				</article>
-				<p v-if="historyEntries.length === 0" class="gi-sidebar-panel__muted">No hay cambios registrados todavia.</p>
+				<p v-if="historyEntries.length === 0" class="gi-sidebar-panel__muted">No hay cambios registrados todavía.</p>
 			</div>
 		</section>
+		<div v-if="discardChangesDialogOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="resolveDiscardChangesDialog(false)">
+			<section class="gi-app-dialog gi-dialog gi-dialog--compact" aria-label="Confirmar salida sin guardar">
+				<header class="gi-dialog__header">
+					<h3 class="gi-dialog__title">Cambios sin guardar</h3>
+					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="resolveDiscardChangesDialog(false)">x</button>
+				</header>
+				<p class="gi-dialog__message gi-dialog__message--neutral">Hay cambios sin guardar en esta incidencia. Si sales ahora, se perderán.</p>
+				<footer class="gi-dialog__footer">
+					<button class="gi-ghost-button" type="button" @click="resolveDiscardChangesDialog(false)">Seguir editando</button>
+					<button class="gi-primary-button" type="button" @click="resolveDiscardChangesDialog(true)">Salir sin guardar</button>
+				</footer>
+			</section>
+		</div>
+		<div v-if="closeReasonDialogOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="closeReasonDialogOpen = false">
+			<section class="gi-app-dialog gi-dialog gi-dialog--compact" aria-label="Motivo del cierre obligatorio">
+				<header class="gi-dialog__header">
+					<h3 class="gi-dialog__title">Motivo del cierre obligatorio</h3>
+					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeReasonDialogOpen = false">x</button>
+				</header>
+				<p class="gi-dialog__message gi-dialog__message--neutral">Debes indicar el motivo del cierre antes de guardar.</p>
+				<footer class="gi-dialog__footer">
+					<button class="gi-primary-button" type="button" @click="closeReasonDialogOpen = false">Entendido</button>
+				</footer>
+			</section>
+		</div>
 	</div>
 </template>
 
@@ -884,6 +998,27 @@ function assignToCurrentUser() {
 
 .gi-sidebar-panel__support-editor-grid {
 	padding-top: 0;
+}
+
+.gi-sidebar-panel__editor-form {
+	display: grid;
+	gap: .85rem;
+	padding: 1rem 0;
+}
+
+.gi-sidebar-panel__compact-select-grid {
+	display: grid;
+	gap: .75rem;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	align-items: start;
+}
+
+.gi-sidebar-panel__compact-field {
+	gap: .25rem;
+}
+
+.gi-sidebar-panel__compact-field > span {
+	font-size: .73rem;
 }
 
 .gi-sidebar-panel__summary-grid {
@@ -1016,6 +1151,34 @@ function assignToCurrentUser() {
 	gap: .85rem;
 }
 
+.gi-sidebar-panel__type-chip {
+	padding: .8rem .95rem;
+	border: 1px solid rgba(49, 96, 91, .12);
+	border-radius: 14px;
+	background: rgba(245, 249, 247, .96);
+	font-weight: 600;
+	color: #2f554c;
+}
+
+.gi-sidebar-panel__comments-mobile-toggle,
+.gi-sidebar-panel__comments-mobile-menu {
+	display: none;
+}
+
+.gi-sidebar-panel__comments-mobile-toggle--always {
+	display: inline-flex;
+	justify-content: center;
+}
+
+.gi-sidebar-panel__comments-mobile-menu--always {
+	display: grid;
+	gap: .85rem;
+	padding: .9rem 1rem;
+	border: 1px solid rgba(49, 96, 91, .12);
+	border-radius: 16px;
+	background: rgba(247, 250, 248, .95);
+}
+
 .gi-sidebar-panel__comment-composer-toggle-row {
 	display: flex;
 	justify-content: flex-start;
@@ -1065,7 +1228,12 @@ function assignToCurrentUser() {
 }
 
 .gi-sidebar-panel__sort-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	justify-self: flex-start;
+	min-height: 2.364rem;
+	white-space: nowrap;
 }
 
 .gi-sidebar-panel__selected-file {
@@ -1077,6 +1245,8 @@ function assignToCurrentUser() {
 }
 
 .gi-sidebar-panel__comments-filters,
+.gi-sidebar-panel__comments-mobile-actions,
+.gi-sidebar-panel__comments-mobile-filters,
 .gi-sidebar-panel__comments-accordion {
 	display: grid;
 	gap: .75rem;
@@ -1144,6 +1314,10 @@ function assignToCurrentUser() {
 }
 
 @media (max-width: 900px) {
+	.gi-sidebar-panel__compact-select-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
 	.gi-sidebar-panel__comment-meta,
 	.gi-sidebar-panel__history-meta,
 	.gi-sidebar-panel__comments-header,
@@ -1162,6 +1336,35 @@ function assignToCurrentUser() {
 
 	.gi-sidebar-panel__comments-toolbar {
 		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 640px) {
+	.gi-sidebar-panel__compact-select-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.gi-sidebar-panel__comments-mobile-toggle {
+		display: inline-flex;
+		justify-content: center;
+	}
+
+	.gi-sidebar-panel__comments-toolbar-actions,
+	.gi-sidebar-panel__comments-filters {
+		display: none;
+	}
+
+	.gi-sidebar-panel__comments-mobile-menu {
+		display: grid;
+		gap: .85rem;
+		padding: .9rem 1rem;
+		border: 1px solid rgba(49, 96, 91, .12);
+		border-radius: 16px;
+		background: rgba(247, 250, 248, .95);
+	}
+
+	.gi-sidebar-panel__comments-mobile-actions > .gi-secondary-button {
+		width: 100%;
 	}
 }
 </style>

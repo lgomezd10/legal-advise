@@ -26,7 +26,7 @@ async function save() {
 	}, {})
 	const saved = await updatePersonalConfig(payload)
 	bootstrapStore.setPersonalConfig(saved)
-	state.message = 'Configuracion personal guardada.'
+	state.message = 'Configuración personal guardada.'
 	state.saving = false
 }
 </script>

@@ -32,6 +32,15 @@ type RichTextEditorInstance = {
 	getHTML(): string
 	setEditable(editable: boolean, emitUpdate?: boolean): void
 	chain(): RichTextEditorChain
+	state?: {
+		selection?: {
+			$from?: {
+				parent?: {
+					textContent?: string
+				}
+			}
+		}
+	}
 	commands: {
 		setContent(content: string, options?: { emitUpdate?: boolean }): void
 	}
@@ -63,6 +72,11 @@ const showHtmlSource = ref(false)
 const htmlSource = ref('')
 let syncingFromExternal = false
 let pendingImageDialogFocusHandler: (() => void) | null = null
+
+function normalizeEditorContent(value: string | null | undefined) {
+	const sanitized = sanitizeRichText(value)
+	return isRichTextEmpty(sanitized) ? '<p></p>' : sanitized
+}
 
 const editorStyle = computed(() => ({ '--gi-rich-text-min-height': `${props.minHeight}px` }))
 
@@ -142,9 +156,9 @@ function setEditorHtml(value: string) {
 		return
 	}
 
-	const nextValue = sanitizeRichText(value)
+	const nextValue = normalizeEditorContent(value)
 	const currentValue = sanitizeRichText(instance.getHTML())
-	if (nextValue === currentValue) {
+	if (nextValue === normalizeEditorContent(currentValue)) {
 		return
 	}
 
@@ -160,7 +174,7 @@ function initializeEditor() {
 	try {
 		let instance: RichTextEditorInstance | null = null
 		instance = new Editor({
-			content: sanitizeRichText(props.modelValue),
+			content: normalizeEditorContent(props.modelValue),
 			editable: !props.disabled,
 			extensions: [
 				StarterKit.configure({
@@ -274,6 +288,35 @@ function toggleBlockquote() {
 	runEditorCommand((instance) => {
 		instance.chain().focus().toggleBlockquote().run()
 	})
+}
+
+function getCurrentBlockText(instance: RichTextEditorInstance | null) {
+	return instance?.state?.selection?.$from?.parent?.textContent?.trim() ?? ''
+}
+
+function isHeadingToolActive(level: 2 | 3) {
+	const instance = editor.value
+	if (!instance || isRichTextEmpty(instance.getHTML())) {
+		return false
+	}
+
+	if (!instance?.isActive('heading', { level })) {
+		return false
+	}
+
+	return getCurrentBlockText(instance) !== ''
+}
+
+function isTextAlignToolActive(alignment: 'left' | 'center' | 'right') {
+	if (!editor.value || isRichTextEmpty(editor.value.getHTML())) {
+		return false
+	}
+
+	if (alignment === 'left') {
+		return false
+	}
+
+	return editor.value?.isActive('paragraph', { textAlign: alignment }) ?? false
 }
 
 function isEditorActive(name: string, attributes?: Record<string, unknown>) {
@@ -409,10 +452,10 @@ function openImageDialog() {
 		</div>
 		<div v-else class="gi-rich-text-editor__surface">
 			<div class="gi-rich-text-editor__toolbar">
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('heading', { level: 2 }) }" :disabled="disabled || showHtmlSource" title="Titulo grande" aria-label="Titulo grande" @click="toggleHeading(2)">
+				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isHeadingToolActive(2) }" :disabled="disabled || showHtmlSource" title="Título grande" aria-label="Título grande" @click="toggleHeading(2)">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h3v5h10V6h3v12h-3v-5H7v5H4z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('heading', { level: 3 }) }" :disabled="disabled || showHtmlSource" title="Subtitulo" aria-label="Subtitulo" @click="toggleHeading(3)">
+				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isHeadingToolActive(3) }" :disabled="disabled || showHtmlSource" title="Subtítulo" aria-label="Subtítulo" @click="toggleHeading(3)">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3v4h10V7h3v10h-3v-4H7v4H4z" fill="currentColor" /></svg>
 				</button>
 				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('bold') }" :disabled="disabled || showHtmlSource" title="Negrita" aria-label="Negrita" @click="toggleBold">
@@ -427,19 +470,19 @@ function openImageDialog() {
 				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('orderedList') }" :disabled="disabled || showHtmlSource" title="Lista numerada" aria-label="Lista numerada" @click="toggleOrderedList">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h2V5H3v1h1zm0 6h1v1H3v1h3v-3H4zm-1 5h1.8L3 20v1h3v-1H4.8L6 18.5V17H3zm5-11h13V5H8zm0 12h13v-2H8zm0-5h13v-2H8z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('bulletList') }" :disabled="disabled || showHtmlSource" title="Lista con vietas" aria-label="Lista con vietas" @click="toggleBulletList">
+				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('bulletList') }" :disabled="disabled || showHtmlSource" title="Lista con viñetas" aria-label="Lista con viñetas" @click="toggleBulletList">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5A1.5 1.5 0 1 0 5 9.5A1.5 1.5 0 1 0 5 6.5M8 8h13V6H8zm-3 5.5A1.5 1.5 0 1 0 5 16.5A1.5 1.5 0 1 0 5 13.5M8 15h13v-2H8zm-3 4A1.5 1.5 0 1 0 5 22A1.5 1.5 0 1 0 5 19m3 1h13v-2H8z" fill="currentColor" /></svg>
 				</button>
 				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('blockquote') }" :disabled="disabled || showHtmlSource" title="Cita" aria-label="Cita" @click="toggleBlockquote">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17h4l2-4V7H7zm8 0h4l2-4V7h-6z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('paragraph', { textAlign: 'left' }) }" :disabled="disabled || showHtmlSource" title="Alinear a la izquierda" aria-label="Alinear a la izquierda" @click="setAlignment('left')">
+				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isTextAlignToolActive('left') }" :disabled="disabled || showHtmlSource" title="Alinear a la izquierda" aria-label="Alinear a la izquierda" @click="setAlignment('left')">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16V4H4zm0 4h10V8H4zm0 4h16v-2H4zm0 4h10v-2H4z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('paragraph', { textAlign: 'center' }) }" :disabled="disabled || showHtmlSource" title="Centrar" aria-label="Centrar" @click="setAlignment('center')">
+				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isTextAlignToolActive('center') }" :disabled="disabled || showHtmlSource" title="Centrar" aria-label="Centrar" @click="setAlignment('center')">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16V4H4zm3 4h10V8H7zm-3 4h16v-2H4zm3 4h10v-2H7z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('paragraph', { textAlign: 'right' }) }" :disabled="disabled || showHtmlSource" title="Alinear a la derecha" aria-label="Alinear a la derecha" @click="setAlignment('right')">
+				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isTextAlignToolActive('right') }" :disabled="disabled || showHtmlSource" title="Alinear a la derecha" aria-label="Alinear a la derecha" @click="setAlignment('right')">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16V4H4zm6 4h10V8H10zm-6 4h16v-2H4zm6 4h10v-2H10z" fill="currentColor" /></svg>
 				</button>
 				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('link') }" :disabled="disabled || showHtmlSource" title="Enlace" aria-label="Enlace" @click="toggleLink">

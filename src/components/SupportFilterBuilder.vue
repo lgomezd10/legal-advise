@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import type { AssignableOption, SavedFilter, SearchableSelectOption, StatusOption, TypeNode } from '@/types'
 import SearchableSelect from './SearchableSelect.vue'
 
-type CriteriaKey = 'status' | 'createdBy' | 'assignedUser' | 'assignedGroup' | 'typeId' | 'city' | 'text' | 'updatedWithinDays' | 'createdAt' | 'updatedAt' | 'unassigned' | 'hasAttachments'
+type CriteriaKey = 'status' | 'createdBy' | 'assignedUser' | 'assignedGroup' | 'typeId' | 'province' | 'text' | 'updatedWithinDays' | 'createdAt' | 'updatedAt' | 'unassigned' | 'hasAttachments'
 
 type FilterCriteriaState = {
 	status: string[]
@@ -11,7 +11,7 @@ type FilterCriteriaState = {
 	assignedUser: string
 	assignedGroup: string
 	typeId: string
-	city: string
+	province: string
 	text: string
 	updatedWithinDays: string
 	createdAtFrom: string
@@ -33,6 +33,7 @@ const props = defineProps<{
 	filters: SavedFilter[]
 	statuses: StatusOption[]
 	types: TypeNode[]
+	provinces: string[]
 	users: AssignableOption[]
 	groups: AssignableOption[]
 	initialFilterId?: number | null
@@ -51,7 +52,7 @@ const criteria = reactive<FilterCriteriaState>({
 	assignedUser: '',
 	assignedGroup: '',
 	typeId: '',
-	city: '',
+	province: '',
 	text: '',
 	updatedWithinDays: '',
 	createdAtFrom: '',
@@ -68,7 +69,7 @@ const enabledCriteria = reactive<Record<CriteriaKey, boolean>>({
 	assignedUser: false,
 	assignedGroup: false,
 	typeId: false,
-	city: false,
+	province: false,
 	text: false,
 	updatedWithinDays: false,
 	createdAt: false,
@@ -83,7 +84,7 @@ const draftCriteria = reactive<FilterCriteriaState>({
 	assignedUser: '',
 	assignedGroup: '',
 	typeId: '',
-	city: '',
+	province: '',
 	text: '',
 	updatedWithinDays: '',
 	createdAtFrom: '',
@@ -100,7 +101,7 @@ const criteriaNegation = reactive<CriteriaNegationState>({
 	assignedUser: false,
 	assignedGroup: false,
 	typeId: false,
-	city: false,
+	province: false,
 	text: false,
 	updatedWithinDays: false,
 	createdAt: false,
@@ -115,7 +116,7 @@ const draftNegation = reactive<CriteriaNegationState>({
 	assignedUser: false,
 	assignedGroup: false,
 	typeId: false,
-	city: false,
+	province: false,
 	text: false,
 	updatedWithinDays: false,
 	createdAt: false,
@@ -154,11 +155,11 @@ const criterionOptions: Array<{ key: CriteriaKey, label: string }> = [
 	{ key: 'assignedUser', label: 'Usuario asignado' },
 	{ key: 'assignedGroup', label: 'Grupo asignado' },
 	{ key: 'typeId', label: 'Tipo' },
-	{ key: 'city', label: 'Ciudad' },
+	{ key: 'province', label: 'Provincia' },
 	{ key: 'text', label: 'Texto libre' },
 	{ key: 'updatedWithinDays', label: 'Fecha reciente' },
-	{ key: 'createdAt', label: 'Fecha de creacion' },
-	{ key: 'updatedAt', label: 'Fecha de ultima modificacion' },
+	{ key: 'createdAt', label: 'Fecha de creación' },
+	{ key: 'updatedAt', label: 'Fecha de última modificación' },
 	{ key: 'unassigned', label: 'Sin asignar' },
 	{ key: 'hasAttachments', label: 'Documentos adjuntos' },
 ]
@@ -166,6 +167,7 @@ const criterionOptions: Array<{ key: CriteriaKey, label: string }> = [
 const safeFilters = computed<SavedFilter[]>(() => normalizeCollection<SavedFilter>(props.filters))
 const safeStatuses = computed<StatusOption[]>(() => normalizeCollection<StatusOption>(props.statuses))
 const safeTypes = computed<TypeNode[]>(() => normalizeCollection<TypeNode>(props.types))
+const safeProvinces = computed<string[]>(() => normalizeCollection<string>(props.provinces))
 const safeUsers = computed<AssignableOption[]>(() => normalizeCollection<AssignableOption>(props.users))
 const safeGroups = computed<AssignableOption[]>(() => normalizeCollection<AssignableOption>(props.groups))
 const typeOptions = computed(() => flattenTypes(safeTypes.value))
@@ -198,6 +200,10 @@ const typeSelectOptions = computed<SearchableSelectOption[]>(() => typeOptions.v
 	value: String(item.id),
 	label: item.label,
 })))
+const provinceOptions = computed<SearchableSelectOption[]>(() => safeProvinces.value.map((province) => ({
+	value: province,
+	label: province,
+})))
 const activeCriteria = computed<Record<string, unknown>>(() => {
 	const next: Record<string, unknown> = {}
 	if (enabledCriteria.status && criteria.status.length > 0) {
@@ -215,8 +221,8 @@ const activeCriteria = computed<Record<string, unknown>>(() => {
 	if (enabledCriteria.typeId && criteria.typeId) {
 		next.typeId = Number(criteria.typeId)
 	}
-	if (enabledCriteria.city && criteria.city.trim()) {
-		next.city = criteria.city.trim()
+	if (enabledCriteria.province && criteria.province.trim()) {
+		next.province = criteria.province.trim()
 	}
 	if (enabledCriteria.text && criteria.text.trim()) {
 		next.text = criteria.text.trim()
@@ -269,8 +275,8 @@ const activeFilterChips = computed<FilterChip[]>(() => {
 	if (enabledCriteria.typeId && criteria.typeId) {
 		chips.push({ key: 'typeId', label: withNegationLabel('typeId', `Tipo: ${formatType(criteria.typeId)}`) })
 	}
-	if (enabledCriteria.city && criteria.city.trim()) {
-		chips.push({ key: 'city', label: withNegationLabel('city', `Ciudad: ${criteria.city.trim()}`) })
+	if (enabledCriteria.province && criteria.province.trim()) {
+		chips.push({ key: 'province', label: withNegationLabel('province', `Provincia: ${criteria.province.trim()}`) })
 	}
 	if (enabledCriteria.text && criteria.text.trim()) {
 		chips.push({ key: 'text', label: withNegationLabel('text', `Texto: ${criteria.text.trim()}`) })
@@ -279,10 +285,10 @@ const activeFilterChips = computed<FilterChip[]>(() => {
 		chips.push({ key: 'updatedWithinDays', label: withNegationLabel('updatedWithinDays', `Ultimos ${criteria.updatedWithinDays} dias`) })
 	}
 	if (enabledCriteria.createdAt && (criteria.createdAtFrom || criteria.createdAtTo)) {
-		chips.push({ key: 'createdAt', label: withNegationLabel('createdAt', `Creacion: ${formatDateRange(criteria.createdAtFrom, criteria.createdAtTo)}`) })
+		chips.push({ key: 'createdAt', label: withNegationLabel('createdAt', `Creación: ${formatDateRange(criteria.createdAtFrom, criteria.createdAtTo)}`) })
 	}
 	if (enabledCriteria.updatedAt && (criteria.updatedAtFrom || criteria.updatedAtTo)) {
-		chips.push({ key: 'updatedAt', label: withNegationLabel('updatedAt', `Ultima modificacion: ${formatDateRange(criteria.updatedAtFrom, criteria.updatedAtTo)}`) })
+		chips.push({ key: 'updatedAt', label: withNegationLabel('updatedAt', `Última modificación: ${formatDateRange(criteria.updatedAtFrom, criteria.updatedAtTo)}`) })
 	}
 	if (enabledCriteria.unassigned && criteria.unassigned) {
 		chips.push({ key: 'unassigned', label: withNegationLabel('unassigned', 'Sin asignar') })
@@ -367,8 +373,8 @@ function clearCriterionValue(key: CriteriaKey) {
 		criteria.assignedGroup = ''
 	} else if (key === 'typeId') {
 		criteria.typeId = ''
-	} else if (key === 'city') {
-		criteria.city = ''
+	} else if (key === 'province') {
+		criteria.province = ''
 	} else if (key === 'text') {
 		criteria.text = ''
 	} else if (key === 'updatedWithinDays') {
@@ -392,7 +398,7 @@ function resetDraft() {
 	draftCriteria.assignedUser = ''
 	draftCriteria.assignedGroup = ''
 	draftCriteria.typeId = ''
-	draftCriteria.city = ''
+	draftCriteria.province = ''
 	draftCriteria.text = ''
 	draftCriteria.updatedWithinDays = ''
 	draftCriteria.createdAtFrom = ''
@@ -413,7 +419,7 @@ function loadDraftForCriterion(key: CriteriaKey) {
 	draftCriteria.assignedUser = key === 'assignedUser' ? criteria.assignedUser : ''
 	draftCriteria.assignedGroup = key === 'assignedGroup' ? criteria.assignedGroup : ''
 	draftCriteria.typeId = key === 'typeId' ? criteria.typeId : ''
-	draftCriteria.city = key === 'city' ? criteria.city : ''
+	draftCriteria.province = key === 'province' ? criteria.province : ''
 	draftCriteria.text = key === 'text' ? criteria.text : ''
 	draftCriteria.updatedWithinDays = key === 'updatedWithinDays' ? criteria.updatedWithinDays : ''
 	draftCriteria.createdAtFrom = key === 'createdAt' ? criteria.createdAtFrom : ''
@@ -495,8 +501,8 @@ function hasDraftValue(key: CriteriaKey) {
 	if (key === 'typeId') {
 		return Boolean(draftCriteria.typeId)
 	}
-	if (key === 'city') {
-		return Boolean(draftCriteria.city.trim())
+	if (key === 'province') {
+		return Boolean(draftCriteria.province.trim())
 	}
 	if (key === 'text') {
 		return Boolean(draftCriteria.text.trim())
@@ -533,8 +539,8 @@ function applyDraftCriterion() {
 		criteria.assignedGroup = draftCriteria.assignedGroup
 	} else if (key === 'typeId') {
 		criteria.typeId = draftCriteria.typeId
-	} else if (key === 'city') {
-		criteria.city = draftCriteria.city.trim()
+	} else if (key === 'province') {
+		criteria.province = draftCriteria.province.trim()
 	} else if (key === 'text') {
 		criteria.text = draftCriteria.text.trim()
 	} else if (key === 'updatedWithinDays') {
@@ -577,7 +583,7 @@ function resetBuilder() {
 	criteria.assignedUser = ''
 	criteria.assignedGroup = ''
 	criteria.typeId = ''
-	criteria.city = ''
+	criteria.province = ''
 	criteria.text = ''
 	textSearchInput.value = ''
 	criteria.updatedWithinDays = ''
@@ -602,6 +608,10 @@ function normalizeCriteria(source: Record<string, unknown>) {
 	for (const [key, value] of Object.entries(source)) {
 		normalized[key] = Array.isArray(value) ? [...value] : value
 	}
+	if ((!('province' in normalized) || normalized.province === null || normalized.province === '') && typeof normalized.city === 'string' && normalized.city.trim() !== '') {
+		normalized.province = normalized.city.trim()
+	}
+	delete normalized.city
 
 	return normalized
 }
@@ -648,8 +658,8 @@ function applyCriteria(nextCriteria: Record<string, unknown>, filterId: number |
 			criteria.assignedGroup = String(rawValue)
 		} else if (key === 'typeId') {
 			criteria.typeId = String(rawValue)
-		} else if (key === 'city') {
-			criteria.city = String(rawValue)
+		} else if (key === 'province') {
+			criteria.province = String(rawValue)
 		} else if (key === 'text') {
 			criteria.text = String(rawValue)
 			textSearchInput.value = criteria.text
@@ -882,22 +892,25 @@ function getSuggestedSaveName() {
 				</div>
 				<button v-for="chip in activeFilterChips" :key="chip.key" class="gi-filter-chip gi-filter-chip--action" type="button" @click="editCriterion(chip.key)">
 					<span class="gi-filter-chip__text">{{ chip.label }}</span>
-					<span class="gi-filter-chip__edit">Editar</span>
 					<span class="gi-filter-chip__remove" role="button" :aria-label="`Quitar ${chip.label}`" @click.stop="removeCriterion(chip.key)">x</span>
 				</button>
-				<button class="gi-filter-chip-bar__add" type="button" aria-label="Anadir condicion" @click="openAddCriterionModal">+</button>
+				<button class="gi-filter-chip-bar__add" type="button" aria-label="Añadir condicion" @click="openAddCriterionModal">+</button>
 			</div>
 			<div class="gi-filter-chip-bar__actions">
+				<button class="gi-round-icon-button gi-filter-chip-bar__icon-action gi-filter-chip-bar__icon-action--danger" type="button" aria-label="Limpiar filtros aplicados" title="Limpiar filtros aplicados" @click="resetBuilder">
+					<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+						<path d="M4.2 4.2a1 1 0 0 1 1.4 0L8 6.6l2.4-2.4a1 1 0 1 1 1.4 1.4L9.4 8l2.4 2.4a1 1 0 0 1-1.4 1.4L8 9.4l-2.4 2.4a1 1 0 0 1-1.4-1.4L6.6 8 4.2 5.6a1 1 0 0 1 0-1.4Z" fill="currentColor" />
+					</svg>
+				</button>
 				<button class="gi-round-icon-button gi-filter-chip-bar__icon-action" type="button" aria-label="Guardar filtro" title="Guardar filtro" @click="openSaveModal">
 					<span aria-hidden="true">&#128190;</span>
 				</button>
-				<button class="gi-ghost-button gi-filter-chip-bar__text-action" type="button" @click="resetBuilder">Limpiar</button>
 			</div>
 		</div>
 		</div>
 
-		<div v-if="modalOpen" class="gi-dialog-backdrop" @click.self="closeAddCriterionModal">
-			<section class="gi-dialog gi-dialog--wide" aria-label="Añadir filtro">
+		<div v-if="modalOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="closeAddCriterionModal">
+			<section class="gi-app-dialog gi-dialog gi-dialog--wide" aria-label="Añadir filtro">
 				<header class="gi-dialog__header">
 					<h3 class="gi-dialog__title">Añadir filtro</h3>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeAddCriterionModal">x</button>
@@ -936,14 +949,14 @@ function getSuggestedSaveName() {
 						<SearchableSelect :model-value="draftCriteria.typeId || null" :options="typeSelectOptions" placeholder="Selecciona un tipo" @update:modelValue="onDraftTypeSelect" />
 					</label>
 
-					<label v-else-if="modalCriterionKey === 'city'" class="gi-field">
-						<span>Ciudad</span>
-						<input v-model="draftCriteria.city" class="gi-input" placeholder="Ej. Madrid" />
+					<label v-else-if="modalCriterionKey === 'province'" class="gi-field">
+						<span>Provincia</span>
+						<SearchableSelect :model-value="draftCriteria.province || null" :options="provinceOptions" placeholder="Selecciona una provincia" search-placeholder="Buscar provincia" clearable @update:modelValue="draftCriteria.province = $event ? String($event) : ''" />
 					</label>
 
 					<label v-else-if="modalCriterionKey === 'text'" class="gi-field">
 						<span>Texto libre</span>
-						<input v-model="draftCriteria.text" class="gi-input" placeholder="Titulo, descripcion o seguimiento" />
+						<input v-model="draftCriteria.text" class="gi-input" placeholder="Título, descripción o seguimiento" />
 					</label>
 
 					<label v-else-if="modalCriterionKey === 'updatedWithinDays'" class="gi-field">
@@ -991,13 +1004,13 @@ function getSuggestedSaveName() {
 
 				<footer class="gi-dialog__footer">
 					<button class="gi-ghost-button" type="button" @click="closeAddCriterionModal">Cancelar</button>
-					<button class="gi-primary-button" type="button" :disabled="!modalCriterionKey || !hasDraftValue(modalCriterionKey)" @click="applyDraftCriterion">Anadir</button>
+					<button class="gi-primary-button" type="button" :disabled="!modalCriterionKey || !hasDraftValue(modalCriterionKey)" @click="applyDraftCriterion">Añadir</button>
 				</footer>
 			</section>
 		</div>
 
-		<div v-if="saveModalOpen" class="gi-dialog-backdrop" @click.self="closeSaveModal">
-			<section class="gi-dialog gi-dialog--compact" aria-label="Guardar filtro">
+		<div v-if="saveModalOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="closeSaveModal">
+			<section class="gi-app-dialog gi-dialog gi-dialog--compact" aria-label="Guardar filtro">
 				<header class="gi-dialog__header">
 					<h3 class="gi-dialog__title">Guardar filtro</h3>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeSaveModal">x</button>
@@ -1018,8 +1031,8 @@ function getSuggestedSaveName() {
 			</section>
 		</div>
 
-		<div v-if="deleteModalOpen" class="gi-dialog-backdrop" @click.self="closeDeleteModal">
-			<section class="gi-dialog gi-dialog--compact" aria-label="Eliminar filtro guardado">
+		<div v-if="deleteModalOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="closeDeleteModal">
+			<section class="gi-app-dialog gi-dialog gi-dialog--compact" aria-label="Eliminar filtro guardado">
 				<header class="gi-dialog__header">
 					<h3 class="gi-dialog__title">Eliminar filtro</h3>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeDeleteModal">x</button>
@@ -1045,6 +1058,7 @@ function getSuggestedSaveName() {
 	padding: 1rem 1.1rem;
 	border-radius: 24px;
 	margin-bottom: 1.2rem;
+	min-width: 0;
 }
 
 .gi-filter-panel__actions,
@@ -1066,16 +1080,20 @@ function getSuggestedSaveName() {
 }
 
 .gi-filter-toolbar {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+	gap: .75rem;
 	align-items: flex-end;
+	min-width: 0;
 }
 
 .gi-filter-toolbar__field {
 	min-width: 0;
-	flex: 1 1 22rem;
+	width: 100%;
 }
 
 .gi-filter-toolbar__field--search {
-	flex: 2 1 28rem;
+	grid-column: 1 / span 2;
 }
 
 .gi-filter-toolbar__search-input {
@@ -1086,6 +1104,7 @@ function getSuggestedSaveName() {
 .gi-filter-chip-group {
 	display: grid;
 	gap: .45rem;
+	min-width: 0;
 }
 
 .gi-filter-chip-group__label {
@@ -1093,7 +1112,7 @@ function getSuggestedSaveName() {
 }
 
 .gi-filter-toolbar__delete-button {
-	flex: 0 0 auto;
+	justify-self: start;
 	min-height: 2.25rem;
 	padding: .42rem .9rem;
 	border: none;
@@ -1116,6 +1135,8 @@ function getSuggestedSaveName() {
 
 .gi-filter-toolbar__field :deep(.gi-search-select) {
 	flex: 1 1 auto;
+	width: 100%;
+	max-width: 100%;
 }
 
 .gi-filter-toolbar__field :deep(.gi-search-select__trigger) {
@@ -1123,6 +1144,7 @@ function getSuggestedSaveName() {
 	padding: .42rem .7rem;
 	border-radius: 999px;
 	font-size: .94rem;
+	max-width: 100%;
 }
 
 .gi-filter-modal__date-range {
@@ -1156,18 +1178,33 @@ function getSuggestedSaveName() {
 	align-items: center;
 	min-width: 0;
 	flex: 1;
+	overflow: hidden;
 }
 
 .gi-filter-chip-bar__actions {
 	display: flex;
-	gap: .55rem;
+	gap: .35rem;
 	align-items: center;
 	flex: none;
+	min-width: 0;
+}
+
+.gi-filter-chip-bar__icon-action--danger {
+	color: #b03a2f;
+	background: rgba(176, 58, 47, .12);
+	border-color: rgba(176, 58, 47, .18);
+}
+
+.gi-filter-chip-bar__icon-action--danger:hover,
+.gi-filter-chip-bar__icon-action--danger:focus-visible {
+	background: rgba(176, 58, 47, .18);
+	color: #8f2c23;
 }
 
 .gi-filter-chip {
 	justify-content: flex-start;
 	max-width: 100%;
+	min-width: 0;
 	padding: .3rem .48rem .3rem .7rem;
 	border-radius: 999px;
 	background: rgba(49, 96, 91, .1);
@@ -1192,12 +1229,6 @@ function getSuggestedSaveName() {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	max-width: 100%;
-}
-
-.gi-filter-chip__edit {
-	font-size: .78rem;
-	color: #45675e;
-	white-space: nowrap;
 }
 
 .gi-filter-chip-bar__add {
@@ -1255,10 +1286,20 @@ function getSuggestedSaveName() {
 @media (max-width: 900px) {
 	.gi-filter-toolbar {
 		align-items: stretch;
+		grid-template-columns: minmax(0, 1fr);
 	}
 
 	.gi-filter-toolbar__field {
-		flex: 1 1 auto;
+		grid-column: 1;
+	}
+
+	.gi-filter-toolbar__field--search {
+		grid-column: 1;
+	}
+
+	.gi-filter-toolbar__delete-button {
+		justify-self: stretch;
+		width: 100%;
 	}
 
 	.gi-filter-chip-bar,
@@ -1269,12 +1310,51 @@ function getSuggestedSaveName() {
 
 	.gi-filter-chip-bar__items {
 		width: 100%;
+		align-items: stretch;
 	}
 
 	.gi-filter-chip-bar__actions {
 		width: 100%;
-		justify-content: flex-end;
+		justify-content: flex-start;
 	}
 
+}
+
+@media (max-width: 640px) {
+	.gi-filter-panel {
+		padding: .9rem;
+		border-radius: 20px;
+	}
+
+	.gi-filter-toolbar__field :deep(.gi-search-select__trigger) {
+		border-radius: 16px;
+	}
+
+	.gi-filter-chip-bar {
+		padding: .7rem;
+	}
+
+	.gi-filter-chip-bar__items {
+		flex-direction: column;
+		flex-wrap: nowrap;
+	}
+
+	.gi-filter-chip {
+		width: 100%;
+		border-radius: 16px;
+	}
+
+	.gi-filter-chip__text {
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+
+	.gi-filter-chip-bar__add {
+		align-self: flex-start;
+	}
+
+	.gi-filter-chip-bar__actions {
+		justify-content: flex-start;
+	}
 }
 </style>

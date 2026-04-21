@@ -24,7 +24,7 @@ async function saveFilters(nextFilters: SavedFilter[]) {
 
 async function restoreFilters() {
 	filterSettings.value = (await restoreSupportFilterSettings()).items
-	statusMessage.value = 'Se ha restaurado la configuracion global de filtros.'
+	statusMessage.value = 'Se ha restaurado la configuración global de filtros.'
 }
 </script>
 
@@ -40,7 +40,7 @@ async function restoreFilters() {
 			description="Puedes ajustar tu copia local de los filtros globales, cambiar cuál se aplica por defecto y restaurar en cualquier momento la configuración definida por administración."
 			save-label="Guardar filtros"
 			empty-label="No hay filtros disponibles para soporte."
-			secondary-action-label="Restaurar configuracion global"
+			secondary-action-label="Restaurar configuración global"
 			lock-predefined-filters
 			@save="saveFilters"
 			@secondary-action="restoreFilters"

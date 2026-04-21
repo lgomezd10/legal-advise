@@ -34,6 +34,7 @@ if (!ticketsStore.draft) {
 
 watch(selectedProvince, () => {
 	if (selectedProvince.value) {
+		bootstrapStore.ensureProvinceOption(selectedProvince.value)
 		typeStepError.value = ''
 	}
 })
@@ -44,7 +45,7 @@ function continueToDetails() {
 	}
 
 	if (!selectedProvince.value) {
-		typeStepError.value = 'Debes seleccionar una provincia o anadir una nueva.'
+		typeStepError.value = 'Debes seleccionar una provincia o Añadir una nueva.'
 		return
 	}
 
@@ -66,12 +67,19 @@ function cancel() {
 }
 
 async function submit(payload: Record<string, unknown>) {
+	const nextPersonalConfig = {
+		...bootstrapStore.data.personalConfig,
+		...((payload.personalData as Record<string, string> | undefined) ?? {}),
+		province: selectedProvince.value ?? '',
+	}
 	const finalPayload = {
 		...payload,
 		province: selectedProvince.value,
+		personalData: nextPersonalConfig,
 	}
 	ticketsStore.mergeDraft(finalPayload as typeof draft.value)
 	await ticketsStore.create(finalPayload)
+	bootstrapStore.setPersonalConfig(nextPersonalConfig)
 	ticketsStore.clearDraft()
 	await ticketsStore.load('user')
 	await router.push('/mis-incidencias')
@@ -96,12 +104,12 @@ async function submit(payload: Record<string, unknown>) {
 			<TypeCascadeSelector v-model="selectedPath" :types="types" />
 			<label class="gi-field gi-field--wide">
 				<span>Provincia</span>
-				<SearchableSelect v-model="selectedProvince" :options="provinceOptions" placeholder="Selecciona provincia" search-placeholder="Buscar provincia" clearable allow-create create-label="Anadir provincia" />
+				<SearchableSelect v-model="selectedProvince" :options="provinceOptions" placeholder="Selecciona provincia" search-placeholder="Buscar provincia" clearable allow-create create-label="Añadir provincia" />
 			</label>
 			<p v-if="typeStepError" class="gi-ticket-creation-card__error">{{ typeStepError }}</p>
 			<div class="gi-ticket-type-summary">
 				<span class="gi-ticket-type-summary__label">Ruta elegida</span>
-				<strong>{{ typeSummary.length > 0 ? typeSummary.join(' > ') : 'Todavia no has seleccionado un tipo' }}</strong>
+				<strong>{{ typeSummary.length > 0 ? typeSummary.join(' > ') : 'Todavía no has seleccionado un tipo' }}</strong>
 			</div>
 			<div class="gi-ticket-type-summary">
 				<span class="gi-ticket-type-summary__label">Provincia</span>

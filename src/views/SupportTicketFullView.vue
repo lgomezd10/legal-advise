@@ -10,7 +10,7 @@ const route = useRoute()
 const router = useRouter()
 const bootstrapStore = useBootstrapStore()
 const ticketsStore = useTicketsStore()
-const panelRef = ref<{ confirmDiscardChanges: () => boolean } | null>(null)
+const panelRef = ref<{ confirmDiscardChanges: () => boolean | Promise<boolean> } | null>(null)
 
 function canLeaveTicket() {
 	return panelRef.value?.confirmDiscardChanges() ?? true
@@ -103,6 +103,7 @@ function backToSupport() {
 			:roles="bootstrapStore.data.roles"
 			:users="assignableUsers"
 			:groups="assignableGroups"
+			:types="bootstrapStore.data.catalogs.types"
 			:fields="bootstrapStore.data.catalogs.fields"
 			:current-user-uid="bootstrapStore.data.currentUser.uid"
 			:statuses="statuses"

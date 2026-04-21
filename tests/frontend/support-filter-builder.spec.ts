@@ -24,6 +24,7 @@ describe('SupportFilterBuilder', () => {
 				filters: [],
 				statuses: [],
 				types: [],
+				provinces: [],
 				users: [],
 				groups: [],
 			},
@@ -34,7 +35,7 @@ describe('SupportFilterBuilder', () => {
 			},
 		})
 
-		await wrapper.get('button[aria-label="Anadir condicion"]').trigger('click')
+		await wrapper.get('button[aria-label="Añadir condicion"]').trigger('click')
 		const selects = wrapper.findAll('select.searchable-select-interactive-stub')
 		await selects[1].setValue('createdAt')
 
@@ -60,6 +61,7 @@ describe('SupportFilterBuilder', () => {
 					{ id: 'estado_1', label: 'Estado 1', active: false },
 				],
 				types: [],
+				provinces: [],
 				users: [],
 				groups: [],
 			},
@@ -70,7 +72,7 @@ describe('SupportFilterBuilder', () => {
 			},
 		})
 
-		await wrapper.get('button[aria-label="Anadir condicion"]').trigger('click')
+		await wrapper.get('button[aria-label="Añadir condicion"]').trigger('click')
 		const selects = wrapper.findAll('select.searchable-select-interactive-stub')
 		await selects[1].setValue('status')
 

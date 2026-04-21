@@ -21,10 +21,10 @@ describe('Pantallas de configuración', () => {
 			},
 		})
 
-		expect(wrapper.text()).toContain('Configuracion')
-		expect(wrapper.text()).toContain('Configuracion personal')
-		expect(wrapper.text()).toContain('Configuracion de soporte')
-		expect(wrapper.text()).toContain('Consola de administracion')
+		expect(wrapper.text()).toContain('Configuración')
+		expect(wrapper.text()).toContain('Configuración personal')
+		expect(wrapper.text()).toContain('Configuración de soporte')
+		expect(wrapper.text()).toContain('Consola de administración')
 
 		const triggers = wrapper.findAll('button.gi-config-accordion__trigger')
 		await triggers[0].trigger('click')
@@ -44,13 +44,14 @@ describe('Pantallas de configuración', () => {
 		expect(wrapper.text()).toContain('Guardar cambios')
 		expect(wrapper.text()).toContain('Correo')
 		expect(wrapper.text()).toContain('Ciudad')
+		expect(wrapper.text()).toContain('Provincia')
 
 		await wrapper.get('input[type="email"]').setValue('nuevo@example.com')
 		await wrapper.get('button').trigger('click')
 		await flushPromises()
 
-		expect(updatePersonalConfigMock).toHaveBeenCalledWith({ email: 'nuevo@example.com', city: 'Madrid' })
-		expect(wrapper.text()).toContain('Configuracion personal guardada.')
+		expect(updatePersonalConfigMock).toHaveBeenCalledWith({ email: 'nuevo@example.com', city: 'Madrid', province: 'Madrid' })
+		expect(wrapper.text()).toContain('Configuración personal guardada.')
 	})
 
 	it('muestra las secciones y acciones clave de la consola de administración', async() => {
@@ -79,13 +80,21 @@ describe('Pantallas de configuración', () => {
 		}
 
 		await wrapper.get('button.gi-admin-topnav__item:nth-of-type(2)').trigger('click')
-		expect(wrapper.text()).toContain('Anadir criticidad')
+		expect(wrapper.text()).toContain('Añadir criticidad')
 
 		await wrapper.get('button.gi-admin-topnav__item:nth-of-type(5)').trigger('click')
 		expect(wrapper.text()).toContain('Filtros')
 
 		await wrapper.get('button.gi-admin-topnav__item:nth-of-type(6)').trigger('click')
-		expect(wrapper.text()).toContain('Anadir regla')
+		expect(wrapper.text()).toContain('Añadir regla')
+
+		await wrapper.get('button.gi-admin-topnav__item:nth-of-type(7)').trigger('click')
+		expect(wrapper.text()).toContain('Usuario')
+		expect(wrapper.text()).toContain('Soporte')
+		expect(wrapper.text()).toContain('Administrador')
+		expect(wrapper.text()).toContain('Añadir usuario o grupo')
+		expect(wrapper.text()).toContain('Añadir')
+		expect(wrapper.text()).not.toContain('Añadir perfil')
 
 		await wrapper.get('button.gi-admin-topnav__item:nth-of-type(8)').trigger('click')
 		expect(wrapper.text()).toContain('Tamano maximo por fichero (MB)')

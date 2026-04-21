@@ -13,7 +13,7 @@ use OCP\IUserSession;
 
 class AdminApiController extends BaseApiController {
 	public function __construct(string $appName, IRequest $request, private readonly IUserSession $userSession, private readonly RoleService $roleService, private readonly AdminConfigService $adminConfigService) {
-		parent::__construct($appName, $request);
+		parent::__construct($appName, $request, $userSession, $roleService);
 	}
 
 	#[NoAdminRequired]
@@ -33,7 +33,7 @@ class AdminApiController extends BaseApiController {
 	}
 
 	private function assertAdmin(): void {
-		$uid = $this->userSession->getUser()?->getUID() ?? '';
+		$uid = $this->assertAppAccess();
 		if (!$this->roleService->hasRole($uid, RoleService::ADMIN)) {
 			throw new \RuntimeException('Forbidden', 403);
 		}

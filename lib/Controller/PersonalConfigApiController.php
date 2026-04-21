@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\ConsultasLegales\Controller;
 
 use OCA\ConsultasLegales\Service\PersonalConfigService;
+use OCA\ConsultasLegales\Service\RoleService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\IRequest;
@@ -14,16 +15,17 @@ class PersonalConfigApiController extends BaseApiController {
 	public function __construct(
 		string $appName,
 		IRequest $request,
-		private readonly IUserSession $userSession,
+		IUserSession $userSession,
+		RoleService $roleService,
 		private readonly PersonalConfigService $personalConfigService,
 	) {
-		parent::__construct($appName, $request);
+		parent::__construct($appName, $request, $userSession, $roleService);
 	}
 
 	#[NoAdminRequired]
 	public function show(): DataResponse {
 		return $this->respond(function (): array {
-			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$uid = $this->assertAppAccess();
 			return ['values' => $this->personalConfigService->getForUser($uid)];
 		});
 	}
@@ -31,7 +33,7 @@ class PersonalConfigApiController extends BaseApiController {
 	#[NoAdminRequired]
 	public function update(): DataResponse {
 		return $this->respond(function (): array {
-			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$uid = $this->assertAppAccess();
 			$values = $this->request->getParam('values') ?? [];
 			return ['values' => $this->personalConfigService->saveForUser($uid, is_array($values) ? $values : [])];
 		});

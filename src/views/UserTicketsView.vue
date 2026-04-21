@@ -106,13 +106,13 @@ function isClosedTicket(ticket: Ticket) {
 			<div class="gi-ticket-list-header__filters">
 				<label class="gi-search-box gi-ticket-list-header__search">
 					<span class="gi-search-box__label">Buscar</span>
-					<input v-model="searchText" class="gi-search-box__input" type="search" placeholder="Buscar por numero, estado, titulo, descripcion, comentarios publicos, fecha, provincia o ciudad" />
+					<input v-model="searchText" class="gi-search-box__input" type="search" placeholder="Buscar por número, estado, título, descripción, comentarios públicos, fecha, provincia o ciudad" />
 				</label>
 				<label class="gi-field gi-ticket-list-header__date-field">
 					<span>Fecha</span>
 					<select v-model="dateField" class="gi-input gi-ticket-list-header__date-field-select">
-						<option value="createdAt">Creacion</option>
-						<option value="updatedAt">Ultima modificacion</option>
+						<option value="createdAt">Creación</option>
+						<option value="updatedAt">Última modificación</option>
 					</select>
 				</label>
 				<label class="gi-field">
@@ -131,21 +131,21 @@ function isClosedTicket(ticket: Ticket) {
 					<span>Pendiente de mi</span>
 					<strong>{{ pendingTickets.length }}</strong>
 				</button>
-				<TicketList v-if="openSections.pending" :tickets="pendingTickets" :statuses="statuses" :users="assignableUsers" :groups="assignableGroups" :empty-label="searchText.trim() === '' ? 'No hay tickets pendientes de ti' : 'No hay tickets pendientes de ti que coincidan con la busqueda'" @open="openTicket" />
+				<TicketList v-if="openSections.pending" :tickets="pendingTickets" :statuses="statuses" :types="bootstrapStore.data.catalogs.types" :users="assignableUsers" :groups="assignableGroups" :empty-label="searchText.trim() === '' ? 'No hay tickets pendientes de ti' : 'No hay tickets pendientes de ti que coincidan con la búsqueda'" @open="openTicket" />
 			</section>
 			<section class="gi-ticket-section">
 				<button class="gi-ticket-section__header" type="button" @click="openSections.open = !openSections.open">
 					<span>Tickets abiertos</span>
 					<strong>{{ openTickets.length }}</strong>
 				</button>
-				<TicketList v-if="openSections.open" :tickets="openTickets" :statuses="statuses" :users="assignableUsers" :groups="assignableGroups" :empty-label="searchText.trim() === '' ? 'No hay tickets abiertos' : 'No hay tickets abiertos que coincidan con la busqueda'" @open="openTicket" />
+				<TicketList v-if="openSections.open" :tickets="openTickets" :statuses="statuses" :types="bootstrapStore.data.catalogs.types" :users="assignableUsers" :groups="assignableGroups" :empty-label="searchText.trim() === '' ? 'No hay tickets abiertos' : 'No hay tickets abiertos que coincidan con la búsqueda'" @open="openTicket" />
 			</section>
 			<section class="gi-ticket-section">
 				<button class="gi-ticket-section__header" type="button" @click="openSections.closed = !openSections.closed">
 					<span>Tickets cerrados</span>
 					<strong>{{ closedTickets.length }}</strong>
 				</button>
-				<TicketList v-if="openSections.closed" :tickets="closedTickets" :statuses="statuses" :users="assignableUsers" :groups="assignableGroups" :empty-label="searchText.trim() === '' ? 'No hay tickets cerrados' : 'No hay tickets cerrados que coincidan con la busqueda'" @open="openTicket" />
+				<TicketList v-if="openSections.closed" :tickets="closedTickets" :statuses="statuses" :types="bootstrapStore.data.catalogs.types" :users="assignableUsers" :groups="assignableGroups" :empty-label="searchText.trim() === '' ? 'No hay tickets cerrados' : 'No hay tickets cerrados que coincidan con la búsqueda'" @open="openTicket" />
 			</section>
 		</div>
 	</section>

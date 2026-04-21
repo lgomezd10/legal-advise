@@ -12,6 +12,7 @@ class RoleService {
 	public const USER = 'usuario';
 	public const SUPPORT = 'soporte';
 	public const ADMIN = 'administrador';
+	private const ALLOWED_ROLES = [self::USER, self::SUPPORT, self::ADMIN];
 
 	public function __construct(
 		private readonly ProfileAssignmentMapper $profileAssignmentMapper,
@@ -21,27 +22,41 @@ class RoleService {
 	}
 
 	public function getEffectiveRoles(string $uid): array {
-		$roles = [self::USER => true];
-
-		if ($this->groupManager->isAdmin($uid)) {
-			$roles[self::ADMIN] = true;
+		$uid = trim($uid);
+		if ($uid === '') {
+			return [];
 		}
 
+		$user = $this->userManager->get($uid);
+		if ($user === null) {
+			return [];
+		}
+
+		$roles = [];
+
 		foreach ($this->profileAssignmentMapper->findAllOrdered('id', 'ASC') as $assignment) {
-			$user = $this->userManager->get($uid);
+			$profile = trim((string) $assignment->getProfile());
+			if (!in_array($profile, self::ALLOWED_ROLES, true)) {
+				continue;
+			}
+
 			if ($assignment->getPrincipalType() === 'user' && $assignment->getPrincipalId() === $uid) {
-				$roles[$assignment->getProfile()] = true;
+				$roles[$profile] = true;
 			}
 
 			if ($assignment->getPrincipalType() === 'group') {
 				$group = $this->groupManager->get($assignment->getPrincipalId());
 				if ($group !== null && $user !== null && $group->inGroup($user)) {
-					$roles[$assignment->getProfile()] = true;
+					$roles[$profile] = true;
 				}
 			}
 		}
 
 		return array_keys($roles);
+	}
+
+	public function hasAnyRole(string $uid): bool {
+		return $this->getEffectiveRoles($uid) !== [];
 	}
 
 	public function hasRole(string $uid, string $role): bool {

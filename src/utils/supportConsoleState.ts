@@ -14,13 +14,13 @@ export type SupportConsoleState = {
 const STORAGE_KEY = 'legal_advice:support_console_state'
 
 export const DEFAULT_SUPPORT_COLUMNS: SupportColumnKey[] = ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription']
-export const DEFAULT_COLUMN_EDITOR_ORDER: SupportColumnKey[] = ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription', 'status', 'urgency', 'createdAt']
+export const DEFAULT_COLUMN_EDITOR_ORDER: SupportColumnKey[] = ['number', 'updatedAt', 'assignment', 'createdBy', 'province', 'title', 'userDescription', 'status', 'urgency', 'createdAt']
 export const DEFAULT_SUPPORT_SORT: Pick<SupportConsoleState, 'sortKey' | 'sortDirection'> = {
 	sortKey: 'updatedAt',
 	sortDirection: 'desc',
 }
 
-const KNOWN_COLUMN_KEYS: SupportColumnKey[] = ['number', 'createdBy', 'title', 'userDescription', 'assignment', 'status', 'urgency', 'createdAt', 'updatedAt']
+const KNOWN_COLUMN_KEYS: SupportColumnKey[] = ['number', 'createdBy', 'province', 'title', 'userDescription', 'assignment', 'status', 'urgency', 'createdAt', 'updatedAt']
 
 export function loadSupportConsoleState(): SupportConsoleState | null {
 	if (typeof window === 'undefined') {
@@ -55,4 +55,11 @@ export function normalizeSupportColumns(value: unknown, fallback: SupportColumnK
 	const knownKeys = new Set<SupportColumnKey>(KNOWN_COLUMN_KEYS)
 	const normalized = value.filter((item): item is SupportColumnKey => typeof item === 'string' && knownKeys.has(item as SupportColumnKey))
 	return normalized.length > 0 ? Array.from(new Set(normalized)) : [...fallback]
+}
+
+export function normalizeSupportColumnOrder(value: unknown, fallback: SupportColumnKey[]) {
+	const normalized = normalizeSupportColumns(value, fallback)
+	const existing = new Set<SupportColumnKey>(normalized)
+	const missing = KNOWN_COLUMN_KEYS.filter((key) => !existing.has(key))
+	return [...normalized, ...missing]
 }

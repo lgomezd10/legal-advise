@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\ConsultasLegales\Controller;
 
 use OCA\ConsultasLegales\Service\AttachmentService;
+use OCA\ConsultasLegales\Service\RoleService;
 use OCA\ConsultasLegales\Service\TicketService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
@@ -15,17 +16,18 @@ class TicketApiController extends BaseApiController {
 	public function __construct(
 		string $appName,
 		IRequest $request,
-		private readonly IUserSession $userSession,
+		IUserSession $userSession,
+		RoleService $roleService,
 		private readonly TicketService $ticketService,
 		private readonly AttachmentService $attachmentService,
 	) {
-		parent::__construct($appName, $request);
+		parent::__construct($appName, $request, $userSession, $roleService);
 	}
 
 	#[NoAdminRequired]
 	public function index(): DataResponse {
 		return $this->respond(function (): array {
-			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$uid = $this->assertAppAccess();
 			$scope = (string) ($this->request->getParam('scope') ?? 'user');
 			$criteria = $this->request->getParam('criteria') ?? [];
 			return ['items' => $this->ticketService->list($uid, is_array($criteria) ? $criteria : [], $scope === 'support')];
@@ -35,7 +37,7 @@ class TicketApiController extends BaseApiController {
 	#[NoAdminRequired]
 	public function show(int $id): DataResponse {
 		return $this->respond(function () use ($id): array {
-			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$uid = $this->assertAppAccess();
 			return $this->ticketService->show($uid, $id);
 		});
 	}
@@ -43,7 +45,7 @@ class TicketApiController extends BaseApiController {
 	#[NoAdminRequired]
 	public function create(): DataResponse {
 		return $this->respond(function (): array {
-			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$uid = $this->assertAppAccess();
 			return $this->ticketService->create($uid, $this->request->getParams());
 		}, 201);
 	}
@@ -51,7 +53,7 @@ class TicketApiController extends BaseApiController {
 	#[NoAdminRequired]
 	public function update(int $id): DataResponse {
 		return $this->respond(function () use ($id): array {
-			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$uid = $this->assertAppAccess();
 			return $this->ticketService->update($uid, $id, $this->request->getParams());
 		});
 	}
@@ -59,7 +61,7 @@ class TicketApiController extends BaseApiController {
 	#[NoAdminRequired]
 	public function reopen(int $id): DataResponse {
 		return $this->respond(function () use ($id): array {
-			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$uid = $this->assertAppAccess();
 			return $this->ticketService->reopen($uid, $id);
 		});
 	}
@@ -67,7 +69,7 @@ class TicketApiController extends BaseApiController {
 	#[NoAdminRequired]
 	public function comment(int $id): DataResponse {
 		return $this->respond(function () use ($id): array {
-			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$uid = $this->assertAppAccess();
 			return $this->ticketService->addComment($uid, $id, $this->request->getParams());
 		}, 201);
 	}
@@ -75,7 +77,7 @@ class TicketApiController extends BaseApiController {
 	#[NoAdminRequired]
 	public function uploadAttachment(int $id): DataResponse {
 		return $this->respond(function () use ($id): array {
-			$uid = $this->userSession->getUser()?->getUID() ?? '';
+			$uid = $this->assertAppAccess();
 			$commentId = (int) ($this->request->getParam('commentId') ?? 0);
 			$sourceUrl = $this->request->getParam('sourceUrl');
 			$originalName = $this->request->getParam('originalName');
@@ -92,6 +94,9 @@ class TicketApiController extends BaseApiController {
 
 	#[NoAdminRequired]
 	public function downloadAttachment(int $id): DataResponse {
-		return $this->respond(fn (): array => $this->attachmentService->download($id));
+		return $this->respond(function () use ($id): array {
+			$this->assertAppAccess();
+			return $this->attachmentService->download($id);
+		});
 	}
 }

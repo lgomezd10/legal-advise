@@ -18,6 +18,8 @@ use OCA\ConsultasLegales\Db\Urgency;
 use OCA\ConsultasLegales\Db\UrgencyMapper;
 
 class AdminConfigService {
+	private const ALLOWED_PROFILES = [RoleService::USER, RoleService::SUPPORT, RoleService::ADMIN];
+
 	public function __construct(
 		private readonly DefaultConfigService $defaultConfigService,
 		private readonly ProvinceCatalogService $provinceCatalogService,
@@ -130,17 +132,40 @@ class AdminConfigService {
 		}
 
 		if (isset($payload['profiles']) && is_array($payload['profiles'])) {
+			$normalizedProfiles = [];
 			foreach ($payload['profiles'] as $row) {
-				$entity = new ProfileAssignment();
-				$entity->setProfile((string) $row['profile']);
-				$entity->setPrincipalType((string) $row['principalType']);
-				$entity->setPrincipalId((string) $row['principalId']);
-				if (isset($row['id'])) {
-					$entity->setId((int) $row['id']);
-					$this->profileMapper->update($entity);
-				} else {
-					$this->profileMapper->insert($entity);
+				$profile = trim((string) ($row['profile'] ?? ''));
+				if (!in_array($profile, self::ALLOWED_PROFILES, true)) {
+					throw new \InvalidArgumentException('El perfil indicado no es válido.');
 				}
+
+				$principalType = trim((string) ($row['principalType'] ?? ''));
+				if (!in_array($principalType, ['user', 'group'], true)) {
+					throw new \InvalidArgumentException('El tipo de principal no es válido.');
+				}
+
+				$principalId = trim((string) ($row['principalId'] ?? ''));
+				if ($principalId === '') {
+					throw new \InvalidArgumentException('Debes indicar un usuario o grupo para el perfil.');
+				}
+
+				$normalizedProfiles[$profile . '|' . $principalType . '|' . $principalId] = [
+					'profile' => $profile,
+					'principalType' => $principalType,
+					'principalId' => $principalId,
+				];
+			}
+
+			foreach ($this->profileMapper->findAllOrdered('id', 'ASC') as $existingProfile) {
+				$this->profileMapper->delete($existingProfile);
+			}
+
+			foreach (array_values($normalizedProfiles) as $row) {
+				$entity = new ProfileAssignment();
+				$entity->setProfile($row['profile']);
+				$entity->setPrincipalType($row['principalType']);
+				$entity->setPrincipalId($row['principalId']);
+				$this->profileMapper->insert($entity);
 			}
 		}
 

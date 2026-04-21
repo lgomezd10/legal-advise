@@ -13,7 +13,7 @@ const bootstrapStore = useBootstrapStore()
 const ticketsStore = useTicketsStore()
 const supportMode = computed(() => route.path.startsWith('/soporte'))
 const panelRoles = computed(() => supportMode.value ? bootstrapStore.data.roles : ['usuario'])
-const panelRef = ref<{ confirmDiscardChanges: () => boolean } | null>(null)
+const panelRef = ref<{ confirmDiscardChanges: () => boolean | Promise<boolean> } | null>(null)
 
 function canLeaveTicket() {
 	return panelRef.value?.confirmDiscardChanges() ?? true
@@ -110,6 +110,7 @@ function repeatTicket() {
 		:roles="panelRoles"
 		:users="bootstrapStore.data.assignables.users"
 		:groups="bootstrapStore.data.assignables.groups"
+		:types="bootstrapStore.data.catalogs.types"
 		:fields="bootstrapStore.data.catalogs.fields"
 		:current-user-uid="bootstrapStore.data.currentUser.uid"
 		:statuses="bootstrapStore.data.catalogs.statuses"

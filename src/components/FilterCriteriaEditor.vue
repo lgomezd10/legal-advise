@@ -39,6 +39,7 @@ const enabledCriteria = reactive<Record<CriteriaKey, boolean>>({ status: false, 
 const draftCriteria = reactive<FilterCriteriaState>({ status: [], assignedUser: '', assignedGroup: '', typeId: '', city: '', text: '', updatedWithinDays: '', unassigned: false, hasAttachments: false })
 const modalOpen = ref(false)
 const modalCriterionKey = ref<CriteriaKey | ''>('')
+const syncingFromModelValue = ref(false)
 
 function normalizeCollection<T>(items: T[] | Record<string, T> | undefined | null): T[] {
 	if (Array.isArray(items)) {
@@ -101,6 +102,7 @@ const activeFilterChips = computed<FilterChip[]>(() => {
 })
 
 watch(() => props.modelValue, (value) => {
+	syncingFromModelValue.value = true
 	resetAll()
 	for (const [key, rawValue] of Object.entries(value ?? {})) {
 		if (!(key in enabledCriteria)) continue
@@ -115,9 +117,8 @@ watch(() => props.modelValue, (value) => {
 		else if (key === 'unassigned') criteria.unassigned = Boolean(rawValue)
 		else if (key === 'hasAttachments') criteria.hasAttachments = Boolean(rawValue)
 	}
+	syncingFromModelValue.value = false
 }, { deep: true, immediate: true })
-
-watch(activeCriteria, (value) => emit('update:modelValue', value), { deep: true })
 
 function flattenTypes(types: TypeNode[], prefix = ''): Array<{ id: number, label: string }> {
 	return types.flatMap((item) => {
@@ -177,6 +178,14 @@ function hasDraftValue(key: CriteriaKey) {
 	return draftCriteria.unassigned
 }
 
+function emitCurrentCriteria() {
+	if (syncingFromModelValue.value) {
+		return
+	}
+
+	emit('update:modelValue', activeCriteria.value)
+}
+
 function applyDraftCriterion() {
 	if (!modalCriterionKey.value || !hasDraftValue(modalCriterionKey.value)) return
 	const key = modalCriterionKey.value
@@ -190,6 +199,7 @@ function applyDraftCriterion() {
 	else if (key === 'updatedWithinDays') criteria.updatedWithinDays = draftCriteria.updatedWithinDays
 	else if (key === 'hasAttachments') criteria.hasAttachments = true
 	else criteria.unassigned = true
+	emitCurrentCriteria()
 	modalOpen.value = false
 	resetDraft()
 }
@@ -210,7 +220,7 @@ function removeCriterion(key: CriteriaKey) {
 	else if (key === 'updatedWithinDays') criteria.updatedWithinDays = ''
 	else if (key === 'hasAttachments') criteria.hasAttachments = false
 	else criteria.unassigned = false
-	if (Object.keys(activeCriteria.value).length === 0) emit('update:modelValue', {})
+	emitCurrentCriteria()
 }
 
 function isStatusSelectable(statusId: string) {
@@ -260,15 +270,15 @@ function formatType(typeId: string) {
 					<span class="gi-filter-chip__edit">Editar</span>
 					<span class="gi-filter-chip__remove" role="button" :aria-label="`Quitar ${chip.label}`" @click.stop="removeCriterion(chip.key)">x</span>
 				</button>
-				<button class="gi-filter-chip-bar__add" type="button" aria-label="Anadir criterio" @click="modalOpen = true">
+				<button class="gi-filter-chip-bar__add" type="button" aria-label="Añadir criterio" @click="modalOpen = true">
 					+
 				</button>
 			</div>
 		</div>
-		<div v-if="modalOpen" class="gi-dialog-backdrop" @click.self="modalOpen = false; resetDraft()">
-			<section class="gi-dialog gi-dialog--wide">
+		<div v-if="modalOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="modalOpen = false; resetDraft()">
+			<section class="gi-app-dialog gi-dialog gi-dialog--wide">
 				<header class="gi-dialog__header">
-					<h3 class="gi-dialog__title">Anadir criterio</h3>
+					<h3 class="gi-dialog__title">Añadir criterio</h3>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="modalOpen = false; resetDraft()">x</button>
 				</header>
 				<label class="gi-field">
@@ -292,7 +302,7 @@ function formatType(typeId: string) {
 					<label v-else class="gi-switch-row"><input v-model="draftCriteria.unassigned" type="checkbox" /><span>Solo sin asignar</span></label>
 				</div>
 				<footer class="gi-dialog__footer">
-					<button class="gi-primary-button" type="button" :disabled="!modalCriterionKey || !hasDraftValue(modalCriterionKey)" @click="applyDraftCriterion">Anadir</button>
+					<button class="gi-primary-button" type="button" :disabled="!modalCriterionKey || !hasDraftValue(modalCriterionKey)" @click="applyDraftCriterion">Añadir</button>
 				</footer>
 			</section>
 		</div>
@@ -310,7 +320,7 @@ function formatType(typeId: string) {
 	align-items: center;
 	gap: .75rem;
 	padding: .55rem .75rem;
-	border-radius: 999px;
+	border-radius: 18px;
 	background: rgba(242, 246, 243, .92);
 	border: 1px solid rgba(49, 96, 91, .1);
 }

@@ -4,7 +4,7 @@ export function createTypeTree(): TypeNode[] {
 	return [
 		{
 			id: 1,
-			name: 'Neceisto asesoramiento',
+			name: 'Necesito asesoramiento',
 			slug: 'neceisto-asesoramiento',
 			level: 0,
 			sortOrder: 10,
@@ -41,11 +41,12 @@ export function createBootstrapData(overrides: Partial<BootstrapData> = {}): Boo
 		roles: ['usuario'],
 		navigation: [
 			{ id: 'mis-incidencias', label: 'Mis tickets', route: '/mis-incidencias', visible: true },
-			{ id: 'configuracion', label: 'Configuracion', route: '/configuracion', visible: true },
+			{ id: 'configuracion', label: 'Configuración', route: '/configuracion', visible: true },
 		],
 		personalConfig: {
 			email: 'usuario@example.com',
 			city: 'Madrid',
+			province: 'Madrid',
 		},
 		catalogs: {
 			statuses,
@@ -57,6 +58,7 @@ export function createBootstrapData(overrides: Partial<BootstrapData> = {}): Boo
 			fields: [
 				{ fieldKey: 'email', label: 'Correo', fieldType: 'email', required: true, sortOrder: 10, active: true },
 				{ fieldKey: 'city', label: 'Ciudad', fieldType: 'text', required: false, sortOrder: 20, active: true },
+				{ fieldKey: 'province', label: 'Provincia', fieldType: 'text', required: false, sortOrder: 30, active: true },
 			],
 			provinces: ['Madrid', 'Barcelona'],
 			attachmentConfig: {
@@ -148,7 +150,7 @@ export function createTicket(overrides: Partial<Ticket> = {}): Ticket {
 		urgencyId: 1,
 		typeId: 11,
 		title: 'Ticket de prueba',
-		userDescription: '<p>Descripcion inicial</p>',
+		userDescription: '<p>Descripción inicial</p>',
 		supportDescription: '<p>Soporte</p>',
 		assignedUserUid: 'soporte1',
 		assignedGroupId: 'grupo-soporte',
@@ -183,7 +185,11 @@ export function createAdminConfigData() {
 		fields,
 		filters,
 		rules,
-		profiles: [{ profile: 'soporte', principalType: 'group', principalId: 'grupo-soporte' }],
+		profiles: [
+			{ profile: 'usuario', principalType: 'user', principalId: 'usuario1' },
+			{ profile: 'soporte', principalType: 'group', principalId: 'grupo-soporte' },
+			{ profile: 'administrador', principalType: 'user', principalId: 'soporte1' },
+		],
 		attachmentConfig: { allowedExtensions: ['pdf', 'png'], maxFileSizeMb: 25 },
 		tasksConfig: { enabled: true },
 	}

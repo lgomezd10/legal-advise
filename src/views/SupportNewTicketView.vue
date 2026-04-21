@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import TicketForm from '@/components/TicketForm.vue'
@@ -40,6 +40,12 @@ const assignedUserUid = ref<string | null>(null)
 const assignedGroupId = ref<string | null>(null)
 const submitError = ref('')
 
+watch(selectedProvince, () => {
+	if (selectedProvince.value) {
+		bootstrapStore.ensureProvinceOption(selectedProvince.value)
+	}
+})
+
 function onAssignedUserSelect(value: string | number | null) {
 	const nextUserUid = value ? String(value) : null
 	assignedUserUid.value = nextUserUid
@@ -69,11 +75,6 @@ function cancel() {
 }
 
 async function submit(payload: Record<string, unknown>) {
-	if (!selectedProvince.value) {
-		submitError.value = 'Debes seleccionar una provincia o anadir una nueva.'
-		return
-	}
-
 	submitError.value = ''
 	const finalPayload = {
 		...payload,
@@ -100,7 +101,7 @@ async function submit(payload: Record<string, unknown>) {
 			<div class="gi-form-grid gi-support-new-ticket-card__meta-grid">
 				<label class="gi-field">
 					<span>Provincia</span>
-					<SearchableSelect :model-value="selectedProvince" :options="provinceOptions" placeholder="Selecciona provincia" search-placeholder="Buscar provincia" clearable allow-create create-label="Anadir provincia" @update:modelValue="selectedProvince = $event ? String($event) : null" />
+					<SearchableSelect :model-value="selectedProvince" :options="provinceOptions" placeholder="Selecciona provincia" search-placeholder="Buscar provincia" clearable allow-create create-label="Añadir provincia" @update:modelValue="selectedProvince = $event ? String($event) : null" />
 				</label>
 				<label class="gi-field">
 					<span>Asignado a grupo</span>

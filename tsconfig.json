@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "strict": true,
     "jsx": "preserve",
     "esModuleInterop": true,
@@ -12,14 +12,14 @@
       "ES2022",
       "DOM"
     ],
-    "baseUrl": ".",
+    "ignoreDeprecations": "5.0",
     "types": [
       "vitest/globals",
       "node"
     ],
     "paths": {
       "@/*": [
-        "src/*"
+        "./src/*"
       ]
     }
   },

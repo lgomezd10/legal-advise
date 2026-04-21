@@ -14,6 +14,8 @@ use OCA\ConsultasLegales\Db\IncidentType;
 use OCA\ConsultasLegales\Db\IncidentTypeMapper;
 use OCA\ConsultasLegales\Db\NotificationPreference;
 use OCA\ConsultasLegales\Db\NotificationPreferenceMapper;
+use OCA\ConsultasLegales\Db\ProfileAssignment;
+use OCA\ConsultasLegales\Db\ProfileAssignmentMapper;
 use OCA\ConsultasLegales\Db\Urgency;
 use OCA\ConsultasLegales\Db\UrgencyMapper;
 
@@ -27,6 +29,7 @@ class DefaultConfigService {
 		private readonly IncidentTypeMapper $typeMapper,
 		private readonly AssignmentRuleMapper $ruleMapper,
 		private readonly NotificationPreferenceMapper $notificationPreferenceMapper,
+		private readonly ProfileAssignmentMapper $profileAssignmentMapper,
 	) {
 	}
 
@@ -41,6 +44,7 @@ class DefaultConfigService {
 		$typeIds = $this->ensureTypes();
 		$this->ensureAssignmentRules($typeIds);
 		$this->ensureNotificationPreferences();
+		$this->ensureProfileAssignments();
 
 		$this->ensured = true;
 	}
@@ -113,12 +117,18 @@ class DefaultConfigService {
 		$defaults = [
 			['fieldKey' => 'name', 'label' => 'Nombre', 'fieldType' => 'text', 'required' => true, 'preloadSource' => 'displayName', 'sortOrder' => 10],
 			['fieldKey' => 'email', 'label' => 'Email', 'fieldType' => 'email', 'required' => true, 'preloadSource' => 'email', 'sortOrder' => 20],
-			['fieldKey' => 'phone', 'label' => 'Telefono', 'fieldType' => 'tel', 'required' => false, 'preloadSource' => 'phone', 'sortOrder' => 30],
+			['fieldKey' => 'phone', 'label' => 'Teléfono', 'fieldType' => 'tel', 'required' => false, 'preloadSource' => 'phone', 'sortOrder' => 30],
 			['fieldKey' => 'city', 'label' => 'Ciudad', 'fieldType' => 'text', 'required' => false, 'preloadSource' => 'location', 'sortOrder' => 40],
+			['fieldKey' => 'province', 'label' => 'Provincia', 'fieldType' => 'text', 'required' => false, 'preloadSource' => '', 'sortOrder' => 50],
 		];
 
 		foreach ($defaults as $row) {
-			if ($this->fieldMapper->findOneBy('field_key', $row['fieldKey']) instanceof CustomField) {
+			$existing = $this->fieldMapper->findOneBy('field_key', $row['fieldKey']);
+			if ($existing instanceof CustomField) {
+				if ($existing->getLabel() === 'Telefono') {
+					$existing->setLabel($row['label']);
+					$this->fieldMapper->update($existing);
+				}
 				continue;
 			}
 
@@ -139,11 +149,11 @@ class DefaultConfigService {
 	 */
 	private function ensureTypes(): array {
 		$defaults = [
-			['slug' => 'necesito-asesoramiento', 'name' => 'Neceisto asesoramiento', 'parentSlug' => null, 'level' => 0, 'sortOrder' => 10],
+			['slug' => 'necesito-asesoramiento', 'name' => 'Necesito asesoramiento', 'legacyNames' => ['Neceisto asesoramiento'], 'parentSlug' => null, 'level' => 0, 'sortOrder' => 10],
 			['slug' => 'necesito-asesoramiento-solo-territorial', 'name' => 'Solo Territorial', 'parentSlug' => 'necesito-asesoramiento', 'level' => 1, 'sortOrder' => 10],
 			['slug' => 'necesito-asesoramiento-territorial-y-legal', 'name' => 'Territorial y Legal', 'parentSlug' => 'necesito-asesoramiento', 'level' => 1, 'sortOrder' => 20],
-			['slug' => 'necesito-asesoramiento-territorial-y-comunicacion', 'name' => 'Territorial y Comunicacion', 'parentSlug' => 'necesito-asesoramiento', 'level' => 1, 'sortOrder' => 30],
-			['slug' => 'necesito-asesoramiento-territorial-legal-y-comunicacion', 'name' => 'Territoral, Legal y Comunicacion', 'parentSlug' => 'necesito-asesoramiento', 'level' => 1, 'sortOrder' => 40],
+			['slug' => 'necesito-asesoramiento-territorial-y-comunicacion', 'name' => 'Territorial y Comunicación', 'legacyNames' => ['Territorial y Comunicacion'], 'parentSlug' => 'necesito-asesoramiento', 'level' => 1, 'sortOrder' => 30],
+			['slug' => 'necesito-asesoramiento-territorial-legal-y-comunicacion', 'name' => 'Territorial, Legal y Comunicación', 'legacyNames' => ['Territoral, Legal y Comunicacion'], 'parentSlug' => 'necesito-asesoramiento', 'level' => 1, 'sortOrder' => 40],
 			['slug' => 'quiero-informar', 'name' => 'Quiero informar', 'parentSlug' => null, 'level' => 0, 'sortOrder' => 20],
 		];
 
@@ -151,6 +161,11 @@ class DefaultConfigService {
 		foreach ($defaults as $row) {
 			$existing = $this->typeMapper->findOneBy('slug', $row['slug']);
 			if ($existing instanceof IncidentType) {
+				$legacyNames = $row['legacyNames'] ?? [];
+				if ($existing->getName() !== $row['name'] && in_array($existing->getName(), $legacyNames, true)) {
+					$existing->setName($row['name']);
+					$this->typeMapper->update($existing);
+				}
 				$typeIds[$row['slug']] = (int) $existing->getId();
 				continue;
 			}
@@ -217,5 +232,25 @@ class DefaultConfigService {
 		$entity->setChannel($channel);
 		$entity->setEnabled($enabled);
 		$this->notificationPreferenceMapper->insert($entity);
+	}
+
+	private function ensureProfileAssignments(): void {
+		if ($this->profileAssignmentMapper->findAllOrdered('id', 'ASC') !== []) {
+			return;
+		}
+
+		$defaults = [
+			['profile' => RoleService::USER, 'principalType' => 'group', 'principalId' => 'userLegal'],
+			['profile' => RoleService::SUPPORT, 'principalType' => 'group', 'principalId' => 'supportLegal'],
+			['profile' => RoleService::ADMIN, 'principalType' => 'group', 'principalId' => 'adminLegal'],
+		];
+
+		foreach ($defaults as $row) {
+			$entity = new ProfileAssignment();
+			$entity->setProfile($row['profile']);
+			$entity->setPrincipalType($row['principalType']);
+			$entity->setPrincipalId($row['principalId']);
+			$this->profileAssignmentMapper->insert($entity);
+		}
 	}
 }

@@ -65,7 +65,7 @@ function save() {
 			</div>
 			<div class="gi-admin-card__toolbar">
 				<button v-if="secondaryActionLabel" class="gi-ghost-button" type="button" @click="emit('secondary-action')">{{ secondaryActionLabel }}</button>
-				<button class="gi-secondary-button" type="button" @click="addFilter">Anadir filtro</button>
+				<button class="gi-secondary-button" type="button" @click="addFilter">Añadir filtro</button>
 				<button class="gi-primary-button" type="button" @click="save">{{ saveLabel || 'Guardar' }}</button>
 			</div>
 		</div>
@@ -73,12 +73,16 @@ function save() {
 		<ul v-else class="gi-admin-list gi-admin-list--stacked">
 			<li v-for="filter in drafts" :key="filter.clientId" class="gi-admin-row gi-admin-row--stacked gi-filter-catalog-row">
 				<div class="gi-filter-catalog-row__header">
-					<label class="gi-field gi-field--wide">
+					<label class="gi-field gi-filter-catalog-row__name-field">
 						<span>Nombre</span>
 						<input v-model="filter.name" class="gi-input" type="text" placeholder="Nombre del filtro" :disabled="lockPredefinedFilters && filter.isPredefined" />
 					</label>
-					<label class="gi-switch-row"><input v-model="filter.active" type="checkbox" /><span>Activo</span></label>
-					<label class="gi-switch-row"><input :checked="Boolean(filter.isDefault)" :disabled="!filter.active" type="radio" :name="defaultGroupName" @change="setDefault(filter.clientId)" /><span>Predeterminado</span></label>
+					<div class="gi-filter-catalog-row__toggle-field">
+						<input v-model="filter.active" type="checkbox" aria-label="Filtro activo" title="Activo" />
+					</div>
+					<div class="gi-filter-catalog-row__toggle-field">
+						<input :checked="Boolean(filter.isDefault)" :disabled="!filter.active" type="radio" :name="defaultGroupName" aria-label="Filtro predeterminado" title="Predeterminado" @change="setDefault(filter.clientId)" />
+					</div>
 					<div class="gi-filter-catalog-row__actions">
 						<button v-if="canRemove(filter)" class="gi-ghost-button" type="button" @click="removeFilter(filter.clientId)">Eliminar</button>
 					</div>
@@ -98,12 +102,64 @@ function save() {
 }
 
 .gi-filter-catalog-row__header {
-	align-items: center;
-	justify-content: space-between;
+	display: grid;
+	gap: 1rem;
+	grid-template-columns: minmax(18rem, 1.8fr) auto auto auto;
+	align-items: end;
 }
 
 .gi-filter-catalog-row__actions {
-	align-items: center;
+	display: flex;
 	justify-content: flex-end;
+	align-items: flex-end;
+}
+
+.gi-filter-catalog-row__name-field,
+.gi-filter-catalog-row__toggle-field {
+	min-width: 0;
+}
+
+
+.gi-filter-catalog-row__toggle-field {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 2.9rem;
+	padding-bottom: .1rem;
+}
+
+.gi-filter-catalog-row__toggle-field input {
+	margin: 0;
+	width: 1rem;
+	height: 1rem;
+}
+
+@media (max-width: 960px) {
+	.gi-filter-catalog-row__header {
+		grid-template-columns: minmax(14rem, 1fr) auto auto auto;
+	}
+
+	.gi-filter-catalog-row__actions {
+		grid-column: 4;
+	}
+}
+
+@media (max-width: 720px) {
+	.gi-filter-catalog-row__header {
+		grid-template-columns: 1fr auto auto;
+		align-items: center;
+	}
+
+	.gi-filter-catalog-row__name-field {
+		grid-column: 1 / -1;
+	}
+
+	.gi-filter-catalog-row__actions {
+		grid-column: 1 / -1;
+	}
+
+	.gi-filter-catalog-row__actions {
+		justify-content: flex-start;
+	}
 }
 </style>

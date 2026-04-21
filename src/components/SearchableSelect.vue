@@ -20,7 +20,7 @@ const props = withDefaults(defineProps<{
 	clearable: false,
 	disabled: false,
 	allowCreate: false,
-	createLabel: 'Anadir',
+	createLabel: 'Añadir',
 })
 
 const emit = defineEmits<{
@@ -48,6 +48,17 @@ function normalizeOptions(options: SearchableSelectOption[] | Record<string, Sea
 const safeOptions = computed(() => normalizeOptions(props.options))
 const normalizedModelValue = computed(() => props.modelValue === null || props.modelValue === undefined ? '' : String(props.modelValue))
 const selectedOption = computed(() => safeOptions.value.find((option: SearchableSelectOption) => String(option.value) === normalizedModelValue.value) ?? null)
+const triggerLabel = computed(() => {
+	if (selectedOption.value) {
+		return selectedOption.value.label
+	}
+
+	if (props.allowCreate && normalizedModelValue.value.trim() !== '') {
+		return normalizedModelValue.value
+	}
+
+	return props.placeholder
+})
 const filteredOptions = computed(() => {
 	const term = query.value.trim().toLowerCase()
 	if (!term) {
@@ -124,8 +135,8 @@ onBeforeUnmount(() => {
 <template>
 	<div ref="rootRef" class="gi-search-select" :class="{ 'gi-search-select--open': open, 'gi-search-select--disabled': disabled }">
 		<button class="gi-search-select__trigger" type="button" :disabled="disabled" @click="toggleDropdown">
-			<span class="gi-search-select__trigger-text" :class="{ 'gi-search-select__trigger-text--placeholder': !selectedOption }">
-				{{ selectedOption?.label ?? placeholder }}
+			<span class="gi-search-select__trigger-text" :class="{ 'gi-search-select__trigger-text--placeholder': !selectedOption && !(allowCreate && normalizedModelValue.trim() !== '') }">
+				{{ triggerLabel }}
 			</span>
 			<span class="gi-search-select__trigger-icon">▾</span>
 		</button>
@@ -202,6 +213,24 @@ onBeforeUnmount(() => {
 	flex: none;
 	font-size: .8rem;
 	color: #5c6f68;
+}
+
+.gi-search-select--compact .gi-search-select__trigger {
+	min-height: 2.2rem;
+	padding: .42rem .65rem;
+	border-radius: 10px;
+	font-size: .86rem;
+	gap: .5rem;
+}
+
+.gi-search-select--compact .gi-search-select__trigger-icon {
+	font-size: .72rem;
+}
+
+.gi-search-select--compact .gi-search-select__panel {
+	top: calc(100% + .25rem);
+	padding: .55rem;
+	border-radius: 14px;
 }
 
 .gi-search-select__panel {

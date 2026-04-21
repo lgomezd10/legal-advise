@@ -59,7 +59,7 @@ function buildUpdateDetails(entry: TicketHistoryEntry, context: HistoryContext) 
 	}
 
 	if (Object.prototype.hasOwnProperty.call(payload, 'title')) {
-		details.push(`Titulo: ${String(payload.title ?? '')}`)
+		details.push(`Título: ${String(payload.title ?? '')}`)
 	}
 
 	if (Object.prototype.hasOwnProperty.call(payload, 'urgencyId')) {
@@ -67,15 +67,15 @@ function buildUpdateDetails(entry: TicketHistoryEntry, context: HistoryContext) 
 	}
 
 	if (Object.prototype.hasOwnProperty.call(payload, 'assignedUserUid') || Object.prototype.hasOwnProperty.call(payload, 'assignedGroupId')) {
-		details.push(`Asignacion: ${getUserLabel(payload.assignedUserUid as string | null | undefined, context.users)} / ${getGroupLabel(payload.assignedGroupId as string | null | undefined, context.groups)}`)
+		details.push(`Asignación: ${getUserLabel(payload.assignedUserUid as string | null | undefined, context.users)} / ${getGroupLabel(payload.assignedGroupId as string | null | undefined, context.groups)}`)
 	}
 
 	if (Object.prototype.hasOwnProperty.call(payload, 'supportDescription')) {
-		details.push('Descripcion de soporte actualizada')
+		details.push('Descripción de soporte actualizada')
 	}
 
 	if (Object.prototype.hasOwnProperty.call(payload, 'userDescription')) {
-		details.push('Descripcion del ticket actualizada')
+		details.push('Descripción del ticket actualizada')
 	}
 
 	return details.length > 0 ? details : ['Ticket actualizado']

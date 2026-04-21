@@ -311,8 +311,9 @@ class Version000001Date20260310090000 extends SimpleMigrationStep {
 		$rows = [
 			['field_key' => 'name', 'label' => 'Nombre', 'field_type' => 'text', 'required' => true, 'preload_source' => 'displayName', 'sort_order' => 10, 'active' => true],
 			['field_key' => 'email', 'label' => 'Email', 'field_type' => 'email', 'required' => true, 'preload_source' => 'email', 'sort_order' => 20, 'active' => true],
-			['field_key' => 'phone', 'label' => 'Telefono', 'field_type' => 'tel', 'required' => false, 'preload_source' => 'phone', 'sort_order' => 30, 'active' => true],
+			['field_key' => 'phone', 'label' => 'Teléfono', 'field_type' => 'tel', 'required' => false, 'preload_source' => 'phone', 'sort_order' => 30, 'active' => true],
 			['field_key' => 'city', 'label' => 'Ciudad', 'field_type' => 'text', 'required' => false, 'preload_source' => 'location', 'sort_order' => 40, 'active' => true],
+			['field_key' => 'province', 'label' => 'Provincia', 'field_type' => 'text', 'required' => false, 'preload_source' => '', 'sort_order' => 50, 'active' => true],
 		];
 
 		foreach ($rows as $row) {
@@ -324,11 +325,11 @@ class Version000001Date20260310090000 extends SimpleMigrationStep {
 
 	private function seedTypesAndRules(): void {
 		$types = [
-			['slug' => 'necesito-asesoramiento', 'name' => 'Neceisto asesoramiento', 'parent' => null, 'level' => 0, 'sort_order' => 10],
+			['slug' => 'necesito-asesoramiento', 'name' => 'Necesito asesoramiento', 'parent' => null, 'level' => 0, 'sort_order' => 10],
 			['slug' => 'necesito-asesoramiento-solo-territorial', 'name' => 'Solo Territorial', 'parent' => 'necesito-asesoramiento', 'level' => 1, 'sort_order' => 10],
 			['slug' => 'necesito-asesoramiento-territorial-y-legal', 'name' => 'Territorial y Legal', 'parent' => 'necesito-asesoramiento', 'level' => 1, 'sort_order' => 20],
-			['slug' => 'necesito-asesoramiento-territorial-y-comunicacion', 'name' => 'Territorial y Comunicacion', 'parent' => 'necesito-asesoramiento', 'level' => 1, 'sort_order' => 30],
-			['slug' => 'necesito-asesoramiento-territorial-legal-y-comunicacion', 'name' => 'Territoral, Legal y Comunicacion', 'parent' => 'necesito-asesoramiento', 'level' => 1, 'sort_order' => 40],
+			['slug' => 'necesito-asesoramiento-territorial-y-comunicacion', 'name' => 'Territorial y Comunicación', 'parent' => 'necesito-asesoramiento', 'level' => 1, 'sort_order' => 30],
+			['slug' => 'necesito-asesoramiento-territorial-legal-y-comunicacion', 'name' => 'Territorial, Legal y Comunicación', 'parent' => 'necesito-asesoramiento', 'level' => 1, 'sort_order' => 40],
 			['slug' => 'quiero-informar', 'name' => 'Quiero informar', 'parent' => null, 'level' => 0, 'sort_order' => 20],
 		];
 

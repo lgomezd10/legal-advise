@@ -37,7 +37,7 @@ function buildPath(node: EditableTypeNode): string {
 				<div class="gi-admin-tree__actions">
 					<span class="gi-meta-pill">{{ buildPath(node) }}</span>
 					<button class="gi-secondary-button" type="button" @click="emit('add-child', node)">
-						Anadir subtipo
+						Añadir subtipo
 					</button>
 				</div>
 			</div>

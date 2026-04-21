@@ -21,14 +21,14 @@ const showAdmin = computed(() => bootstrapStore.hasRole('administrador'))
 	<section class="gi-page gi-page--configuration">
 		<header class="gi-page__header">
 			<div>
-				<h1>Configuracion</h1>
+				<h1>Configuración</h1>
 				<p class="gi-page__subtitle">Centraliza aquí la configuración disponible para tu perfil.</p>
 			</div>
 		</header>
 		<section class="gi-config-accordion">
 			<article v-if="showPersonal" class="gi-config-accordion__item gi-surface-elevated">
 				<button class="gi-config-accordion__trigger" type="button" @click="openSections.personal = !openSections.personal">
-					<span>Configuracion personal</span>
+					<span>Configuración personal</span>
 					<strong>{{ openSections.personal ? 'Ocultar' : 'Mostrar' }}</strong>
 				</button>
 				<div v-if="openSections.personal" class="gi-config-accordion__content">
@@ -38,7 +38,7 @@ const showAdmin = computed(() => bootstrapStore.hasRole('administrador'))
 
 			<article v-if="showSupport" class="gi-config-accordion__item gi-surface-elevated">
 				<button class="gi-config-accordion__trigger" type="button" @click="openSections.support = !openSections.support">
-					<span>Configuracion de soporte</span>
+					<span>Configuración de soporte</span>
 					<strong>{{ openSections.support ? 'Ocultar' : 'Mostrar' }}</strong>
 				</button>
 				<div v-if="openSections.support" class="gi-config-accordion__content">
@@ -48,7 +48,7 @@ const showAdmin = computed(() => bootstrapStore.hasRole('administrador'))
 
 			<article v-if="showAdmin" class="gi-config-accordion__item gi-surface-elevated">
 				<button class="gi-config-accordion__trigger" type="button" @click="openSections.admin = !openSections.admin">
-					<span>Consola de administracion</span>
+					<span>Consola de administración</span>
 					<strong>{{ openSections.admin ? 'Ocultar' : 'Mostrar' }}</strong>
 				</button>
 				<div v-if="openSections.admin" class="gi-config-accordion__content">

@@ -199,8 +199,8 @@ function saveUrl() {
 
 		<p v-if="errorMessage" class="gi-form-error">{{ errorMessage }}</p>
 
-		<div v-if="oversizeModalOpen" class="gi-dialog-backdrop" @click.self="closeOversizeModal">
-			<section class="gi-dialog gi-dialog--compact" aria-label="Archivo demasiado grande">
+		<div v-if="oversizeModalOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="closeOversizeModal">
+			<section class="gi-app-dialog gi-dialog gi-dialog--compact" aria-label="Archivo demasiado grande">
 				<header class="gi-dialog__header">
 					<h3 class="gi-dialog__title">Archivo demasiado grande</h3>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeOversizeModal">x</button>
@@ -215,8 +215,8 @@ function saveUrl() {
 			</section>
 		</div>
 
-		<div v-if="urlModalOpen" class="gi-dialog-backdrop" @click.self="closeUrlModal">
-			<section class="gi-dialog gi-dialog--compact" aria-label="Adjuntar URL">
+		<div v-if="urlModalOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="closeUrlModal">
+			<section class="gi-app-dialog gi-dialog gi-dialog--compact" aria-label="Adjuntar URL">
 				<header class="gi-dialog__header">
 					<h3 class="gi-dialog__title">Adjuntar URL</h3>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeUrlModal">x</button>

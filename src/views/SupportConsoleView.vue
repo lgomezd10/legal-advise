@@ -8,7 +8,7 @@ import { useBootstrapStore } from '@/store/bootstrap'
 import { useTicketsStore } from '@/store/tickets'
 import { useSupportFiltersStore } from '@/store/supportFilters'
 import { richTextToPlainText } from '@/utils/richText'
-import { DEFAULT_COLUMN_EDITOR_ORDER, DEFAULT_SUPPORT_COLUMNS, DEFAULT_SUPPORT_SORT, loadSupportConsoleState, normalizeSupportColumns, saveSupportConsoleState } from '@/utils/supportConsoleState'
+import { DEFAULT_COLUMN_EDITOR_ORDER, DEFAULT_SUPPORT_COLUMNS, DEFAULT_SUPPORT_SORT, loadSupportConsoleState, normalizeSupportColumnOrder, normalizeSupportColumns, saveSupportConsoleState } from '@/utils/supportConsoleState'
 
 const router = useRouter()
 const route = useRoute()
@@ -21,11 +21,12 @@ const builderInitialFilterId = ref<number | null>(null)
 const builderInitialCriteria = ref<Record<string, unknown>>({})
 const statuses = computed(() => bootstrapStore.data.catalogs.statuses)
 const types = computed(() => bootstrapStore.data.catalogs.types)
+const provinces = computed(() => bootstrapStore.data.catalogs.provinces)
 const users = computed(() => bootstrapStore.data.assignables.users)
 const groups = computed(() => bootstrapStore.data.assignables.groups)
 const initialCriteria = computed<Record<string, unknown>>(() => {
 	const defaultFilter = supportFiltersStore.items.find((item) => item.id === supportFiltersStore.defaultFilterId)
-	return defaultFilter?.criteria ?? {}
+	return normalizeSupportCriteria(defaultFilter?.criteria ?? {})
 })
 const columnEditorOpen = ref(false)
 const selectedColumnCount = computed(() => visibleColumns.value.length)
@@ -35,12 +36,13 @@ const sortKey = ref<SupportColumnKey | 'createdBy'>(DEFAULT_SUPPORT_SORT.sortKey
 const sortDirection = ref<'asc' | 'desc'>(DEFAULT_SUPPORT_SORT.sortDirection)
 const consoleStateReady = ref(false)
 const availableColumns: Array<{ key: SupportColumnKey, label: string }> = [
-	{ key: 'number', label: 'Numero de ticket' },
-	{ key: 'updatedAt', label: 'Ultima modificacion' },
-	{ key: 'assignment', label: 'Asignacion' },
+	{ key: 'number', label: 'Número de ticket' },
+	{ key: 'updatedAt', label: 'Última modificación' },
+	{ key: 'assignment', label: 'Asignación' },
 	{ key: 'createdBy', label: 'Creado por' },
-	{ key: 'title', label: 'Titulo' },
-	{ key: 'userDescription', label: 'Descripcion' },
+	{ key: 'province', label: 'Provincia' },
+	{ key: 'title', label: 'Título' },
+	{ key: 'userDescription', label: 'Descripción' },
 	{ key: 'status', label: 'Estado' },
 	{ key: 'urgency', label: 'Criticidad' },
 	{ key: 'createdAt', label: 'Fecha de apertura' },
@@ -110,6 +112,15 @@ function cloneCriteria(source: Record<string, unknown>) {
 	return normalized
 }
 
+function normalizeSupportCriteria(source: Record<string, unknown>) {
+	const normalized = cloneCriteria(source)
+	if ((!('province' in normalized) || normalized.province === null || normalized.province === '') && typeof normalized.city === 'string' && normalized.city.trim() !== '') {
+		normalized.province = normalized.city.trim()
+	}
+	delete normalized.city
+	return normalized
+}
+
 function getRouteFilterId() {
 	const raw = Array.isArray(route.query.filterId) ? route.query.filterId[0] : route.query.filterId
 	const parsed = Number(raw)
@@ -143,9 +154,9 @@ async function applySelectedFilter(filterId: number | null) {
 onMounted(async() => {
 	const savedState = loadSupportConsoleState()
 	if (savedState) {
-		columnEditorOrder.value = normalizeSupportColumns(savedState.columnEditorOrder, DEFAULT_COLUMN_EDITOR_ORDER)
+		columnEditorOrder.value = normalizeSupportColumnOrder(savedState.columnEditorOrder, DEFAULT_COLUMN_EDITOR_ORDER)
 		visibleColumns.value = columnEditorOrder.value.filter((column) => normalizeSupportColumns(savedState.visibleColumns, DEFAULT_SUPPORT_COLUMNS).includes(column))
-		criteria.value = savedState.criteria ?? {}
+		criteria.value = normalizeSupportCriteria(savedState.criteria ?? {})
 		sortKey.value = savedState.sortKey ?? DEFAULT_SUPPORT_SORT.sortKey
 		sortDirection.value = savedState.sortDirection ?? DEFAULT_SUPPORT_SORT.sortDirection
 		selectedFilterId.value = savedState.selectedFilterId ?? null
@@ -158,9 +169,9 @@ onMounted(async() => {
 	const routeFilterId = getRouteFilterId()
 	if (routeFilterId !== null && resolveFilterCriteria(routeFilterId)) {
 		selectedFilterId.value = routeFilterId
-		criteria.value = cloneCriteria(resolveFilterCriteria(routeFilterId)?.criteria ?? {})
+		criteria.value = normalizeSupportCriteria(resolveFilterCriteria(routeFilterId)?.criteria ?? {})
 	} else if (Object.keys(criteria.value).length === 0) {
-		criteria.value = cloneCriteria(initialCriteria.value)
+		criteria.value = normalizeSupportCriteria(initialCriteria.value)
 		if (selectedFilterId.value === null && Object.keys(criteria.value).length > 0) {
 			selectedFilterId.value = supportFiltersStore.defaultFilterId
 		}
@@ -284,6 +295,7 @@ function closeColumnEditor() {
 			:filters="supportFiltersStore.items"
 			:statuses="statuses"
 			:types="types"
+			:provinces="provinces"
 			:users="users"
 			:groups="groups"
 			:initial-filter-id="builderInitialFilterId"
@@ -293,6 +305,7 @@ function closeColumnEditor() {
 			@delete="supportFiltersStore.remove" />
 		<SupportTicketTable
 			:tickets="sortedTickets"
+			:types="types"
 			:visible-columns="orderedVisibleColumns"
 			:sort-key="sortKey"
 			:sort-direction="sortDirection"
@@ -301,8 +314,8 @@ function closeColumnEditor() {
 			@sort="onSortChange"
 		/>
 
-		<div v-if="columnEditorOpen" class="gi-dialog-backdrop" @click.self="closeColumnEditor">
-			<section class="gi-dialog gi-dialog--medium gi-dialog--min-tall" aria-label="Editar columnas visibles">
+		<div v-if="columnEditorOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="closeColumnEditor">
+			<section class="gi-app-dialog gi-dialog gi-dialog--medium gi-dialog--min-tall" aria-label="Editar columnas visibles">
 				<header class="gi-dialog__header">
 					<h2 class="gi-dialog__title">Editar columnas</h2>
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeColumnEditor">x</button>
@@ -312,8 +325,16 @@ function closeColumnEditor() {
 						<input :checked="visibleColumns.includes(column.key)" type="checkbox" @change="toggleColumn(column.key, ($event.target as HTMLInputElement).checked)" />
 						<span>{{ column.label }}</span>
 						<div class="gi-support-column-editor__order-actions">
-							<button class="gi-ghost-button" type="button" :disabled="!visibleColumns.includes(column.key) || orderedVisibleColumns.indexOf(column.key) === 0" @click="moveColumn(column.key, -1)">Subir</button>
-							<button class="gi-ghost-button" type="button" :disabled="!visibleColumns.includes(column.key) || orderedVisibleColumns.indexOf(column.key) === orderedVisibleColumns.length - 1" @click="moveColumn(column.key, 1)">Bajar</button>
+							<button class="gi-round-icon-button gi-support-column-editor__move-button" type="button" aria-label="Subir columna" title="Subir columna" :disabled="!visibleColumns.includes(column.key) || orderedVisibleColumns.indexOf(column.key) === 0" @click="moveColumn(column.key, -1)">
+								<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+									<path d="M8 3.5 3.5 8h2.25v4.5h4.5V8H12.5L8 3.5Z" />
+								</svg>
+							</button>
+							<button class="gi-round-icon-button gi-support-column-editor__move-button" type="button" aria-label="Bajar columna" title="Bajar columna" :disabled="!visibleColumns.includes(column.key) || orderedVisibleColumns.indexOf(column.key) === orderedVisibleColumns.length - 1" @click="moveColumn(column.key, 1)">
+								<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+									<path d="M5.75 3.5v4.5H3.5L8 12.5 12.5 8h-2.25V3.5h-4.5Z" />
+								</svg>
+							</button>
 						</div>
 					</div>
 				</div>
@@ -352,6 +373,11 @@ function closeColumnEditor() {
 	display: flex;
 	gap: .4rem;
 	margin-left: auto;
+}
+
+.gi-support-column-editor__move-button {
+	width: 1.9rem;
+	height: 1.9rem;
 }
 
 .gi-support-column-editor-modal__grid {

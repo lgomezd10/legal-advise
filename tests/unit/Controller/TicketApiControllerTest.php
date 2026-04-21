@@ -6,6 +6,7 @@ namespace OCA\ConsultasLegales\Tests\Unit\Controller;
 
 use OCA\ConsultasLegales\Controller\TicketApiController;
 use OCA\ConsultasLegales\Service\AttachmentService;
+use OCA\ConsultasLegales\Service\RoleService;
 use OCA\ConsultasLegales\Service\TicketService;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\IRequest;
@@ -30,9 +31,15 @@ class TicketApiControllerTest extends TestCase {
 			->with('soporte1', 2, [])
 			->willThrowException(new \RuntimeException('Forbidden', 403));
 
+		$roleService = $this->createMock(RoleService::class);
+		$roleService->expects(self::once())
+			->method('hasAnyRole')
+			->with('soporte1')
+			->willReturn(true);
+
 		$attachmentService = $this->createMock(AttachmentService::class);
 
-		$controller = new TicketApiController('legal_advice', $request, $userSession, $ticketService, $attachmentService);
+		$controller = new TicketApiController('legal_advice', $request, $userSession, $roleService, $ticketService, $attachmentService);
 
 		$response = $controller->update(2);
 

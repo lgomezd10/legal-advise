@@ -19,6 +19,22 @@ export const bootstrapStoreMock = reactive({
 	loading: false,
 	hasRole: (role: string) => false,
 	refresh: vi.fn(async() => undefined),
+	ensureProvinceOption: vi.fn((province: string | null | undefined) => {
+		const trimmed = String(province ?? '').trim()
+		if (trimmed === '') {
+			return
+		}
+		if (bootstrapStoreMock.data.catalogs.provinces.some((entry) => entry.trim().toLocaleLowerCase() === trimmed.toLocaleLowerCase())) {
+			return
+		}
+		bootstrapStoreMock.data = {
+			...bootstrapStoreMock.data,
+			catalogs: {
+				...bootstrapStoreMock.data.catalogs,
+				provinces: [...bootstrapStoreMock.data.catalogs.provinces, trimmed],
+			},
+		}
+	}),
 	setPersonalConfig: vi.fn((personalConfig: Record<string, string>) => {
 		bootstrapStoreMock.data = {
 			...bootstrapStoreMock.data,
@@ -30,6 +46,7 @@ export const bootstrapStoreMock = reactive({
 	loading: boolean
 	hasRole: (role: string) => boolean
 	refresh: ReturnType<typeof vi.fn>
+	ensureProvinceOption: ReturnType<typeof vi.fn>
 	setPersonalConfig: ReturnType<typeof vi.fn>
 }
 
@@ -96,6 +113,7 @@ export function resetFrontendMocks() {
 	bootstrapStoreMock.loading = false
 	bootstrapStoreMock.refresh.mockReset()
 	bootstrapStoreMock.refresh.mockResolvedValue(undefined)
+	bootstrapStoreMock.ensureProvinceOption.mockClear()
 	bootstrapStoreMock.setPersonalConfig.mockClear()
 
 	ticketsStoreMock.items = []

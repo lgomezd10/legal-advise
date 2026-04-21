@@ -23,7 +23,7 @@ class CatalogService {
 	public const CORE_STATUS_DEFINITIONS = [
 		['id' => 'nuevo', 'label' => 'Nuevo', 'description' => 'Estado inicial al registrar un ticket nuevo.', 'active' => true, 'closed' => false, 'fixed' => true, 'toggleable' => false],
 		['id' => 'asignado', 'label' => 'Asignado', 'description' => 'El ticket ya esta en gestion por soporte.', 'active' => true, 'closed' => false, 'fixed' => true, 'toggleable' => false],
-		['id' => 'en_espera_usuario', 'label' => 'En espera usuario', 'description' => 'Soporte necesita una respuesta o accion del usuario.', 'active' => true, 'closed' => false, 'fixed' => true, 'toggleable' => false],
+		['id' => 'en_espera_usuario', 'label' => 'En espera usuario', 'description' => 'Soporte necesita una respuesta o acción del usuario.', 'active' => true, 'closed' => false, 'fixed' => true, 'toggleable' => false],
 		['id' => 'en_progreso', 'label' => 'En progreso', 'description' => 'El ticket se esta tramitando internamente.', 'active' => true, 'closed' => false, 'fixed' => true, 'toggleable' => false],
 		['id' => 'resuelto', 'label' => 'Resuelto', 'description' => 'El ticket ya tiene una resolucion comunicada.', 'active' => true, 'closed' => true, 'fixed' => true, 'toggleable' => true],
 		['id' => 'cerrado', 'label' => 'Cerrado', 'description' => 'El ticket ha quedado cerrado definitivamente.', 'active' => true, 'closed' => true, 'fixed' => true, 'toggleable' => false],

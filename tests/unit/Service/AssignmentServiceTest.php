@@ -34,4 +34,56 @@ class AssignmentServiceTest extends TestCase {
 
 		self::assertSame(['assignedUserUid' => null, 'assignedGroupId' => 'support'], $service->resolveForType(200));
 	}
+
+	public function testPrefersProvinceSpecificRuleOverGenericRule(): void {
+		$genericRule = new AssignmentRule();
+		$genericRule->setAssignedGroupId('support');
+
+		$specificRule = new AssignmentRule();
+		$specificRule->setAssignedUserUid('soporte-madrid');
+		$specificRule->setAssignedGroupId('madrid');
+		$specificRule->setProvince('Madrid');
+
+		$ruleMapper = $this->createMock(AssignmentRuleMapper::class);
+		$ruleMapper->expects(self::once())
+			->method('findBy')
+			->with('type_id', 11, 'priority', 'DESC')
+			->willReturn([$genericRule, $specificRule]);
+
+		$typeMapper = $this->createMock(IncidentTypeMapper::class);
+		$typeMapper->expects(self::never())->method('find');
+
+		$service = new AssignmentService($ruleMapper, $typeMapper);
+
+		self::assertSame(
+			['assignedUserUid' => 'soporte-madrid', 'assignedGroupId' => 'madrid'],
+			$service->resolveForType(11, 'Madrid'),
+		);
+	}
+
+	public function testKeepsGenericRuleWhenProvinceDoesNotMatchConfiguredSpecificRule(): void {
+		$genericRule = new AssignmentRule();
+		$genericRule->setAssignedGroupId('support');
+
+		$specificRule = new AssignmentRule();
+		$specificRule->setAssignedUserUid('soporte-sevilla');
+		$specificRule->setAssignedGroupId('sevilla');
+		$specificRule->setProvince('Sevilla');
+
+		$ruleMapper = $this->createMock(AssignmentRuleMapper::class);
+		$ruleMapper->expects(self::once())
+			->method('findBy')
+			->with('type_id', 11, 'priority', 'DESC')
+			->willReturn([$specificRule, $genericRule]);
+
+		$typeMapper = $this->createMock(IncidentTypeMapper::class);
+		$typeMapper->expects(self::never())->method('find');
+
+		$service = new AssignmentService($ruleMapper, $typeMapper);
+
+		self::assertSame(
+			['assignedUserUid' => null, 'assignedGroupId' => 'support'],
+			$service->resolveForType(11, 'Madrid'),
+		);
+	}
 }

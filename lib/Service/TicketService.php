@@ -33,6 +33,7 @@ class TicketService {
 		private readonly UrgencyMapper $urgencyMapper,
 		private readonly TicketNumberService $ticketNumberService,
 		private readonly AssignmentService $assignmentService,
+		private readonly PersonalConfigService $personalConfigService,
 		private readonly PermissionService $permissionService,
 		private readonly NotificationService $notificationService,
 		private readonly TaskSyncService $taskSyncService,
@@ -68,7 +69,7 @@ class TicketService {
 		$now = time();
 		$roles = $this->roleService->getEffectiveRoles($uid);
 		$isSupportActor = in_array(RoleService::SUPPORT, $roles, true) || in_array(RoleService::ADMIN, $roles, true);
-		$province = $this->resolveProvinceSelection($payload);
+		$province = $this->resolveProvinceSelection($payload, !$isSupportActor);
 		$assignment = $isSupportActor
 			? [
 				'assignedUserUid' => $this->normalizeOptionalString($payload['assignedUserUid'] ?? null),
@@ -101,6 +102,7 @@ class TicketService {
 
 		$ticket = $this->ticketMapper->insert($ticket);
 		$this->savePersonalData($ticket->getId(), $payload['personalData'] ?? []);
+		$this->rememberProvinceForUser($uid, $province);
 		$this->addHistory($ticket->getId(), $uid, $isSupportActor ? RoleService::SUPPORT : RoleService::USER, 'ticket_created', 'publico', ['status' => $initialStatus]);
 		$this->taskSyncService->syncTicket($ticket);
 		$this->notificationService->emit('ticket_created', $ticket);
@@ -112,7 +114,7 @@ class TicketService {
 		$ticket = $this->ticketMapper->find($id);
 		$this->permissionService->assertCanManageTicket($uid, $ticket);
 		if ($this->catalogService->isClosedStatus((string) $ticket->getStatus())) {
-			throw new \RuntimeException('El ticket esta cerrado y debe reabrirse antes de modificarlo.', 409);
+			throw new \RuntimeException('El ticket está cerrado y debe reabrirse antes de modificarlo.', 409);
 		}
 
 		$previousStatus = (string) $ticket->getStatus();
@@ -132,7 +134,7 @@ class TicketService {
 			if ($field === 'title') {
 				$value = trim((string) $value);
 				if ($value === '') {
-					throw new \InvalidArgumentException('El titulo del ticket no puede estar vacio.');
+					throw new \InvalidArgumentException('El título del ticket no puede estar vacío.');
 				}
 				$payload[$field] = $value;
 			}
@@ -209,7 +211,7 @@ class TicketService {
 	public function addComment(string $uid, int $ticketId, array $payload): array {
 		$ticket = $this->ticketMapper->find($ticketId);
 		if ($this->catalogService->isClosedStatus((string) $ticket->getStatus())) {
-			throw new \RuntimeException('El ticket esta cerrado y no admite comentarios hasta reabrirse.', 409);
+			throw new \RuntimeException('El ticket está cerrado y no admite comentarios hasta reabrirse.', 409);
 		}
 
 		$roles = $this->roleService->getEffectiveRoles($uid);
@@ -224,7 +226,7 @@ class TicketService {
 		$body = $this->richTextSanitizer->sanitize((string) ($payload['body'] ?? ''));
 		$allowEmpty = filter_var($payload['allowEmpty'] ?? false, FILTER_VALIDATE_BOOLEAN);
 		if (!$this->richTextSanitizer->isMeaningful($body) && !$allowEmpty) {
-			throw new \InvalidArgumentException('El comentario no puede estar vacio.');
+			throw new \InvalidArgumentException('El comentario no puede estar vacío.');
 		}
 
 		$comment = new Comment();
@@ -348,7 +350,7 @@ class TicketService {
 		return implode('', array_map(static fn (string $line): string => '<p>' . htmlspecialchars($line, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>', $lines));
 	}
 
-	private function resolveProvinceSelection(array $payload): ?string {
+	private function resolveProvinceSelection(array $payload, bool $required = true): ?string {
 		$rawProvince = is_string($payload['province'] ?? null) ? trim((string) $payload['province']) : '';
 
 		if ($rawProvince !== '') {
@@ -356,7 +358,21 @@ class TicketService {
 			return $province ?? $rawProvince;
 		}
 
-		throw new \InvalidArgumentException('Debes seleccionar una provincia o anadir una nueva.');
+		if ($required) {
+			throw new \InvalidArgumentException('Debes seleccionar una provincia o Añadir una nueva.');
+		}
+
+		return null;
+	}
+
+	private function rememberProvinceForUser(string $uid, ?string $province): void {
+		if ($uid === '' || $province === null || trim($province) === '') {
+			return;
+		}
+
+		$current = $this->personalConfigService->getForUser($uid);
+		$current['province'] = trim($province);
+		$this->personalConfigService->saveForUser($uid, $current);
 	}
 
 	private function serializeTicket(string $uid, Ticket $ticket, bool $includeDetail = false): array {
@@ -462,6 +478,9 @@ class TicketService {
 					break;
 				case 'city':
 					$matches = stripos((string) ($ticket['city'] ?? ''), (string) $value) !== false;
+					break;
+				case 'province':
+					$matches = stripos((string) ($ticket['province'] ?? ''), (string) $value) !== false;
 					break;
 				case 'typeId':
 					$matches = (int) ($ticket['typeId'] ?? 0) === (int) $value;

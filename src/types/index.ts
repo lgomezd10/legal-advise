@@ -48,7 +48,7 @@ export interface EditableTypeNode {
 	clientId: string
 }
 
-export type SupportColumnKey = 'number' | 'createdBy' | 'title' | 'userDescription' | 'assignment' | 'status' | 'urgency' | 'createdAt' | 'updatedAt'
+export type SupportColumnKey = 'number' | 'createdBy' | 'province' | 'title' | 'userDescription' | 'assignment' | 'status' | 'urgency' | 'createdAt' | 'updatedAt'
 
 export interface TicketAttachmentLinkDraft {
 	url: string

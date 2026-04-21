@@ -42,6 +42,7 @@ const channelOptions: SearchableSelectOption[] = [
 	{ value: 'mail', label: 'Correo' },
 	{ value: 'nextcloud_mail', label: 'Nextcloud y correo' },
 ]
+const visibleFields = computed(() => props.fields.filter((field: CatalogField) => field.fieldKey !== 'province'))
 
 function applyDraft(draft: TicketDraft | null | undefined) {
 	form.selectedPath = [...(props.lockedTypePath ?? draft?.selectedPath ?? [])]
@@ -88,18 +89,18 @@ const canSubmit = computed(() => Boolean(selectedTypeId.value) && form.title.tri
 	<div class="gi-form-shell">
 		<TypeCascadeSelector v-if="!props.lockedTypePath?.length" v-model="form.selectedPath" :types="types" />
 		<div class="gi-form-grid">
-			<label class="gi-field gi-field--wide"><span>Titulo</span><input v-model="form.title" class="gi-input" /></label>
+			<label class="gi-field gi-field--wide"><span>Título</span><input v-model="form.title" class="gi-input" /></label>
 			<label class="gi-field"><span>Criticidad</span><SearchableSelect v-model="form.urgencyId" :options="urgencyOptions" placeholder="Selecciona" clearable /></label>
-			<label class="gi-field"><span>Canal de comunicacion</span><SearchableSelect v-model="form.communicationChannel" :options="channelOptions" placeholder="Selecciona" /></label>
-			<label class="gi-field gi-field--wide">
-				<span>Descripcion</span>
-				<RichTextEditor v-model="form.userDescription" placeholder="Describe el ticket y, si lo necesitas, pega capturas o inserta imagenes" :min-height="220" />
-			</label>
+			<label class="gi-field"><span>Canal de comunicación</span><SearchableSelect v-model="form.communicationChannel" :options="channelOptions" placeholder="Selecciona" /></label>
+			<div class="gi-field gi-field--wide">
+				<span>Descripción</span>
+				<RichTextEditor v-model="form.userDescription" placeholder="Describe el ticket y, si lo necesitas, pega capturas o inserta imágenes" :min-height="220" />
+			</div>
 			<label class="gi-field gi-field--wide">
 				<span>Adjuntos iniciales</span>
 				<AttachmentPicker v-model="form.attachments" :allowed-extensions="allowedExtensions" :max-file-size-mb="maxFileSizeMb || 25" />
 			</label>
-			<label v-for="field in fields" :key="field.fieldKey" class="gi-field">
+			<label v-for="field in visibleFields" :key="field.fieldKey" class="gi-field">
 				<span>{{ field.label }}</span>
 				<input v-model="form.personalData[field.fieldKey]" :type="field.fieldType" class="gi-input" :required="field.required" />
 			</label>

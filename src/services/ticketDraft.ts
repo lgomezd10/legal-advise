@@ -18,7 +18,7 @@ export function createDefaultTicketDraft(personalConfig: Record<string, string>,
 	return {
 		selectedPath: [],
 		typeId: null,
-		province: null,
+		province: personalConfig.province?.trim() || null,
 		title: '',
 		userDescription: '',
 		urgencyId: getDefaultUrgencyId(urgencies),
@@ -74,6 +74,11 @@ export function getTypeLabelsForPath(types: TypeNode[], path: number[]): string[
 	}
 
 	return labels
+}
+
+export function getTypeLabel(types: TypeNode[], targetTypeId?: number | null, separator = ' > '): string {
+	const path = getTypePath(types, targetTypeId)
+	return getTypeLabelsForPath(types, path).join(separator)
 }
 
 export function getTicketPersonalDataRecord(ticket: Ticket | null | undefined): Record<string, string> {

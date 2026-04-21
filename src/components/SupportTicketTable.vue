@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive } from 'vue'
-import type { SupportColumnKey, Ticket } from '@/types'
+import type { SupportColumnKey, Ticket, TypeNode } from '@/types'
+import { getTypeLabel } from '@/services/ticketDraft'
 import { formatDateTime } from '@/utils/formatting'
 import { excerptRichText, richTextToPlainText } from '@/utils/richText'
 
@@ -10,7 +11,6 @@ type SupportColumn = {
 	key: SupportColumnKey
 	label: string
 	defaultVisible: boolean
-	sticky?: boolean
 	defaultWidth: number
 }
 
@@ -18,6 +18,7 @@ const props = defineProps<{
 	tickets: Ticket[]
 	emptyLabel: string
 	visibleColumns: SupportColumnKey[]
+	types?: TypeNode[]
 	sortKey?: SupportColumnKey | 'createdBy'
 	sortDirection?: 'asc' | 'desc'
 }>()
@@ -30,6 +31,7 @@ const emit = defineEmits<{
 const columnWidths = reactive<Record<SupportColumnKey, number>>({
 	number: 160,
 	createdBy: 180,
+	province: 160,
 	title: 260,
 	userDescription: 380,
 	assignment: 240,
@@ -47,12 +49,13 @@ let activeResize: {
 
 const columns = computed<SupportColumn[]>(() => {
 	const available: SupportColumn[] = [
-		{ key: 'number', label: 'Ticket', defaultVisible: true, sticky: true, defaultWidth: 160 },
-		{ key: 'updatedAt', label: 'Ultima modificacion', defaultVisible: true, defaultWidth: 210 },
-		{ key: 'assignment', label: 'Asignacion', defaultVisible: true, defaultWidth: 240 },
+		{ key: 'number', label: 'Ticket', defaultVisible: true, defaultWidth: 160 },
+		{ key: 'updatedAt', label: 'Última modificación', defaultVisible: true, defaultWidth: 210 },
+		{ key: 'assignment', label: 'Asignación', defaultVisible: true, defaultWidth: 240 },
 		{ key: 'createdBy', label: 'Creado por', defaultVisible: true, defaultWidth: 180 },
-		{ key: 'title', label: 'Titulo', defaultVisible: true, defaultWidth: 260 },
-		{ key: 'userDescription', label: 'Descripcion', defaultVisible: true, defaultWidth: 380 },
+		{ key: 'province', label: 'Provincia', defaultVisible: false, defaultWidth: 160 },
+		{ key: 'title', label: 'Título', defaultVisible: true, defaultWidth: 260 },
+		{ key: 'userDescription', label: 'Descripción', defaultVisible: true, defaultWidth: 380 },
 		{ key: 'status', label: 'Estado', defaultVisible: false, defaultWidth: 150 },
 		{ key: 'urgency', label: 'Criticidad', defaultVisible: false, defaultWidth: 150 },
 		{ key: 'createdAt', label: 'Fecha apertura', defaultVisible: false, defaultWidth: 210 },
@@ -65,6 +68,7 @@ const columns = computed<SupportColumn[]>(() => {
 const tableStyle = computed(() => ({
 	width: `${columns.value.reduce((total, column) => total + (columnWidths[column.key] ?? column.defaultWidth), 0)}px`,
 }))
+const safeTypes = computed<TypeNode[]>(() => props.types ?? [])
 
 function formatAssignment(ticket: Ticket) {
 	const parts = [ticket.assignedUserUid, ticket.assignedGroupId ? `Grupo ${ticket.assignedGroupId}` : '']
@@ -75,6 +79,12 @@ function formatAssignment(ticket: Ticket) {
 
 function excerpt(text: string, maxLength = 140) {
 	return excerptRichText(text, maxLength)
+}
+
+function resolveTypeLabel(ticket: Ticket) {
+	const typeLabel = getTypeLabel(safeTypes.value, ticket.typeId) || 'Sin tipo'
+	const province = typeof ticket.province === 'string' ? ticket.province.trim() : ''
+	return province ? `${province}: ${typeLabel}` : typeLabel
 }
 
 function getColumnStyle(column: SupportColumn) {
@@ -91,11 +101,15 @@ function getCellTitle(columnKey: SupportColumnKey, ticket: Ticket) {
 	}
 
 	if (columnKey === 'title') {
-		return ticket.title || ''
+		return [ticket.title || '', resolveTypeLabel(ticket)].filter(Boolean).join(' · ')
 	}
 
 	if (columnKey === 'createdBy') {
 		return ticket.creatorUid || ''
+	}
+
+	if (columnKey === 'province') {
+		return ticket.province || ''
 	}
 
 	if (columnKey === 'userDescription') {
@@ -184,7 +198,7 @@ onBeforeUnmount(() => {
 				</colgroup>
 				<thead>
 					<tr>
-						<th v-for="column in columns" :key="column.key" :class="{ 'gi-support-table__cell--sticky': column.sticky }" :style="getColumnStyle(column)">
+						<th v-for="column in columns" :key="column.key" :style="getColumnStyle(column)">
 							<div class="gi-support-table__header-content">
 								<button class="gi-support-table__sort-button" type="button" @click="toggleSort(column.key)">
 									<span class="gi-support-table__header-label">{{ column.label }}</span>
@@ -197,15 +211,19 @@ onBeforeUnmount(() => {
 				</thead>
 				<tbody>
 					<tr v-for="ticket in tickets" :key="ticket.id" class="gi-support-table__row" @click="emit('open', ticket.id)">
-						<td v-for="column in columns" :key="column.key" :class="{ 'gi-support-table__cell--sticky': column.sticky }" :style="getColumnStyle(column)" :title="getCellTitle(column.key, ticket)">
+						<td v-for="column in columns" :key="column.key" :style="getColumnStyle(column)" :title="getCellTitle(column.key, ticket)">
 							<template v-if="column.key === 'number'">
 								<strong class="gi-support-table__cell-text">{{ ticket.number }}</strong>
 							</template>
 							<template v-else-if="column.key === 'title'">
 								<div class="gi-support-table__title gi-support-table__cell-text">{{ ticket.title }}</div>
+								<div class="gi-support-table__type gi-support-table__cell-text">{{ resolveTypeLabel(ticket) }}</div>
 							</template>
 							<template v-else-if="column.key === 'createdBy'">
 								<span class="gi-support-table__cell-text">{{ ticket.creatorUid }}</span>
+							</template>
+							<template v-else-if="column.key === 'province'">
+								<span class="gi-support-table__cell-text">{{ ticket.province || 'Sin provincia' }}</span>
 							</template>
 							<template v-else-if="column.key === 'userDescription'">
 								<span class="gi-support-table__description gi-support-table__cell-text">{{ excerpt(ticket.userDescription || '') }}</span>
@@ -313,6 +331,16 @@ onBeforeUnmount(() => {
 	font-size: .9rem;
 }
 
+.gi-support-table__type {
+	margin-top: .25rem;
+	font-size: .8rem;
+	font-weight: 600;
+	color: #587068;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .gi-support-table__resize-handle {
 	position: absolute;
 	right: 0;
@@ -333,16 +361,6 @@ onBeforeUnmount(() => {
 
 .gi-support-table__row:hover td {
 	background: rgba(244, 248, 246, .98);
-}
-
-.gi-support-table__cell--sticky {
-	position: sticky;
-	left: 0;
-	z-index: 1;
-}
-
-.gi-support-table tbody .gi-support-table__cell--sticky {
-	background: rgba(255, 255, 255, .98);
 }
 
 .gi-support-table__title {

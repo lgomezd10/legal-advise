@@ -8,7 +8,7 @@ import { SearchableSelectStub, TicketFormStub, TicketListStub, TicketSidebarPane
 import { createBootstrapData, createTicket } from './helpers/testData'
 
 describe('Pantallas de usuario', () => {
-	it('busca en comentarios publicos pero no en comentarios internos', async() => {
+	it('busca en comentarios públicos pero no en comentarios internos', async() => {
 		const TicketListResultStub = defineComponent({
 			name: 'TicketList',
 			props: {
@@ -41,7 +41,7 @@ describe('Pantallas de usuario', () => {
 		expect(wrapper.text()).not.toContain('TK-INTERNO')
 	})
 
-	it('permite filtrar por fecha de ultima modificacion desde la consola de usuario', async() => {
+	it('permite filtrar por fecha de última modificación desde la consola de usuario', async() => {
 		const TicketListResultStub = defineComponent({
 			name: 'TicketList',
 			props: {
@@ -114,10 +114,50 @@ describe('Pantallas de usuario', () => {
 		expect(wrapper.text()).toContain('Nuevo ticket')
 		expect(wrapper.text()).toContain('Seleccion de tipo')
 		expect(wrapper.text()).toContain('Provincia')
+		expect(wrapper.text()).toContain('Madrid')
 		expect(wrapper.text()).toContain('Ruta elegida')
 		expect(wrapper.text()).toContain('Continuar')
 		expect(wrapper.text()).toContain('Cancelar')
-		expect(wrapper.text()).toContain('Anadir provincia')
+		expect(wrapper.text()).toContain('Añadir provincia')
+	})
+
+	it('guarda la última provincia seleccionada para reutilizarla en el siguiente ticket', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['usuario'], personalConfig: { email: 'usuario@example.com', city: 'Madrid', province: 'Madrid' } })
+		ticketsStoreMock.draft = {
+			selectedPath: [1, 11],
+			province: 'Sevilla',
+			title: 'Borrador',
+			userDescription: '<p>Texto</p>',
+			urgencyId: '1',
+			communicationChannel: 'nextcloud_mail',
+			personalData: { city: 'Madrid', province: 'Madrid' },
+			attachments: { files: [], links: [] },
+		}
+
+		const wrapper = mount(NewTicketView, {
+			global: {
+				stubs: {
+					SearchableSelect: SearchableSelectStub,
+					TypeCascadeSelector: TypeCascadeSelectorStub,
+					TicketForm: TicketFormStub,
+				},
+			},
+		})
+
+		wrapper.getComponent(TicketFormStub).vm.$emit('submit', {
+			title: 'Nuevo ticket',
+			userDescription: '<p>Texto</p>',
+			urgencyId: 1,
+			communicationChannel: 'nextcloud_mail',
+			personalData: { email: 'usuario@example.com', city: 'Madrid' },
+		})
+		await flushPromises()
+
+		expect(ticketsStoreMock.create).toHaveBeenCalledWith(expect.objectContaining({
+			province: 'Sevilla',
+			personalData: expect.objectContaining({ province: 'Sevilla' }),
+		}))
+		expect(bootstrapStoreMock.setPersonalConfig).toHaveBeenCalledWith(expect.objectContaining({ province: 'Sevilla' }))
 	})
 
 	it('muestra el formulario de detalle cuando ya existe borrador con tipo y provincia', () => {

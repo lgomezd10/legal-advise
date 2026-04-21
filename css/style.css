@@ -304,21 +304,27 @@ body,
 	flex: none;
 }
 
+.gi-app-dialog-backdrop,
 .gi-dialog-backdrop {
 	position: fixed;
 	inset: 0;
 	z-index: 120;
 	display: grid;
-	place-items: center;
-	padding: 1rem;
+	align-items: stretch;
+	justify-items: center;
+	padding: .75rem;
 	background: rgba(24, 38, 34, .34);
 }
 
+.gi-app-dialog,
 .gi-dialog {
 	width: min(32rem, 100%);
-	max-height: calc(100vh - 2rem);
+	height: calc(100vh - 1.5rem);
+	max-height: calc(100vh - 1.5rem);
+	min-height: calc(100vh - 1.5rem);
 	overflow: auto;
-	display: grid;
+	display: flex;
+	flex-direction: column;
 	gap: 1rem;
 	padding: 1rem;
 	border-radius: 22px;
@@ -326,7 +332,6 @@ body,
 	border: 1px solid rgba(49, 96, 91, .14);
 	box-shadow: 0 24px 64px rgba(20, 34, 30, .18);
 	box-sizing: border-box;
-	align-content: start;
 }
 
 .gi-dialog--compact {
@@ -362,6 +367,7 @@ body,
 .gi-dialog__body {
 	display: grid;
 	gap: .8rem;
+	min-height: 0;
 }
 
 .gi-dialog__message {

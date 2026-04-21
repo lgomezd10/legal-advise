@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { AssignableOption, StatusOption, Ticket } from '@/types'
+import type { AssignableOption, StatusOption, Ticket, TypeNode } from '@/types'
+import { getTypeLabel } from '@/services/ticketDraft'
 import { formatDateTime, getStatusLabel } from '@/utils/formatting'
 import { excerptRichText } from '@/utils/richText'
 
@@ -9,6 +10,7 @@ const props = defineProps<{
 	tickets: Ticket[]
 	emptyLabel: string
  	statuses?: StatusOption[]
+	types?: TypeNode[]
 	users?: AssignableOption[]
 	groups?: AssignableOption[]
 }>()
@@ -18,6 +20,7 @@ const emit = defineEmits<{
 }>()
 
 const safeStatuses = computed<StatusOption[]>(() => props.statuses ?? [])
+const safeTypes = computed<TypeNode[]>(() => props.types ?? [])
 
 function resolveStatusLabel(statusId: string) {
 	return getStatusLabel(statusId, safeStatuses.value)
@@ -25,6 +28,10 @@ function resolveStatusLabel(statusId: string) {
 
 function resolveDescription(value: string) {
 	return excerptRichText(value, 180)
+}
+
+function resolveTypeLabel(typeId?: number | null) {
+	return getTypeLabel(safeTypes.value, typeId) || 'Sin tipo'
 }
 
 </script>
@@ -42,6 +49,7 @@ function resolveDescription(value: string) {
 			</div>
 			<p class="gi-ticket-card__description">{{ resolveDescription(ticket.userDescription) }}</p>
 			<div class="gi-ticket-card__footer">
+				<span class="gi-ticket-card__type">{{ resolveTypeLabel(ticket.typeId) }}</span>
 				<span class="gi-badge">{{ resolveStatusLabel(ticket.status) }}</span>
 			</div>
 		</button>
@@ -120,7 +128,18 @@ function resolveDescription(value: string) {
 }
 
 .gi-ticket-card__footer {
-	justify-content: flex-end;
+	justify-content: space-between;
 	align-items: center;
+	flex-wrap: wrap;
+}
+
+.gi-ticket-card__type {
+	color: #4f665f;
+	font-size: .84rem;
+	font-weight: 600;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 </style>

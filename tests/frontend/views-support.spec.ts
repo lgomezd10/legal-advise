@@ -25,8 +25,8 @@ describe('Pantallas de soporte', () => {
 		})
 		window.localStorage.setItem('legal_advice:support_console_state', JSON.stringify({
 			visibleColumns: ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription'],
-			columnEditorOrder: ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription', 'status', 'urgency', 'createdAt'],
-			criteria: { city: 'Sevilla', text: 'seguimiento' },
+			columnEditorOrder: ['number', 'updatedAt', 'assignment', 'createdBy', 'province', 'title', 'userDescription', 'status', 'urgency', 'createdAt'],
+			criteria: { province: 'Sevilla', text: 'seguimiento' },
 			sortKey: 'updatedAt',
 			sortDirection: 'desc',
 			selectedFilterId: null,
@@ -45,8 +45,8 @@ describe('Pantallas de soporte', () => {
 
 		const builder = wrapper.getComponent(SupportFilterBuilderPropsStub)
 		expect(builder.props('initialFilterId')).toBe(null)
-		expect(builder.props('initialCriteria')).toEqual({ city: 'Sevilla', text: 'seguimiento' })
-		expect(ticketsStoreMock.load).toHaveBeenCalledWith('support', { city: 'Sevilla', text: 'seguimiento' })
+		expect(builder.props('initialCriteria')).toEqual({ province: 'Sevilla', text: 'seguimiento' })
+		expect(ticketsStoreMock.load).toHaveBeenCalledWith('support', { province: 'Sevilla', text: 'seguimiento' })
 	})
 
 	it('aplica un filtro de soporte indicado en la query de la ruta', async() => {
@@ -67,7 +67,7 @@ describe('Pantallas de soporte', () => {
 		routeState.query = { filterId: '20' }
 		supportFiltersStoreMock.items = [
 			{ id: 10, name: 'Asignadas a mi', criteria: { assignedUser: '__me__' }, isPredefined: true, active: true, isDefault: true, sortOrder: 10 },
-			{ id: 20, name: 'Madrid abiertas', criteria: { city: 'Madrid', status: ['nuevo'] }, isPredefined: false, active: true, isDefault: false, sortOrder: 20 },
+			{ id: 20, name: 'Madrid abiertas', criteria: { province: 'Madrid', status: ['nuevo'] }, isPredefined: false, active: true, isDefault: false, sortOrder: 20 },
 		]
 
 		const wrapper = mount(SupportConsoleView, {
@@ -83,7 +83,7 @@ describe('Pantallas de soporte', () => {
 
 		const builder = wrapper.getComponent(SupportFilterBuilderPropsStub)
 		expect(builder.props('initialFilterId')).toBe(20)
-		expect(ticketsStoreMock.load).toHaveBeenCalledWith('support', { city: 'Madrid', status: ['nuevo'] })
+		expect(ticketsStoreMock.load).toHaveBeenCalledWith('support', { province: 'Madrid', status: ['nuevo'] })
 	})
 
 	it('muestra acciones principales y editor de columnas en la consola de soporte', async() => {
@@ -113,10 +113,48 @@ describe('Pantallas de soporte', () => {
 
 		await wrapper.get('button').trigger('click')
 		await wrapper.get('button:nth-of-type(2)').trigger('click')
-		expect(wrapper.text()).toContain('Numero de ticket')
-		expect(wrapper.text()).toContain('Ultima modificacion')
+		expect(wrapper.text()).toContain('Número de ticket')
+		expect(wrapper.text()).toContain('Última modificación')
+		expect(wrapper.text()).toContain('Provincia')
 		expect(wrapper.text()).toContain('Restaurar por defecto')
 		expect(wrapper.text()).toContain('Listo')
+	})
+
+	it('permite activar Provincia aunque el orden guardado sea anterior a esa columna', async() => {
+		bootstrapStoreMock.data = createBootstrapData({
+			roles: ['soporte'],
+			navigation: [{ id: 'soporte', label: 'Consola de soporte', route: '/soporte', visible: true }],
+		})
+		supportFiltersStoreMock.items = [{ id: 10, name: 'Asignadas a mi', criteria: { assignedUser: '__me__' }, isPredefined: true, active: true, isDefault: true, sortOrder: 10 }]
+		ticketsStoreMock.items = [createTicket({ id: 100 })]
+		window.localStorage.setItem('legal_advice:support_console_state', JSON.stringify({
+			visibleColumns: ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription'],
+			columnEditorOrder: ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription', 'status', 'urgency', 'createdAt'],
+			criteria: {},
+			sortKey: 'updatedAt',
+			sortDirection: 'desc',
+			selectedFilterId: null,
+		}))
+
+		const wrapper = mount(SupportConsoleView, {
+			global: {
+				stubs: {
+					SupportFilterBuilder: SupportFilterBuilderStub,
+					SupportTicketTable: SupportTicketTableStub,
+				},
+			},
+		})
+
+		await flushPromises()
+		await wrapper.get('button:nth-of-type(2)').trigger('click')
+
+		const provinceRow = wrapper.findAll('.gi-support-column-editor__item').find((row) => row.text().includes('Provincia'))
+		expect(provinceRow).toBeTruthy()
+		const provinceCheckbox = provinceRow!.get('input[type="checkbox"]')
+		expect((provinceCheckbox.element as HTMLInputElement).checked).toBe(false)
+
+		await provinceCheckbox.setValue(true)
+		expect((provinceCheckbox.element as HTMLInputElement).checked).toBe(true)
 	})
 
 	it('muestra la pantalla de nuevo ticket de soporte con provincia y asignacion', () => {
@@ -140,6 +178,32 @@ describe('Pantallas de soporte', () => {
 		expect(wrapper.text()).toContain('Madrid')
 		expect(wrapper.text()).toContain('Grupo Soporte')
 		expect(wrapper.text()).toContain('Soporte Uno')
+	})
+
+	it('permite crear tickets de soporte sin provincia', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
+
+		const wrapper = mount(SupportNewTicketView, {
+			global: {
+				stubs: {
+					SearchableSelect: SearchableSelectStub,
+					TicketForm: TicketFormStub,
+				},
+			},
+		})
+
+		wrapper.getComponent(TicketFormStub).vm.$emit('submit', {
+			title: 'Ticket soporte',
+			userDescription: '<p>Texto</p>',
+			urgencyId: 1,
+			communicationChannel: 'nextcloud_mail',
+			personalData: { email: 'soporte@example.com' },
+		})
+		await flushPromises()
+
+		expect(ticketsStoreMock.create).toHaveBeenCalledWith(expect.objectContaining({
+			province: null,
+		}))
 	})
 
 	it('muestra la pantalla completa de soporte con acciones de vuelta', async() => {
