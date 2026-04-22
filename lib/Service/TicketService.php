@@ -378,12 +378,12 @@ class TicketService {
 	private function serializeTicket(string $uid, Ticket $ticket, bool $includeDetail = false): array {
 		$data = $ticket->jsonSerialize();
 		$isClosedStatus = $this->catalogService->isClosedStatus((string) $ticket->getStatus());
-		$publicComments = $this->commentMapper->findBy('ticket_id', $ticket->getId(), 'created_at', 'ASC');
+		$comments = $this->commentMapper->findBy('ticket_id', $ticket->getId(), 'created_at', 'ASC');
 		$data['canRead'] = $this->permissionService->canReadTicket($uid, $ticket);
 		$data['canManage'] = $this->permissionService->canManageTicket($uid, $ticket);
 		$data['canComment'] = !$isClosedStatus && $this->permissionService->canCommentOnTicket($uid, $ticket);
 		$data['canReopen'] = $isClosedStatus && $this->canReopenTicket($uid, $ticket);
-		$data['publicCommentSearchText'] = $this->buildPublicCommentSearchText($publicComments);
+		$data['publicCommentSearchText'] = $this->buildCommentSearchText($uid, $ticket, $comments);
 		$attachments = $includeDetail ? $this->attachmentService->listForTicket($ticket->getId()) : [];
 		$attachmentsByCommentId = [];
 		foreach ($attachments as $attachment) {
@@ -401,7 +401,7 @@ class TicketService {
 			$comment = $row->jsonSerialize();
 			$comment['attachments'] = $attachmentsByCommentId[(int) ($comment['id'] ?? 0)] ?? [];
 			return $comment;
-		}, $publicComments), fn (array $comment) => $this->permissionService->canSeeComment($uid, $ticket, (string) $comment['visibility']))) : [];
+		}, $comments), fn (array $comment) => $this->permissionService->canSeeComment($uid, $ticket, (string) $comment['visibility']))) : [];
 		$data['history'] = $includeDetail ? array_values(array_filter(array_map(fn ($row) => $row->jsonSerialize(), $this->historyMapper->findBy('ticket_id', $ticket->getId(), 'created_at', 'ASC')), fn (array $entry) => $entry['visibility'] === 'publico' || $this->permissionService->canManageTicket($uid, $ticket))) : [];
 		$data['personalData'] = $includeDetail ? array_map(fn ($row) => $row->jsonSerialize(), $this->ticketDataMapper->findBy('ticket_id', $ticket->getId(), 'field_key', 'ASC')) : [];
 		$data['taskSync'] = $includeDetail ? $this->taskSyncService->getSyncForTicket($ticket->getId()) : null;
@@ -411,10 +411,10 @@ class TicketService {
 	/**
 	 * @param Comment[] $comments
 	 */
-	private function buildPublicCommentSearchText(array $comments): string {
+	private function buildCommentSearchText(string $uid, Ticket $ticket, array $comments): string {
 		$parts = [];
 		foreach ($comments as $comment) {
-			if ($comment->getVisibility() !== 'publico') {
+			if (!$this->permissionService->canSeeComment($uid, $ticket, $comment->getVisibility())) {
 				continue;
 			}
 

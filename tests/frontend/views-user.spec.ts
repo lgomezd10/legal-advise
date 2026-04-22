@@ -98,6 +98,36 @@ describe('Pantallas de usuario', () => {
 		expect(wrapper.text()).toContain('Buscar')
 	})
 
+	it('expande Pendiente de mi al entrar si hay tickets pendientes tras la carga', async() => {
+		const TicketListResultStub = defineComponent({
+			name: 'TicketList',
+			props: {
+				tickets: { type: Array, default: () => [] },
+			},
+			template: `<div class="ticket-list-result-stub">{{ tickets.map((ticket) => ticket.number).join(', ') }}</div>`,
+		})
+
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['usuario'] })
+		ticketsStoreMock.items = []
+		ticketsStoreMock.load.mockImplementation(async() => {
+			ticketsStoreMock.items = [
+				createTicket({ id: 1, number: 'TK-PENDIENTE', status: 'en_espera_usuario' }),
+			]
+		})
+
+		const wrapper = mount(UserTicketsView, {
+			global: {
+				stubs: {
+					TicketList: TicketListResultStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('TK-PENDIENTE')
+	})
+
 	it('muestra el paso de seleccion de tipo y provincia al crear un ticket', () => {
 		bootstrapStoreMock.data = createBootstrapData({ roles: ['usuario'] })
 

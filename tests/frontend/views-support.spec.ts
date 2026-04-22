@@ -120,7 +120,7 @@ describe('Pantallas de soporte', () => {
 		expect(wrapper.text()).toContain('Listo')
 	})
 
-	it('permite activar Provincia aunque el orden guardado sea anterior a esa columna', async() => {
+	it('migra el estado guardado antiguo a las nuevas columnas por defecto de soporte', async() => {
 		bootstrapStoreMock.data = createBootstrapData({
 			roles: ['soporte'],
 			navigation: [{ id: 'soporte', label: 'Consola de soporte', route: '/soporte', visible: true }],
@@ -151,8 +151,10 @@ describe('Pantallas de soporte', () => {
 		const provinceRow = wrapper.findAll('.gi-support-column-editor__item').find((row) => row.text().includes('Provincia'))
 		expect(provinceRow).toBeTruthy()
 		const provinceCheckbox = provinceRow!.get('input[type="checkbox"]')
-		expect((provinceCheckbox.element as HTMLInputElement).checked).toBe(false)
+		expect((provinceCheckbox.element as HTMLInputElement).checked).toBe(true)
 
+		await provinceCheckbox.setValue(false)
+		expect((provinceCheckbox.element as HTMLInputElement).checked).toBe(false)
 		await provinceCheckbox.setValue(true)
 		expect((provinceCheckbox.element as HTMLInputElement).checked).toBe(true)
 	})

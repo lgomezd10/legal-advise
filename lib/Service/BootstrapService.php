@@ -85,7 +85,7 @@ class BootstrapService {
 				'types' => [],
 				'fields' => [],
 				'provinces' => [],
-				'attachmentConfig' => ['allowedExtensions' => [], 'maxFileSizeMb' => 25],
+				'attachmentConfig' => ['allowedExtensions' => [], 'maxFileSizeMb' => 100],
 			],
 			'supportFilters' => [],
 			'personalConfig' => [],

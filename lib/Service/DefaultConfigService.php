@@ -63,7 +63,7 @@ class DefaultConfigService {
 			],
 			'attachment_config' => [
 				'allowedExtensions' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'tif', 'tiff', 'mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac', 'flac', 'opus', 'wma', 'mp4', 'm4v', 'mov', 'avi', 'mkv', 'webm', 'mpeg', 'mpg', '3gp', 'wmv', 'ogv'],
-				'maxFileSizeMb' => 25,
+				'maxFileSizeMb' => 100,
 			],
 		];
 
@@ -77,7 +77,9 @@ class DefaultConfigService {
 					$current = is_array($existing->getConfigValue()) ? $existing->getConfigValue() : [];
 					$currentExtensions = is_array($current['allowedExtensions'] ?? null) ? $current['allowedExtensions'] : [];
 					$current['allowedExtensions'] = array_values(array_unique(array_filter(array_map(static fn ($extension) => is_string($extension) ? strtolower(trim(ltrim($extension, '.'))) : '', array_merge($value['allowedExtensions'], $currentExtensions)), static fn (string $extension): bool => $extension !== '')));
-					$current['maxFileSizeMb'] = max(1, (int) ($current['maxFileSizeMb'] ?? $value['maxFileSizeMb']));
+					$hasCurrentMax = array_key_exists('maxFileSizeMb', $current);
+					$currentMax = $hasCurrentMax ? max(1, (int) $current['maxFileSizeMb']) : 0;
+					$current['maxFileSizeMb'] = !$hasCurrentMax || $currentMax === 25 ? $value['maxFileSizeMb'] : $currentMax;
 					$existing->setConfigValue($current);
 					$this->settingMapper->update($existing);
 				}

@@ -17,7 +17,7 @@ class CatalogService {
 			'mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac', 'flac', 'opus', 'wma',
 			'mp4', 'm4v', 'mov', 'avi', 'mkv', 'webm', 'mpeg', 'mpg', '3gp', 'wmv', 'ogv',
 		],
-		'maxFileSizeMb' => 25,
+		'maxFileSizeMb' => 100,
 	];
 
 	public const CORE_STATUS_DEFINITIONS = [

@@ -232,7 +232,7 @@ onBeforeUnmount(() => {
 								<span class="gi-support-table__cell-text">{{ formatAssignment(ticket) }}</span>
 							</template>
 							<template v-else-if="column.key === 'status'">
-								<span class="gi-badge gi-support-table__cell-text">{{ ticket.status }}</span>
+								<span class="gi-badge gi-badge--success gi-support-table__cell-text">{{ ticket.status }}</span>
 							</template>
 							<template v-else-if="column.key === 'urgency'">
 								<span class="gi-support-table__cell-text">{{ ticket.urgencyId ?? 'Sin criticidad' }}</span>
@@ -253,10 +253,10 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .gi-table-shell {
-	border: 1px solid rgba(49, 96, 91, .12);
+	border: 1px solid var(--gi-color-border);
 	border-radius: 20px;
-	background: rgba(255, 255, 255, .94);
-	box-shadow: 0 20px 48px rgba(34, 62, 55, .06);
+	background: var(--gi-color-surface);
+	box-shadow: 0 20px 48px var(--gi-color-shadow-soft);
 	overflow: hidden;
 }
 
@@ -279,8 +279,8 @@ onBeforeUnmount(() => {
 	padding: .95rem 1rem;
 	text-align: left;
 	vertical-align: top;
-	border-bottom: 1px solid rgba(49, 96, 91, .08);
-	background: rgba(255, 255, 255, .96);
+	border-bottom: 1px solid var(--gi-color-border);
+	background: var(--gi-color-surface);
 	overflow: hidden;
 }
 
@@ -288,11 +288,11 @@ onBeforeUnmount(() => {
 	position: sticky;
 	top: 0;
 	z-index: 1;
-	background: rgba(239, 245, 241, .98);
+	background: var(--gi-color-surface-subtle);
 	font-size: .83rem;
 	text-transform: uppercase;
 	letter-spacing: .04em;
-	color: #526861;
+	color: var(--gi-color-text-muted);
 }
 
 .gi-support-table__header-content {
@@ -335,7 +335,7 @@ onBeforeUnmount(() => {
 	margin-top: .25rem;
 	font-size: .8rem;
 	font-weight: 600;
-	color: #587068;
+	color: var(--gi-color-text-muted);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -350,7 +350,7 @@ onBeforeUnmount(() => {
 	height: 1.8rem;
 	border: none;
 	border-radius: 999px;
-	background: linear-gradient(180deg, rgba(49, 96, 91, .12), rgba(49, 96, 91, .28));
+	background: linear-gradient(180deg, var(--gi-color-border), var(--gi-color-border-strong));
 	cursor: col-resize;
 	padding: 0;
 }
@@ -360,7 +360,7 @@ onBeforeUnmount(() => {
 }
 
 .gi-support-table__row:hover td {
-	background: rgba(244, 248, 246, .98);
+	background: var(--gi-color-surface-subtle);
 }
 
 .gi-support-table__title {
@@ -370,7 +370,7 @@ onBeforeUnmount(() => {
 .gi-support-table__description {
 	display: inline-block;
 	max-width: 100%;
-	color: #596d66;
+	color: var(--gi-color-text-muted);
 }
 
 .gi-support-table__cell-text {

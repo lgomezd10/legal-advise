@@ -165,7 +165,7 @@ async function submit(payload: Record<string, unknown>) {
 
 .gi-ticket-creation-card__header p {
 	margin-top: .2rem;
-	color: #5e706a;
+	color: var(--gi-color-text-muted);
 }
 
 .gi-ticket-creation-card__header--summary {
@@ -205,15 +205,15 @@ async function submit(payload: Record<string, unknown>) {
 	gap: .35rem;
 	padding: .9rem 1rem;
 	border-radius: 18px;
-	background: rgba(239, 245, 241, .98);
-	border: 1px solid rgba(49, 96, 91, .1);
+	background: var(--gi-color-primary-soft);
+	border: 1px solid var(--gi-color-border);
 }
 
 .gi-ticket-type-summary__label {
 	font-size: .74rem;
 	text-transform: uppercase;
 	letter-spacing: .06em;
-	color: #60746d;
+	color: var(--gi-color-text-muted);
 }
 
 </style>

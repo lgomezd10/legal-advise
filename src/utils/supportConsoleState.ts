@@ -13,8 +13,10 @@ export type SupportConsoleState = {
 
 const STORAGE_KEY = 'legal_advice:support_console_state'
 
-export const DEFAULT_SUPPORT_COLUMNS: SupportColumnKey[] = ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription']
-export const DEFAULT_COLUMN_EDITOR_ORDER: SupportColumnKey[] = ['number', 'updatedAt', 'assignment', 'createdBy', 'province', 'title', 'userDescription', 'status', 'urgency', 'createdAt']
+const LEGACY_DEFAULT_SUPPORT_COLUMNS: SupportColumnKey[] = ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription']
+
+export const DEFAULT_SUPPORT_COLUMNS: SupportColumnKey[] = ['updatedAt', 'province', 'title', 'status', 'userDescription']
+export const DEFAULT_COLUMN_EDITOR_ORDER: SupportColumnKey[] = ['updatedAt', 'province', 'title', 'status', 'userDescription', 'number', 'assignment', 'createdBy', 'urgency', 'createdAt']
 export const DEFAULT_SUPPORT_SORT: Pick<SupportConsoleState, 'sortKey' | 'sortDirection'> = {
 	sortKey: 'updatedAt',
 	sortDirection: 'desc',
@@ -33,7 +35,19 @@ export function loadSupportConsoleState(): SupportConsoleState | null {
 			return null
 		}
 
-		return JSON.parse(raw) as SupportConsoleState
+		const parsed = JSON.parse(raw) as SupportConsoleState
+		const visibleColumns = normalizeSupportColumns(parsed.visibleColumns, DEFAULT_SUPPORT_COLUMNS)
+		const columnEditorOrder = normalizeSupportColumnOrder(parsed.columnEditorOrder, DEFAULT_COLUMN_EDITOR_ORDER)
+
+		if (isSameColumns(visibleColumns, LEGACY_DEFAULT_SUPPORT_COLUMNS)) {
+			parsed.visibleColumns = [...DEFAULT_SUPPORT_COLUMNS]
+			parsed.columnEditorOrder = [...DEFAULT_COLUMN_EDITOR_ORDER]
+			return parsed
+		}
+
+		parsed.visibleColumns = visibleColumns
+		parsed.columnEditorOrder = columnEditorOrder
+		return parsed
 	} catch {
 		return null
 	}
@@ -62,4 +76,8 @@ export function normalizeSupportColumnOrder(value: unknown, fallback: SupportCol
 	const existing = new Set<SupportColumnKey>(normalized)
 	const missing = KNOWN_COLUMN_KEYS.filter((key) => !existing.has(key))
 	return [...normalized, ...missing]
+}
+
+function isSameColumns(left: SupportColumnKey[], right: SupportColumnKey[]) {
+	return left.length === right.length && left.every((column, index) => column === right[index])
 }

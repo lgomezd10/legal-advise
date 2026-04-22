@@ -241,6 +241,32 @@ describe('Contratos visibles de componentes de pantalla', () => {
 		expect(supportWrapper.text()).toContain('A Coruña: Necesito asesoramiento > Solo Territorial')
 	})
 
+	it('TicketList y SupportTicketTable fijan en verde la chapa de estado', () => {
+		const bootstrap = createBootstrapData({ roles: ['soporte', 'usuario'] })
+		const ticket = createTicket({ status: 'en_espera_usuario' })
+
+		const userWrapper = mount(TicketList, {
+			props: {
+				tickets: [ticket],
+				emptyLabel: 'Sin tickets',
+				statuses: bootstrap.catalogs.statuses,
+				types: bootstrap.catalogs.types,
+			},
+		})
+
+		const supportWrapper = mount(SupportTicketTable, {
+			props: {
+				tickets: [ticket],
+				emptyLabel: 'Sin tickets',
+				visibleColumns: ['status'],
+				types: bootstrap.catalogs.types,
+			},
+		})
+
+		expect(userWrapper.get('.gi-badge').classes()).toContain('gi-badge--success')
+		expect(supportWrapper.get('.gi-badge').classes()).toContain('gi-badge--success')
+	})
+
 	it('TicketSidebarPanel muestra pestañas de usuario y agrupa opciones de comentarios en Mis tickets', async() => {
 		const bootstrap = createBootstrapData({ roles: ['usuario'] })
 		const wrapper = mount(TicketSidebarPanel, {

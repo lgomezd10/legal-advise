@@ -50,7 +50,7 @@ function resolveTypeLabel(typeId?: number | null) {
 			<p class="gi-ticket-card__description">{{ resolveDescription(ticket.userDescription) }}</p>
 			<div class="gi-ticket-card__footer">
 				<span class="gi-ticket-card__type">{{ resolveTypeLabel(ticket.typeId) }}</span>
-				<span class="gi-badge">{{ resolveStatusLabel(ticket.status) }}</span>
+				<span class="gi-badge gi-badge--success">{{ resolveStatusLabel(ticket.status) }}</span>
 			</div>
 		</button>
 		<div v-if="tickets.length === 0" class="gi-empty-state">

@@ -12,10 +12,8 @@ class SupportFilterService {
 
 	private const PREDEFINED_FILTERS = [
 		['name' => 'Asignadas a mi', 'criteria' => ['assignedUser' => '__me__', 'status' => self::OPEN_TICKET_STATUSES], 'sortOrder' => 10, 'isDefault' => true],
-		['name' => 'Asignadas a mis grupos', 'criteria' => ['assignedGroup' => '__my_groups__', 'status' => self::OPEN_TICKET_STATUSES], 'sortOrder' => 20, 'isDefault' => false],
+		['name' => 'Pendientes de usuario', 'criteria' => ['status' => ['en_espera_usuario']], 'sortOrder' => 20, 'isDefault' => false],
 		['name' => 'Sin asignar', 'criteria' => ['unassigned' => true, 'status' => self::OPEN_TICKET_STATUSES], 'sortOrder' => 30, 'isDefault' => false],
-		['name' => 'Pendientes de usuario', 'criteria' => ['status' => ['en_espera_usuario']], 'sortOrder' => 40, 'isDefault' => false],
-		['name' => 'Cerradas recientes', 'criteria' => ['status' => ['resuelto', 'cerrado'], 'updatedWithinDays' => 30], 'sortOrder' => 50, 'isDefault' => false],
 	];
 
 	public function __construct(private readonly SavedFilterMapper $savedFilterMapper) {
@@ -152,10 +150,15 @@ class SupportFilterService {
 			$byName[$row->getName()] = $row;
 		}
 
-		if (isset($byName['Abiertas'])) {
-			$this->savedFilterMapper->delete($byName['Abiertas']);
-			unset($byName['Abiertas']);
-			$globalRows = array_values(array_filter($globalRows, static fn (SavedFilter $row): bool => $row->getName() !== 'Abiertas'));
+		$obsoleteGlobalFilters = ['Abiertas', 'Asignadas a mis grupos', 'Cerradas recientes'];
+		foreach ($obsoleteGlobalFilters as $filterName) {
+			if (!isset($byName[$filterName])) {
+				continue;
+			}
+
+			$this->savedFilterMapper->delete($byName[$filterName]);
+			unset($byName[$filterName]);
+			$globalRows = array_values(array_filter($globalRows, static fn (SavedFilter $row): bool => $row->getName() !== $filterName));
 		}
 
 		if ($globalRows !== []) {

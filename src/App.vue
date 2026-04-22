@@ -6,6 +6,8 @@ import { useSupportFiltersStore } from '@/store/supportFilters'
 import type { SavedFilter } from '@/types'
 
 const DEFAULT_SIDEBAR_WIDTH = 570
+const DESKTOP_NAV_BREAKPOINT = 900
+const DESKTOP_SIDEBAR_BREAKPOINT = 1100
 
 const router = useRouter()
 const route = useRoute()
@@ -17,7 +19,7 @@ const initialHasSupportAccess = bootstrapStore.data.roles.includes('soporte')
 const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
 const sidebarWidth = ref(DEFAULT_SIDEBAR_WIDTH)
 const shellRef = ref<HTMLElement | null>(null)
-const navigationVisible = ref(typeof window === 'undefined' ? initialHasSupportAccess : window.innerWidth >= 1100 && initialHasSupportAccess)
+const navigationVisible = ref(typeof window === 'undefined' ? initialHasSupportAccess : window.innerWidth >= DESKTOP_NAV_BREAKPOINT && initialHasSupportAccess)
 
 const navigation = computed(() => bootstrapStore.data.navigation)
 const hasNavigation = computed(() => navigation.value.length > 0)
@@ -55,8 +57,8 @@ const hasSidebar = computed(() => {
 	return hasTicketSidebarRoute && !isFullscreenRoute
 })
 const sidebarBaseRoute = computed(() => route.path.startsWith('/soporte') ? '/soporte' : '/mis-incidencias')
-const isDesktopSidebar = computed(() => hasSidebar.value && viewportWidth.value >= 1100)
-const isDesktopNavigation = computed(() => viewportWidth.value >= 1100)
+const isDesktopSidebar = computed(() => hasSidebar.value && viewportWidth.value >= DESKTOP_SIDEBAR_BREAKPOINT)
+const isDesktopNavigation = computed(() => viewportWidth.value >= DESKTOP_NAV_BREAKPOINT)
 const shellStyle = computed(() => isDesktopSidebar.value ? { '--gi-sidebar-width': `${sidebarWidth.value}px` } : {})
 
 watch(hasSidebar, (nextHasSidebar, previousHasSidebar) => {
@@ -75,9 +77,9 @@ watch(hasSupportAccess, (nextHasSupportAccess) => {
 })
 
 function updateViewportWidth() {
-	const previousDesktop = viewportWidth.value >= 1100
+	const previousDesktop = viewportWidth.value >= DESKTOP_NAV_BREAKPOINT
 	viewportWidth.value = window.innerWidth
-	if (window.innerWidth < 1100) {
+	if (window.innerWidth < DESKTOP_NAV_BREAKPOINT) {
 		navigationVisible.value = false
 	} else if (!previousDesktop) {
 		navigationVisible.value = hasSupportAccess.value
@@ -175,6 +177,30 @@ function closeSidebar() {
 	}
 }
 
+function resolveNavigationIcon(itemId: string, routePath: string) {
+	if (routePath.startsWith('/mis-incidencias')) {
+		return 'M19 3H14.82C14.4 1.84 13.3 1 12 1S9.6 1.84 9.18 3H5C3.9 3 3 3.9 3 5V21C3 22.1 3.9 23 5 23H19C20.1 23 21 22.1 21 21V5C21 3.9 20.1 3 19 3M12 3C12.55 3 13 3.45 13 4S12.55 5 12 5 11 4.55 11 4 11.45 3 12 3M14 19H7V17H14V19M17 15H7V13H17V15M17 11H7V9H17V11Z'
+	}
+
+	if (routePath.startsWith('/soporte')) {
+		return 'M20 12V8H4V12H2V8C2 6.89 2.89 6 4 6H9V4H15V6H20C21.11 6 22 6.89 22 8V12H20M13 14H11V12H13V14M20 10V19C20 20.11 19.11 21 18 21H6C4.89 21 4 20.11 4 19V10H9V16H15V10H20Z'
+	}
+
+	if (routePath.startsWith('/administracion') || itemId === 'administracion') {
+		return 'M12 2L4 5V11C4 16.55 7.84 21.74 12 23C16.16 21.74 20 16.55 20 11V5L12 2M14.29 16.29L12 14L9.71 16.29L8.29 14.88L10.59 12.59L8.29 10.29L9.71 8.88L12 11.17L14.29 8.88L15.71 10.29L13.41 12.59L15.71 14.88L14.29 16.29Z'
+	}
+
+	if (itemId === 'configuracion' || routePath.startsWith('/configuracion')) {
+		return 'M19.14 12.94C19.18 12.64 19.2 12.33 19.2 12C19.2 11.67 19.18 11.36 19.14 11.06L21.19 9.47C21.37 9.33 21.42 9.08 21.31 8.87L19.37 5.13C19.26 4.92 19 4.84 18.78 4.91L16.36 5.69C15.86 5.31 15.32 4.99 14.73 4.73L14.36 2.16C14.33 1.94 14.14 1.78 13.91 1.78H10.09C9.86 1.78 9.67 1.94 9.64 2.16L9.27 4.73C8.68 4.99 8.14 5.31 7.64 5.69L5.22 4.91C5 4.84 4.74 4.92 4.63 5.13L2.69 8.87C2.58 9.08 2.63 9.33 2.81 9.47L4.86 11.06C4.82 11.36 4.8 11.68 4.8 12C4.8 12.32 4.82 12.64 4.86 12.94L2.81 14.53C2.63 14.67 2.58 14.92 2.69 15.13L4.63 18.87C4.74 19.08 5 19.16 5.22 19.09L7.64 18.31C8.14 18.69 8.68 19.01 9.27 19.27L9.64 21.84C9.67 22.06 9.86 22.22 10.09 22.22H13.91C14.14 22.22 14.33 22.06 14.36 21.84L14.73 19.27C15.32 19.01 15.86 18.69 16.36 18.31L18.78 19.09C19 19.16 19.26 19.08 19.37 18.87L21.31 15.13C21.42 14.92 21.37 14.67 21.19 14.53L19.14 12.94M12 15.5A3.5 3.5 0 0 1 8.5 12A3.5 3.5 0 0 1 12 8.5A3.5 3.5 0 0 1 15.5 12A3.5 3.5 0 0 1 12 15.5Z'
+	}
+
+	return 'M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2M13 9V3.5L18.5 9H13Z'
+}
+
+function resolveSupportFilterIcon() {
+	return 'M3 5H21V7H3V5M6 11H18V13H6V11M10 17H14V19H10V17Z'
+}
+
 onMounted(() => {
 	window.addEventListener('resize', updateViewportWidth)
 	window.addEventListener('focus', syncShellLayoutAfterResume)
@@ -204,6 +230,9 @@ onBeforeUnmount(() => {
 							:type="'button'"
 							:aria-expanded="item.route === '/soporte' && supportFilterItems.length > 0 ? (supportSubmenuExpanded ? 'true' : 'false') : undefined"
 							@click="item.route === '/soporte' ? handleSupportNavigation(item.route) : navigateTo(item.route)">
+							<svg class="gi-nav-item__icon" viewBox="0 0 24 24" aria-hidden="true">
+								<path :d="resolveNavigationIcon(item.id, item.route)" />
+							</svg>
 							<span>{{ item.label }}</span>
 							<svg v-if="item.route === '/soporte' && supportFilterItems.length > 0" class="gi-nav-item__toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
 								<path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
@@ -216,6 +245,9 @@ onBeforeUnmount(() => {
 								class="gi-nav-subitem"
 								:class="{ 'gi-nav-subitem--active': route.path.startsWith('/soporte') && currentSupportFilterId === filter.id }"
 								@click="navigateToSupportFilter(filter.id)">
+								<svg class="gi-nav-subitem__icon" viewBox="0 0 24 24" aria-hidden="true">
+									<path :d="resolveSupportFilterIcon()" />
+								</svg>
 								{{ filter.name }}
 							</button>
 						</div>
@@ -268,16 +300,16 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .gi-shell {
-	--gi-nav-bg: #cfe0ef;
-	--gi-nav-accent: #0a6ea8;
-	--gi-nav-text: #0f2433;
-	--gi-content-bg: #f6f7f9;
+	--gi-nav-bg: rgba(255, 255, 255, .8);
+	--gi-nav-accent: var(--gi-color-primary);
+	--gi-nav-text: var(--gi-color-text);
+	--gi-content-bg: transparent;
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
 	width: 100%;
 	max-width: none;
 	min-width: 0;
-	background: var(--gi-content-bg);
+	background: transparent;
 	height: calc(100vh - 50px);
 	min-height: calc(100vh - 50px);
 	overflow: hidden;
@@ -293,8 +325,10 @@ onBeforeUnmount(() => {
 }
 
 .gi-navigation {
-	border-right: 1px solid rgba(10, 110, 168, .14);
+	border-right: 1px solid var(--gi-color-border);
 	background: var(--gi-nav-bg);
+	backdrop-filter: blur(25px);
+	-webkit-backdrop-filter: blur(25px);
 	overflow: auto;
 	padding: 1rem .75rem .75rem;
 }
@@ -314,13 +348,13 @@ onBeforeUnmount(() => {
 	bottom: 0;
 	width: min(21rem, calc(100vw - 2rem));
 	z-index: 20;
-	box-shadow: 0 18px 40px rgba(16, 36, 51, .18);
+	box-shadow: 0 18px 40px var(--gi-color-shadow-strong);
 }
 
 .gi-navigation-backdrop {
 	position: absolute;
 	inset: 0;
-	background: rgba(15, 36, 51, .16);
+	background: var(--gi-color-overlay);
 	z-index: 15;
 }
 
@@ -338,15 +372,16 @@ onBeforeUnmount(() => {
 .gi-nav-item {
 	display: flex;
 	align-items: center;
-	gap: .7rem;
-	padding: .95rem 1rem;
+	gap: .72rem;
+	padding: .78rem .88rem;
 	border: 1px solid transparent;
-	border-radius: 12px;
+	border-radius: 10px;
 	background: transparent;
 	color: var(--gi-nav-text);
 	font: inherit;
-	font-size: 1rem;
-	font-weight: 500;
+	font-size: .94rem;
+	font-weight: 600;
+	line-height: 1.25;
 	text-align: left;
 	cursor: pointer;
 }
@@ -357,21 +392,21 @@ onBeforeUnmount(() => {
 
 .gi-nav-item--settings {
 	margin-top: auto;
-	background: rgba(255, 255, 255, .32);
-	border-color: rgba(15, 36, 51, .12);
+	background: var(--color-main-background, rgba(255, 255, 255, .96));
+	border-color: var(--gi-color-border);
 }
 
 .gi-nav-item__icon {
-	width: 1.1rem;
-	height: 1.1rem;
+	width: 1.18rem;
+	height: 1.18rem;
 	fill: currentColor;
 	flex: 0 0 auto;
 }
 
 .gi-nav-item--active {
 	background: var(--gi-nav-accent);
-	border-color: rgba(10, 110, 168, .28);
-	color: #fff;
+	border-color: var(--gi-nav-accent);
+	color: var(--gi-color-primary-text);
 }
 
 .gi-nav-item__toggle-icon {
@@ -389,32 +424,44 @@ onBeforeUnmount(() => {
 
 .gi-nav-submenu {
 	display: grid;
-	gap: .3rem;
-	padding-left: .9rem;
+	gap: .2rem;
+	padding-left: 1.85rem;
+	padding-top: .1rem;
 }
 
 .gi-nav-subitem {
-	padding: .55rem .8rem;
+	display: flex;
+	align-items: center;
+	gap: .55rem;
+	padding: .46rem .65rem;
 	border: 0;
-	border-radius: 14px;
-	background: rgba(255, 255, 255, .45);
-	color: rgba(15, 36, 51, .86);
+	border-radius: 8px;
+	background: transparent;
+	color: var(--gi-nav-text);
 	font: inherit;
-	font-size: .93rem;
+	font-size: .86rem;
+	font-weight: 500;
 	text-align: left;
 	cursor: pointer;
 	transition: background-color .18s ease, color .18s ease, transform .18s ease;
 }
 
+.gi-nav-subitem__icon {
+	width: 1rem;
+	height: 1rem;
+	fill: currentColor;
+	flex: 0 0 auto;
+}
+
 .gi-nav-subitem:hover {
-	background: rgba(255, 255, 255, .72);
-	color: #0c3650;
-	transform: translateX(2px);
+	background: var(--gi-color-primary-soft-hover);
+	color: var(--gi-color-primary-soft-text);
+	transform: translateX(1px);
 }
 
 .gi-nav-subitem--active {
-	background: rgba(10, 110, 168, .14);
-	color: #0b4f77;
+	background: var(--gi-color-primary-soft-hover);
+	color: var(--gi-color-primary);
 	font-weight: 700;
 }
 
@@ -422,7 +469,7 @@ onBeforeUnmount(() => {
 	min-width: 0;
 	width: 100%;
 	overflow: auto;
-	background: var(--gi-content-bg);
+	background: var(--gi-color-surface-plain);
 	display: grid;
 	grid-template-rows: auto minmax(0, 1fr);
 }
@@ -432,8 +479,8 @@ onBeforeUnmount(() => {
 	align-items: center;
 	gap: 1rem;
 	padding: .8rem 1rem;
-	background: rgba(255, 255, 255, .9);
-	border-bottom: 1px solid rgba(15, 36, 51, .08);
+	background: var(--gi-color-surface);
+	border-bottom: 1px solid var(--gi-color-border);
 	position: sticky;
 	top: 0;
 	z-index: 5;
@@ -443,7 +490,7 @@ onBeforeUnmount(() => {
 	margin: 0;
 	font-size: 1.2rem;
 	font-weight: 700;
-	color: #182433;
+	color: var(--gi-color-text);
 }
 
 .gi-content-body {
@@ -452,14 +499,14 @@ onBeforeUnmount(() => {
 }
 
 .gi-sidebar-shell {
-	border-left: 1px solid rgba(15, 36, 51, .08);
-	background: #ffffff;
+	border-left: 1px solid var(--gi-color-border);
+	background: var(--gi-color-surface-plain);
 	overflow: auto;
 }
 
 .gi-sidebar-resizer {
 	position: relative;
-	background: linear-gradient(180deg, rgba(15, 36, 51, .04), rgba(15, 36, 51, .08));
+	background: linear-gradient(180deg, var(--gi-color-surface-subtle), var(--gi-color-surface-muted));
 	cursor: col-resize;
 }
 
@@ -471,7 +518,7 @@ onBeforeUnmount(() => {
 	width: .2rem;
 	height: 4rem;
 	border-radius: 999px;
-	background: rgba(15, 36, 51, .18);
+	background: var(--gi-color-border-strong);
 	transform: translate(-50%, -50%);
 }
 
@@ -483,8 +530,8 @@ onBeforeUnmount(() => {
 	padding: 1rem 1.1rem;
 	font-weight: 700;
 	font-size: 1.1rem;
-	color: #182433;
-	border-bottom: 1px solid rgba(15, 36, 51, .08);
+	color: var(--gi-color-text);
+	border-bottom: 1px solid var(--gi-color-border);
 }
 
 .gi-sidebar-close {
@@ -493,9 +540,9 @@ onBeforeUnmount(() => {
 	justify-content: center;
 	width: 2rem;
 	height: 2rem;
-	border: 1px solid rgba(15, 36, 51, .12);
-	background: #eef1f4;
-	color: #213544;
+	border: 1px solid var(--gi-color-border-strong);
+	background: var(--gi-color-surface-subtle);
+	color: var(--gi-color-text);
 	border-radius: 999px;
 	padding: 0;
 	cursor: pointer;
@@ -522,8 +569,8 @@ onBeforeUnmount(() => {
 }
 
 .gi-nav-toggle--surface {
-	background: #eef1f4;
-	box-shadow: inset 0 0 0 1px rgba(15, 36, 51, .08);
+	background: var(--gi-color-surface-subtle);
+	box-shadow: inset 0 0 0 1px var(--gi-color-border);
 	border-radius: 12px;
 }
 
@@ -531,18 +578,28 @@ onBeforeUnmount(() => {
 	width: 1rem;
 	height: .14rem;
 	border-radius: 999px;
-	background: #213544;
+	background: var(--gi-color-text);
 }
 
 .gi-nav-toggle__icon {
 	width: 1.2rem;
 	height: 1.2rem;
-	fill: #213544;
+	fill: var(--gi-color-text);
 	display: block;
 }
 
 .gi-nav-toggle__icon--open {
 	transform: translateX(.02rem);
+}
+
+@media (min-width: 900px) {
+	.gi-shell--nav-open {
+		grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr);
+	}
+
+	.gi-shell--nav-open.gi-shell--desktop-sidebar {
+		grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr) .55rem minmax(20rem, var(--gi-sidebar-width));
+	}
 }
 
 @media (min-width: 1100px) {
@@ -555,22 +612,22 @@ onBeforeUnmount(() => {
 	}
 
 		.gi-shell.gi-shell--nav-open.gi-shell--with-sidebar {
-		grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr) minmax(20rem, 24rem);
+		grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr) minmax(20rem, 24rem);
 	}
 
 	.gi-shell.gi-shell--nav-open.gi-shell--desktop-sidebar {
-		grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr) .55rem minmax(20rem, var(--gi-sidebar-width));
+		grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr) .55rem minmax(20rem, var(--gi-sidebar-width));
 	}
 }
 
-@media (max-width: 1099px) {
+@media (max-width: 899px) {
 	.gi-navigation {
 		border-right: none;
 	}
 
 	.gi-sidebar-shell {
 		border-left: none;
-		border-top: 1px solid rgba(15, 36, 51, .08);
+		border-top: 1px solid var(--gi-color-border);
 	}
 
 	.gi-sidebar-resizer {

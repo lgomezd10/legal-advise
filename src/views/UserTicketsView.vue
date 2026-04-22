@@ -68,19 +68,33 @@ const pendingTickets = computed(() => filteredTickets.value.filter((ticket: Tick
 const openTickets = computed(() => filteredTickets.value.filter((ticket: Ticket) => !isClosedTicket(ticket) && ticket.status !== 'en_espera_usuario'))
 const closedTickets = computed(() => filteredTickets.value.filter((ticket: Ticket) => isClosedTicket(ticket)))
 
+watch([searchText, pendingTickets, openTickets, closedTickets], ([term]) => {
+	if (term.trim() === '') {
+		return
+	}
+
+	openSections.value.pending = pendingTickets.value.length > 0
+	openSections.value.open = openTickets.value.length > 0
+	openSections.value.closed = closedTickets.value.length > 0
+})
+
 watch(pendingTickets, (tickets) => {
 	if (tickets.length === 0 && openSections.value.pending) {
 		openSections.value.pending = false
 	}
 
-	if (!initializedDefaultSection.value) {
+	if (!ticketsStore.loading && !initializedDefaultSection.value) {
 		openSections.value.pending = tickets.length > 0
 		initializedDefaultSection.value = true
 	}
 }, { immediate: true })
 
 onMounted(() => {
-	void ticketsStore.load('user')
+	initializedDefaultSection.value = false
+	void ticketsStore.load('user').finally(() => {
+		openSections.value.pending = pendingTickets.value.length > 0
+		initializedDefaultSection.value = true
+	})
 })
 
 function openTicket(ticketId: number) {
@@ -106,7 +120,7 @@ function isClosedTicket(ticket: Ticket) {
 			<div class="gi-ticket-list-header__filters">
 				<label class="gi-search-box gi-ticket-list-header__search">
 					<span class="gi-search-box__label">Buscar</span>
-					<input v-model="searchText" class="gi-search-box__input" type="search" placeholder="Buscar por número, estado, título, descripción, comentarios públicos, fecha, provincia o ciudad" />
+					<input v-model="searchText" class="gi-search-box__input" type="search" placeholder="Buscar por número, estado, título, descripción, comentarios, fecha, provincia o ciudad" />
 				</label>
 				<label class="gi-field gi-ticket-list-header__date-field">
 					<span>Fecha</span>
