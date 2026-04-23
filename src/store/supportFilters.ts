@@ -5,10 +5,12 @@ import { deleteSupportFilter, fetchSupportFilters, saveSupportFilter } from '@/s
 export const useSupportFiltersStore = defineStore('supportFilters', {
 	state: () => ({
 		items: [] as SavedFilter[],
+		defaultFilterId: null as number | null,
 	}),
 	actions: {
 		async load() {
 			this.items = (await fetchSupportFilters()).items
+			this.defaultFilterId = this.items.find((item) => Boolean(item.isDefault))?.id ?? null
 		},
 		async save(payload: Record<string, unknown>) {
 			await saveSupportFilter(payload)

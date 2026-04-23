@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Tests\Integration\Service;
+namespace OCA\ConsultasLegales\Tests\Integration\Service;
 
-use OCA\Gestion_incidencias\Db\TaskSyncMapper;
-use OCA\Gestion_incidencias\Db\Ticket;
-use OCA\Gestion_incidencias\Service\CatalogService;
-use OCA\Gestion_incidencias\Service\TaskSyncService;
+use OCA\ConsultasLegales\Db\TaskSyncMapper;
+use OCA\ConsultasLegales\Db\Ticket;
+use OCA\ConsultasLegales\Service\CatalogService;
+use OCA\ConsultasLegales\Service\TaskSyncService;
 use OCP\App\IAppManager;
 use OCP\Calendar\IManager;
 use PHPUnit\Framework\TestCase;

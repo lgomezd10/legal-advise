@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Service;
+namespace OCA\ConsultasLegales\Service;
 
-use OCA\Gestion_incidencias\Db\Ticket;
+use OCA\ConsultasLegales\Db\Ticket;
 use OCP\IGroupManager;
 use OCP\IUserManager;
 use RuntimeException;
@@ -44,19 +44,7 @@ class PermissionService {
 		}
 
 		if (in_array(RoleService::SUPPORT, $roles, true)) {
-			if ($ticket->getAssignedUserUid() === null && $ticket->getAssignedGroupId() === null) {
-				return true;
-			}
-
-			if ($ticket->getAssignedUserUid() === $uid) {
-				return true;
-			}
-
-			if ($ticket->getAssignedGroupId() !== null) {
-				$group = $this->groupManager->get($ticket->getAssignedGroupId());
-				$user = $this->userManager->get($uid);
-				return $group !== null && $user !== null && $group->inGroup($user);
-			}
+			return true;
 		}
 
 		return false;
@@ -72,7 +60,42 @@ class PermissionService {
 			return false;
 		}
 
-		return $this->canReadTicket($uid, $ticket);
+		$assignedUserUid = $this->normalizeOptionalString($ticket->getAssignedUserUid());
+		if ($assignedUserUid !== null && $assignedUserUid === $uid) {
+			return true;
+		}
+
+		$assignedGroupId = $this->normalizeOptionalString($ticket->getAssignedGroupId());
+		if ($assignedGroupId !== null) {
+			return $this->userBelongsToGroup($uid, $assignedGroupId);
+		}
+
+		return true;
+	}
+
+	public function canCommentOnTicket(string $uid, Ticket $ticket): bool {
+		if ($ticket->getCreatorUid() === $uid) {
+			return true;
+		}
+
+		return $this->canManageTicket($uid, $ticket);
+	}
+
+	public function canAssignGroup(string $uid, ?string $groupId): bool {
+		if ($groupId === null || $groupId === '') {
+			return true;
+		}
+
+		$roles = $this->roleService->getEffectiveRoles($uid);
+		if (in_array(RoleService::ADMIN, $roles, true)) {
+			return true;
+		}
+
+		if (!in_array(RoleService::SUPPORT, $roles, true)) {
+			return false;
+		}
+
+		return $this->userBelongsToGroup($uid, $groupId);
 	}
 
 	public function canSeeComment(string $uid, Ticket $ticket, string $visibility): bool {
@@ -82,5 +105,25 @@ class PermissionService {
 
 		$roles = $this->roleService->getEffectiveRoles($uid);
 		return in_array(RoleService::SUPPORT, $roles, true) || in_array(RoleService::ADMIN, $roles, true);
+	}
+
+	private function userBelongsToGroup(string $uid, string $groupId): bool {
+		$user = $this->userManager->get($uid);
+		$group = $this->groupManager->get($groupId);
+
+		if ($user === null || $group === null) {
+			return false;
+		}
+
+		return $group->inGroup($user);
+	}
+
+	private function normalizeOptionalString(?string $value): ?string {
+		if ($value === null) {
+			return null;
+		}
+
+		$normalized = trim($value);
+		return $normalized === '' ? null : $normalized;
 	}
 }

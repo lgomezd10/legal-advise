@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Service;
+namespace OCA\ConsultasLegales\Service;
 
 class ProvinceCatalogService {
 	private const PROVINCES = [

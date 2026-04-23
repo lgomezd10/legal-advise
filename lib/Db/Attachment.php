@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Db;
+namespace OCA\ConsultasLegales\Db;
 
 use OCP\DB\Types;
 
@@ -14,6 +14,7 @@ class Attachment extends AbstractEntity {
 	protected $storedName;
 	protected $mimeType;
 	protected $size;
+	protected $sourceUrl;
 	protected $createdAt;
 
 	public function __construct() {

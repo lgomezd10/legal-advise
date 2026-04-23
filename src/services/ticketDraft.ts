@@ -18,13 +18,13 @@ export function createDefaultTicketDraft(personalConfig: Record<string, string>,
 	return {
 		selectedPath: [],
 		typeId: null,
-		province: null,
-		withoutProvince: false,
+		province: personalConfig.province?.trim() || null,
 		title: '',
 		userDescription: '',
 		urgencyId: getDefaultUrgencyId(urgencies),
 		communicationChannel: 'nextcloud_mail',
 		personalData: { ...personalConfig },
+		attachments: { files: [], links: [] },
 	}
 }
 
@@ -76,6 +76,11 @@ export function getTypeLabelsForPath(types: TypeNode[], path: number[]): string[
 	return labels
 }
 
+export function getTypeLabel(types: TypeNode[], targetTypeId?: number | null, separator = ' > '): string {
+	const path = getTypePath(types, targetTypeId)
+	return getTypeLabelsForPath(types, path).join(separator)
+}
+
 export function getTicketPersonalDataRecord(ticket: Ticket | null | undefined): Record<string, string> {
 	const rows = Array.isArray(ticket?.personalData) ? ticket?.personalData as TicketDataRow[] : []
 
@@ -95,7 +100,6 @@ export function createRepeatTicketDraft(ticket: Ticket, types: TypeNode[], perso
 		selectedPath,
 		typeId: ticket.typeId ?? null,
 		province: ticket.province ?? null,
-		withoutProvince: !ticket.province,
 		title: ticket.title,
 		userDescription: ticket.userDescription,
 		urgencyId: ticket.urgencyId ? String(ticket.urgencyId) : getDefaultUrgencyId(urgencies),
@@ -104,5 +108,6 @@ export function createRepeatTicketDraft(ticket: Ticket, types: TypeNode[], perso
 			...personalConfig,
 			...ticketPersonalData,
 		},
+		attachments: { files: [], links: [] },
 	}
 }

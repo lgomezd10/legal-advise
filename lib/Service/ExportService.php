@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Service;
+namespace OCA\ConsultasLegales\Service;
 
 class ExportService {
 	public function __construct(private readonly TicketService $ticketService) {
@@ -12,10 +12,11 @@ class ExportService {
 		$rows = $this->ticketService->list($uid, $criteria, $supportScope);
 		$selectedColumns = $this->normalizeColumns($columns);
 		$handle = fopen('php://temp', 'r+');
-		fputcsv($handle, array_map(fn (string $column) => $this->columnLabel($column), $selectedColumns));
+		fwrite($handle, "\xEF\xBB\xBF");
+		fputcsv($handle, array_map(fn (string $column) => $this->columnLabel($column), $selectedColumns), ';');
 
 		foreach ($rows as $row) {
-			fputcsv($handle, array_map(fn (string $column) => $this->columnValue($column, $row), $selectedColumns));
+			fputcsv($handle, array_map(fn (string $column) => $this->columnValue($column, $row), $selectedColumns), ';');
 		}
 
 		rewind($handle);
@@ -24,27 +25,30 @@ class ExportService {
 
 		return [
 			'filename' => 'tickets-' . date('Ymd-His') . '.csv',
-			'mimeType' => 'text/csv',
+			'mimeType' => 'text/csv; charset=UTF-8',
 			'content' => base64_encode($content),
 		];
 	}
 
 	private function normalizeColumns(array $columns): array {
-		$allowed = ['number', 'title', 'userDescription', 'assignment', 'status', 'urgency', 'createdAt'];
+		$allowed = ['number', 'createdBy', 'province', 'title', 'userDescription', 'assignment', 'status', 'urgency', 'createdAt', 'updatedAt'];
 		$selected = array_values(array_filter($columns, static fn (string $column) => in_array($column, $allowed, true)));
 
-		return $selected !== [] ? $selected : ['number', 'title', 'userDescription', 'assignment'];
+		return $selected !== [] ? $selected : ['number', 'createdBy', 'title', 'userDescription', 'assignment'];
 	}
 
 	private function columnLabel(string $column): string {
 		return match ($column) {
 			'number' => 'numero_ticket',
+			'createdBy' => 'creado_por',
+			'province' => 'provincia',
 			'title' => 'titulo',
 			'userDescription' => 'descripcion',
 			'assignment' => 'asignacion',
 			'status' => 'estado',
 			'urgency' => 'urgencia',
 			'createdAt' => 'fecha_apertura',
+			'updatedAt' => 'fecha_ultima_edicion',
 			default => $column,
 		};
 	}
@@ -52,12 +56,15 @@ class ExportService {
 	private function columnValue(string $column, array $row): string {
 		return match ($column) {
 			'number' => (string) ($row['number'] ?? ''),
+			'createdBy' => (string) ($row['creatorUid'] ?? ''),
+			'province' => (string) ($row['province'] ?? ''),
 			'title' => (string) ($row['title'] ?? ''),
 			'userDescription' => (string) ($row['userDescription'] ?? ''),
 			'assignment' => $this->formatAssignment($row),
 			'status' => (string) ($row['status'] ?? ''),
 			'urgency' => isset($row['urgencyId']) && $row['urgencyId'] !== null ? (string) $row['urgencyId'] : '',
 			'createdAt' => date('c', (int) ($row['createdAt'] ?? time())),
+			'updatedAt' => date('c', (int) ($row['updatedAt'] ?? time())),
 			default => '',
 		};
 	}

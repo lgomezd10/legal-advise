@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia'
-import type { Ticket, TicketDraft } from '@/types'
-import { addComment, createTicket, downloadAttachment, exportTickets, fetchTicket, fetchTickets, updateTicket, uploadAttachment } from '@/services/tickets'
+import type { Ticket, TicketAttachmentLinkDraft, TicketDraft } from '@/types'
+import { addComment, createTicket, downloadAttachment, exportTickets, fetchTicket, fetchTickets, reopenTicket, updateTicket, uploadAttachment, uploadAttachmentUrl } from '@/services/tickets'
 
 type CommentPayload = {
 	body: string
 	visibility: 'interno' | 'publico'
 	files?: File[]
+	links?: TicketAttachmentLinkDraft[]
 }
 
 export const useTicketsStore = defineStore('tickets', {
@@ -25,7 +26,12 @@ export const useTicketsStore = defineStore('tickets', {
 			this.selected = await fetchTicket(ticketId)
 		},
 		async create(payload: Record<string, unknown>) {
-			this.selected = await createTicket(payload)
+			const attachments = isAttachmentDraft(payload.attachments) ? payload.attachments : { files: [], links: [] }
+			const { attachments: ignoredAttachments, ...ticketPayload } = payload
+			this.selected = await createTicket(ticketPayload)
+			if (this.selected && (attachments.files.length > 0 || attachments.links.length > 0)) {
+				await this.comment(this.selected.id, { body: '', visibility: 'publico', files: attachments.files, links: attachments.links })
+			}
 			return this.selected
 		},
 		async update(ticketId: number, payload: Record<string, unknown>) {
@@ -34,13 +40,26 @@ export const useTicketsStore = defineStore('tickets', {
 			return this.selected
 		},
 		async comment(ticketId: number, payload: CommentPayload) {
-			const comment = await addComment(ticketId, { body: payload.body, visibility: payload.visibility })
+			const comment = await addComment(ticketId, {
+				body: payload.body,
+				visibility: payload.visibility,
+				allowEmpty: payload.body.trim() === '' && ((payload.files?.length ?? 0) > 0 || (payload.links?.length ?? 0) > 0),
+			})
 
 			for (const file of payload.files ?? []) {
 				await uploadAttachment(ticketId, file, comment.id)
 			}
 
+			for (const link of payload.links ?? []) {
+				await uploadAttachmentUrl(ticketId, link, comment.id)
+			}
+
 			await this.select(ticketId)
+		},
+		async reopen(ticketId: number) {
+			this.selected = await reopenTicket(ticketId)
+			this.items = this.items.map((item) => item.id === ticketId ? this.selected as Ticket : item)
+			return this.selected
 		},
 		async download(attachmentId: number) {
 			return downloadAttachment(attachmentId)
@@ -71,3 +90,12 @@ export const useTicketsStore = defineStore('tickets', {
 		},
 	},
 })
+
+function isAttachmentDraft(value: unknown): value is { files: File[], links: TicketAttachmentLinkDraft[] } {
+	if (!value || typeof value !== 'object') {
+		return false
+	}
+
+	const maybe = value as { files?: unknown, links?: unknown }
+	return Array.isArray(maybe.files) && Array.isArray(maybe.links)
+}

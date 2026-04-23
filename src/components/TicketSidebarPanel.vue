@@ -1,34 +1,81 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import type { AssignableOption, SearchableSelectOption, StatusOption, Ticket, UrgencyCatalogItem } from '@/types'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import type { AssignableOption, CatalogField, SearchableSelectOption, StatusOption, Ticket, TicketAttachment, TicketAttachmentLinkDraft, TicketComment, TypeNode, UrgencyCatalogItem } from '@/types'
+import { formatDateTime } from '@/utils/formatting'
+import { formatHistoryEntries } from '@/utils/history'
+import { excerptRichText, isRichTextEmpty, richTextToPlainText, sanitizeRichText } from '@/utils/richText'
+import { getTicketPersonalDataRecord, getTypeLabel } from '@/services/ticketDraft'
+import AttachmentPicker from './AttachmentPicker.vue'
+import PlainTextEditor from './PlainTextEditor.vue'
+import RichTextEditor from './RichTextEditor.vue'
+import RichTextContent from './RichTextContent.vue'
 import SearchableSelect from './SearchableSelect.vue'
+
+let ticketSidebarPanelIdSequence = 0
+
+type TicketSidebarTabId = 'comments' | 'detail' | 'attachments' | 'requester' | 'history'
 
 const props = defineProps<{
 	ticket: Ticket | null
 	roles: string[]
 	users?: AssignableOption[]
 	groups?: AssignableOption[]
+	types?: TypeNode[]
+	fields?: CatalogField[]
+	currentUserUid?: string
 	statuses?: StatusOption[]
 	urgencies?: UrgencyCatalogItem[]
 	allowedExtensions?: string[]
+	maxFileSizeMb?: number
 	fullscreen?: boolean
 	readOnly?: boolean
 	showFullscreen?: boolean
 	showRepeat?: boolean
+	initialTab?: TicketSidebarTabId
+	initialComposerVisible?: boolean
 }>()
 
 const emit = defineEmits<{
-	(e: 'comment', payload: { body: string, visibility: 'interno' | 'publico', files: File[] }): void
-	(e: 'update', payload: Record<string, unknown>): void
+	(e: 'comment', payload: { body: string, visibility: 'interno' | 'publico', files: File[], links: TicketAttachmentLinkDraft[] }): void
+	(e: 'save', payload: Record<string, unknown>): void
 	(e: 'download', attachmentId: number): void
 	(e: 'fullscreen'): void
+	(e: 'reopen'): void
+	(e: 'assign-to-me'): void
 	(e: 'repeat'): void
 }>()
 
 const comment = ref('')
 const visibility = ref<'interno' | 'publico'>('publico')
-const selectedFiles = ref<File[]>([])
+const attachmentsDraft = ref<{ files: File[], links: TicketAttachmentLinkDraft[] }>({ files: [], links: [] })
 const composerError = ref('')
+const commentsSearchText = ref('')
+const commentsSortDirection = ref<'desc' | 'asc'>('desc')
+const commentsDateFrom = ref('')
+const commentsDateTo = ref('')
+const commentsAuthorUid = ref<string | null>(null)
+const commentsMobileMenuOpen = ref(false)
+const expandedCommentIds = ref<number[]>([])
+const discardChangesDialogOpen = ref(false)
+const discardChangesResolver = ref<((confirmed: boolean) => void) | null>(null)
+const closeReasonDialogOpen = ref(false)
+const editableTicket = reactive({
+	title: '',
+	status: '',
+	urgencyId: null as number | null,
+	assignedUserUid: null as string | null,
+	assignedGroupId: null as string | null,
+	supportDescription: '',
+})
+const closeReason = ref('')
+const editableBaseSnapshot = ref('')
+const syncedTicketId = ref<number | null>(null)
+const waitingForSaveSync = ref(false)
+const instanceId = `gi-ticket-sidebar-${++ticketSidebarPanelIdSequence}`
+
+function getFieldId(suffix: string) {
+	return `${instanceId}-${suffix}`
+}
 
 function normalizeAssignableOptions(options: AssignableOption[] | Record<string, AssignableOption> | undefined | null): AssignableOption[] {
 	if (Array.isArray(options)) {
@@ -66,32 +113,62 @@ function normalizeUrgencies(urgencies: UrgencyCatalogItem[] | Record<string, Urg
 	return []
 }
 
-const selectedUserUid = computed(() => props.ticket?.assignedUserUid ?? '')
-const selectedGroupId = computed(() => props.ticket?.assignedGroupId ?? '')
-const canManage = computed(() => !props.readOnly && (props.roles.includes('soporte') || props.roles.includes('administrador')))
+function normalizeFields(fields: CatalogField[] | Record<string, CatalogField> | undefined | null): CatalogField[] {
+	if (Array.isArray(fields)) {
+		return fields
+	}
+
+	if (fields && typeof fields === 'object') {
+		return Object.values(fields)
+	}
+
+	return []
+}
+
+function normalizeTypes(types: TypeNode[] | Record<string, TypeNode> | undefined | null): TypeNode[] {
+	if (Array.isArray(types)) {
+		return types
+	}
+
+	if (types && typeof types === 'object') {
+		return Object.values(types)
+	}
+
+	return []
+}
+
+const canManage = computed(() => !props.readOnly && (props.ticket?.canManage ?? (props.roles.includes('soporte') || props.roles.includes('administrador'))))
+const canComment = computed(() => props.ticket?.canComment ?? true)
+const isClosedTicket = computed(() => {
+	if (!props.ticket) {
+		return false
+	}
+
+	const matchedStatus = safeStatuses.value.find((item) => item.id === props.ticket?.status)
+	if (matchedStatus) {
+		return Boolean(matchedStatus.closed)
+	}
+
+	return props.ticket.status === 'resuelto' || props.ticket.status === 'cerrado'
+})
+const canEditTicket = computed(() => canManage.value && !isClosedTicket.value)
+const canPublishComment = computed(() => canComment.value && !isClosedTicket.value)
+const canAssignToCurrentUser = computed(() => Boolean(canEditTicket.value && props.currentUserUid && editableTicket.assignedUserUid !== props.currentUserUid))
+const showSupportTabs = computed(() => canManage.value)
+const defaultComposerVisible = computed(() => props.initialComposerVisible ?? true)
+const defaultTab = computed<TicketSidebarTabId>(() => props.initialTab ?? (showSupportTabs.value ? 'detail' : 'comments'))
+const composerVisible = ref(defaultComposerVisible.value)
+const activeTab = ref<TicketSidebarTabId>(defaultTab.value)
 const safeUsers = computed(() => normalizeAssignableOptions(props.users))
 const safeGroups = computed(() => normalizeAssignableOptions(props.groups))
+const safeTypes = computed(() => normalizeTypes(props.types))
+const safeFields = computed(() => normalizeFields(props.fields)
+	.filter((field: CatalogField) => field.active !== false)
+	.slice()
+	.sort((left: CatalogField, right: CatalogField) => left.sortOrder - right.sortOrder))
 const safeStatuses = computed(() => normalizeStatuses(props.statuses))
 const safeUrgencies = computed(() => normalizeUrgencies(props.urgencies))
-const filteredUsers = computed<AssignableOption[]>(() => {
-	if (!selectedGroupId.value) {
-		return safeUsers.value
-	}
-
-	return safeUsers.value.filter((user: AssignableOption) => user.groupIds?.includes(selectedGroupId.value))
-})
-const filteredGroups = computed<AssignableOption[]>(() => {
-	if (selectedGroupId.value) {
-		return safeGroups.value
-	}
-
-	if (!selectedUserUid.value) {
-		return safeGroups.value
-	}
-
-	return safeGroups.value.filter((group: AssignableOption) => group.userIds?.includes(selectedUserUid.value))
-})
-const statusOptions = computed<SearchableSelectOption[]>(() => safeStatuses.value.map((status: StatusOption) => ({
+const statusOptions = computed<SearchableSelectOption[]>(() => safeStatuses.value.filter((status: StatusOption) => status.active !== false || status.id === props.ticket?.status).map((status: StatusOption) => ({
 	value: status.id,
 	label: status.label,
 })))
@@ -99,67 +176,265 @@ const urgencyOptions = computed<SearchableSelectOption[]>(() => safeUrgencies.va
 	value: String(urgency.id),
 	label: urgency.name,
 })))
-const userOptions = computed<SearchableSelectOption[]>(() => filteredUsers.value.map((user: AssignableOption) => ({
+const userOptions = computed<SearchableSelectOption[]>(() => safeUsers.value
+	.filter((user: AssignableOption) => !editableTicket.assignedGroupId || user.groupIds?.includes(editableTicket.assignedGroupId))
+	.map((user: AssignableOption) => ({
 	value: user.id,
 	label: user.displayName,
 	searchText: [user.id, ...(user.groupIds ?? [])].join(' '),
 })))
-const groupOptions = computed<SearchableSelectOption[]>(() => filteredGroups.value.map((group: AssignableOption) => ({
+const groupOptions = computed<SearchableSelectOption[]>(() => safeGroups.value.map((group: AssignableOption) => ({
 	value: group.id,
 	label: group.displayName,
 	searchText: [group.id, ...(group.userIds ?? [])].join(' '),
 })))
 const visibilityOptions: SearchableSelectOption[] = [
-	{ value: 'publico', label: 'Publico' },
+	{ value: 'publico', label: 'Público' },
 	{ value: 'interno', label: 'Interno' },
 ]
-const normalizedAllowedExtensions = computed(() => (props.allowedExtensions ?? []).map((extension: string) => extension.trim().toLowerCase()).filter((extension: string) => extension !== ''))
-const allowedExtensionsAccept = computed(() => normalizedAllowedExtensions.value.map((extension: string) => `.${extension}`).join(','))
-const allowedExtensionsLabel = computed(() => normalizedAllowedExtensions.value.map((extension: string) => `.${extension}`).join(', '))
+const supportTabs = computed(() => ([
+	{ id: 'detail', label: 'Detalle' },
+	{ id: 'comments', label: 'Comentarios' },
+	{ id: 'requester', label: 'Solicitante' },
+	{ id: 'history', label: 'Historial' },
+	] as Array<{ id: TicketSidebarTabId, label: string }>))
+const userTabs = computed(() => ([
+	{ id: 'comments', label: 'Comentarios' },
+	{ id: 'detail', label: 'Detalles' },
+	{ id: 'attachments', label: 'Adjuntos' },
+	] as Array<{ id: TicketSidebarTabId, label: string }>))
+const visibleTabs = computed(() => showSupportTabs.value ? supportTabs.value : userTabs.value)
+const shouldCollapseCommentOptions = computed(() => !showSupportTabs.value)
+const requesterData = computed<Record<string, string>>(() => getTicketPersonalDataRecord(props.ticket))
+const requesterContactEntries = computed(() => {
+	const entries: Array<{ key: string, label: string, value: string }> = []
+	const remainingKeys = new Set(Object.keys(requesterData.value))
 
-function sendComment() {
-	const body = comment.value.trim()
-	if (!body) {
-		composerError.value = 'Debes escribir un comentario para adjuntar archivos.'
-		return
+	for (const field of safeFields.value) {
+		const value = String(requesterData.value[field.fieldKey] ?? '').trim()
+		remainingKeys.delete(field.fieldKey)
+		if (value === '') {
+			continue
+		}
+		entries.push({ key: field.fieldKey, label: field.label, value })
 	}
 
-	composerError.value = ''
-	emit('comment', { body, visibility: visibility.value, files: [...selectedFiles.value] })
-	comment.value = ''
-	selectedFiles.value = []
-}
-
-function onFileChange(event: Event) {
-	const input = event.target as HTMLInputElement
-	const files = Array.from(input.files ?? [])
-	if (files.length === 0) {
-		return
+	for (const key of remainingKeys) {
+		const value = String(requesterData.value[key] ?? '').trim()
+		if (value === '') {
+			continue
+		}
+		entries.push({ key, label: formatPersonalDataLabel(key), value })
 	}
 
-	const allowedExtensions = normalizedAllowedExtensions.value
-	const invalidFile = files.find((file) => !allowedExtensions.includes(file.name.split('.').pop()?.toLowerCase() ?? ''))
-	if (invalidFile) {
-		composerError.value = `La extension de ${invalidFile.name} no esta permitida.`
-		input.value = ''
-		return
+	return entries
+})
+const ticketTypeLabel = computed(() => getTypeLabel(safeTypes.value, props.ticket?.typeId ?? null) || 'Sin tipo')
+const commentAuthorOptions = computed((): SearchableSelectOption[] => {
+	const seen = new Set<string>()
+	return (props.ticket?.comments ?? []).reduce((options: SearchableSelectOption[], item: TicketComment) => {
+		if (!item.authorUid || seen.has(item.authorUid)) {
+			return options
+		}
+		seen.add(item.authorUid)
+		const user = safeUsers.value.find((entry) => entry.id === item.authorUid)
+		options.push({ value: item.authorUid, label: user?.displayName ?? item.authorUid })
+		return options
+	}, [])
+})
+const historyEntries = computed(() => formatHistoryEntries(props.ticket?.history ?? [], {
+	statuses: safeStatuses.value,
+	users: safeUsers.value,
+	groups: safeGroups.value,
+	urgencies: safeUrgencies.value,
+}))
+const currentEditPayload = computed<Record<string, unknown>>(() => ({
+	title: editableTicket.title.trim(),
+	status: editableTicket.status,
+	urgencyId: editableTicket.urgencyId,
+	assignedUserUid: editableTicket.assignedUserUid,
+	assignedGroupId: editableTicket.assignedGroupId,
+	supportDescription: editableTicket.supportDescription,
+}))
+const targetStatusOption = computed(() => safeStatuses.value.find((item: StatusOption) => item.id === editableTicket.status) ?? null)
+const requiresCloseReason = computed(() => {
+	if (!canEditTicket.value || !props.ticket) {
+		return false
 	}
 
-	const knownKeys = new Set(selectedFiles.value.map((file) => `${file.name}:${file.size}:${file.lastModified}`))
-	for (const file of files) {
-		const key = `${file.name}:${file.size}:${file.lastModified}`
-		if (!knownKeys.has(key)) {
-			selectedFiles.value.push(file)
-			knownKeys.add(key)
+	const nextStatus = targetStatusOption.value
+	if (!nextStatus) {
+		return editableTicket.status === 'resuelto' || editableTicket.status === 'cerrado'
+	}
+
+	return Boolean(nextStatus.closed) && !isClosedTicket.value
+})
+const dirty = computed(() => canEditTicket.value && (JSON.stringify(currentEditPayload.value) !== editableBaseSnapshot.value || closeReason.value.trim() !== ''))
+const filteredComments = computed(() => (props.ticket?.comments ?? []).filter((item: TicketComment) => {
+	const term = commentsSearchText.value.trim().toLowerCase()
+	if (term) {
+		const haystack = `${item.authorUid} ${resolveUserLabel(item.authorUid)} ${richTextToPlainText(item.body)} ${(item.attachments ?? []).map((attachment: TicketAttachment) => attachment.originalName).join(' ')}`.toLowerCase()
+		if (!haystack.includes(term)) {
+			return false
 		}
 	}
 
-	composerError.value = ''
-	input.value = ''
+	if (commentsAuthorUid.value && item.authorUid !== commentsAuthorUid.value) {
+		return false
+	}
+
+	const createdAt = new Date(item.createdAt * 1000)
+	if (commentsDateFrom.value) {
+		const from = new Date(`${commentsDateFrom.value}T00:00:00`)
+		if (createdAt < from) {
+			return false
+		}
+	}
+
+	if (commentsDateTo.value) {
+		const to = new Date(`${commentsDateTo.value}T23:59:59`)
+		if (createdAt > to) {
+			return false
+		}
+	}
+
+	return true
+}))
+const orderedComments = computed(() => [...filteredComments.value].sort((left, right) => {
+	if (commentsSortDirection.value === 'asc') {
+		return left.createdAt - right.createdAt
+	}
+
+	return right.createdAt - left.createdAt
+}))
+const visibleCommentIds = computed(() => orderedComments.value.map((item) => item.id))
+const allVisibleCommentsExpanded = computed(() => visibleCommentIds.value.length > 0 && visibleCommentIds.value.every((id) => expandedCommentIds.value.includes(id)))
+
+function hasUnsavedChanges() {
+	return dirty.value
 }
 
-function removeSelectedFile(index: number) {
-	selectedFiles.value.splice(index, 1)
+function confirmDiscardChanges() {
+	if (!hasUnsavedChanges()) {
+		return true
+	}
+
+	return new Promise<boolean>((resolve) => {
+		discardChangesResolver.value = resolve
+		discardChangesDialogOpen.value = true
+	})
+}
+
+function resolveDiscardChangesDialog(confirmed: boolean) {
+	discardChangesDialogOpen.value = false
+	discardChangesResolver.value?.(confirmed)
+	discardChangesResolver.value = null
+}
+
+function onBeforeWindowUnload(event: BeforeUnloadEvent) {
+	if (!hasUnsavedChanges()) {
+		return
+	}
+
+	event.preventDefault()
+	event.returnValue = ''
+}
+
+defineExpose({
+	hasUnsavedChanges,
+	confirmDiscardChanges,
+})
+
+watch(() => props.initialTab, (nextTab) => {
+	activeTab.value = nextTab ?? defaultTab.value
+})
+
+watch(defaultComposerVisible, (nextValue) => {
+	composerVisible.value = nextValue
+})
+
+function resetTransientTicketPanelState() {
+	comment.value = ''
+	visibility.value = 'publico'
+	attachmentsDraft.value = { files: [], links: [] }
+	composerError.value = ''
+	commentsSearchText.value = ''
+	commentsSortDirection.value = 'desc'
+	commentsDateFrom.value = ''
+	commentsDateTo.value = ''
+	commentsAuthorUid.value = null
+	commentsMobileMenuOpen.value = false
+	composerVisible.value = defaultComposerVisible.value
+	activeTab.value = defaultTab.value
+	closeReason.value = ''
+	closeReasonDialogOpen.value = false
+}
+
+watch(() => props.ticket?.id, () => {
+	resetTransientTicketPanelState()
+	if (discardChangesDialogOpen.value) {
+		resolveDiscardChangesDialog(false)
+	}
+})
+
+watch(() => (props.ticket?.comments ?? []).map((item: TicketComment) => item.id).join(','), () => {
+	expandedCommentIds.value = (props.ticket?.comments ?? []).map((item: TicketComment) => item.id)
+}, { immediate: true })
+
+watch(() => props.ticket ? JSON.stringify({
+	id: props.ticket.id,
+	title: props.ticket.title,
+	status: props.ticket.status,
+	urgencyId: props.ticket.urgencyId ?? null,
+	assignedUserUid: props.ticket.assignedUserUid ?? null,
+	assignedGroupId: props.ticket.assignedGroupId ?? null,
+	supportDescription: props.ticket.supportDescription ?? '',
+}) : '', () => {
+	if (!props.ticket || !canManage.value) {
+		return
+	}
+
+	const nextPayload = {
+		title: props.ticket.title,
+		status: props.ticket.status,
+		urgencyId: props.ticket.urgencyId ?? null,
+		assignedUserUid: props.ticket.assignedUserUid ?? null,
+		assignedGroupId: props.ticket.assignedGroupId ?? null,
+		supportDescription: props.ticket.supportDescription ?? '',
+	}
+	const nextSnapshot = JSON.stringify(nextPayload)
+	if (syncedTicketId.value !== props.ticket.id || !dirty.value || waitingForSaveSync.value) {
+		editableTicket.title = nextPayload.title
+		editableTicket.status = nextPayload.status
+		editableTicket.urgencyId = nextPayload.urgencyId
+		editableTicket.assignedUserUid = nextPayload.assignedUserUid
+		editableTicket.assignedGroupId = nextPayload.assignedGroupId
+		editableTicket.supportDescription = nextPayload.supportDescription
+		closeReason.value = ''
+		editableBaseSnapshot.value = nextSnapshot
+		syncedTicketId.value = props.ticket.id
+		waitingForSaveSync.value = false
+	}
+}, { immediate: true })
+
+onMounted(() => {
+	window.addEventListener('beforeunload', onBeforeWindowUnload)
+})
+
+onBeforeUnmount(() => {
+	window.removeEventListener('beforeunload', onBeforeWindowUnload)
+})
+
+function sendComment() {
+	if (isRichTextEmpty(comment.value) && attachmentsDraft.value.files.length === 0 && attachmentsDraft.value.links.length === 0) {
+		composerError.value = 'Debes escribir un comentario o adjuntar al menos un archivo o una URL.'
+		return
+	}
+
+	composerError.value = ''
+	emit('comment', { body: sanitizeRichText(comment.value), visibility: visibility.value, files: [...attachmentsDraft.value.files], links: [...attachmentsDraft.value.links] })
+	comment.value = ''
+	attachmentsDraft.value = { files: [], links: [] }
 }
 
 function onStatusChange(value: string | number | null) {
@@ -167,115 +442,473 @@ function onStatusChange(value: string | number | null) {
 		return
 	}
 
-	emit('update', { status: String(value) })
+	editableTicket.status = String(value)
+	if (!requiresCloseReason.value) {
+		closeReason.value = ''
+	}
 }
 
 function onUrgencyChange(value: string | number | null) {
-	emit('update', { urgencyId: value ? Number(value) : null })
+	editableTicket.urgencyId = value ? Number(value) : null
 }
 
 function onAssignedUserChange(value: string | number | null) {
 	const nextUserUid = value ? String(value) : null
-	const payload: Record<string, unknown> = {
-		assignedUserUid: nextUserUid,
-	}
+	editableTicket.assignedUserUid = nextUserUid
 
-	if (selectedGroupId.value && nextUserUid) {
-		const validForGroup = safeUsers.value.some((user: AssignableOption) => user.id === nextUserUid && user.groupIds?.includes(selectedGroupId.value))
+	if (editableTicket.assignedGroupId && nextUserUid) {
+		const validForGroup = safeUsers.value.some((user: AssignableOption) => user.id === nextUserUid && user.groupIds?.includes(editableTicket.assignedGroupId ?? ''))
 		if (!validForGroup) {
-			payload.assignedGroupId = null
+			editableTicket.assignedGroupId = null
 		}
 	}
-
-	emit('update', payload)
 }
 
 function onAssignedGroupChange(value: string | number | null) {
 	const nextGroupId = value ? String(value) : null
-	const payload: Record<string, unknown> = {
-		assignedGroupId: nextGroupId,
-	}
+	editableTicket.assignedGroupId = nextGroupId
 
-	if (nextGroupId && selectedUserUid.value) {
-		const validForUser = safeUsers.value.some((user: AssignableOption) => user.id === selectedUserUid.value && user.groupIds?.includes(nextGroupId))
+	if (nextGroupId && editableTicket.assignedUserUid) {
+		const validForUser = safeUsers.value.some((user: AssignableOption) => user.id === editableTicket.assignedUserUid && user.groupIds?.includes(nextGroupId))
 		if (!validForUser) {
-			payload.assignedUserUid = null
+			editableTicket.assignedUserUid = null
 		}
 	}
+}
 
-	emit('update', payload)
+function commentSummary(item: TicketComment) {
+	const excerpt = richTextToPlainText(item.body)
+	if (excerpt.length > 0) {
+		return excerptRichText(item.body, 80)
+	}
+	return (item.attachments ?? []).map((attachment) => attachment.originalName).join(', ') || 'Sin texto'
+}
+
+function toggleExpandedComment(commentId: number) {
+	if (expandedCommentIds.value.includes(commentId)) {
+		expandedCommentIds.value = expandedCommentIds.value.filter((item) => item !== commentId)
+		return
+	}
+	expandedCommentIds.value = [...expandedCommentIds.value, commentId]
+}
+
+function toggleAllVisibleComments() {
+	if (allVisibleCommentsExpanded.value) {
+		const visibleIds = new Set(visibleCommentIds.value)
+		expandedCommentIds.value = expandedCommentIds.value.filter((item) => !visibleIds.has(item))
+		return
+	}
+
+	expandedCommentIds.value = Array.from(new Set([...expandedCommentIds.value, ...visibleCommentIds.value]))
+}
+
+function toggleCommentsSortDirection() {
+	commentsSortDirection.value = commentsSortDirection.value === 'desc' ? 'asc' : 'desc'
+}
+
+function toggleCommentsMobileMenu() {
+	commentsMobileMenuOpen.value = !commentsMobileMenuOpen.value
+}
+
+function closeCommentsMobileMenu() {
+	commentsMobileMenuOpen.value = false
+}
+
+function hideComposer() {
+	composerVisible.value = false
+}
+
+function openRequesterTab() {
+	if (!showSupportTabs.value) {
+		return
+	}
+
+	activeTab.value = 'requester'
+}
+
+function showComposer() {
+	composerVisible.value = true
+}
+
+function escapeHtml(value: string) {
+	return value
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;')
+}
+
+function commentExportText(item: TicketComment) {
+	const text = richTextToPlainText(item.body)
+	if (text !== '') {
+		return text
+	}
+
+	return (item.attachments ?? []).map((attachment) => attachment.originalName).join(', ')
+}
+
+function csvEscape(value: string) {
+	return `"${value.replace(/"/g, '""')}"`
+}
+
+function exportTimestamp() {
+	const now = new Date()
+	const year = String(now.getFullYear())
+	const month = String(now.getMonth() + 1).padStart(2, '0')
+	const day = String(now.getDate()).padStart(2, '0')
+	const hours = String(now.getHours()).padStart(2, '0')
+	const minutes = String(now.getMinutes()).padStart(2, '0')
+	const seconds = String(now.getSeconds()).padStart(2, '0')
+
+	return `${year}${month}${day}-${hours}${minutes}${seconds}`
+}
+
+function exportComments() {
+	if (!props.ticket || filteredComments.value.length === 0) {
+		return
+	}
+
+	const rows = [...filteredComments.value]
+		.sort((left, right) => right.createdAt - left.createdAt)
+		.map((item) => [
+			formatDateTime(item.createdAt),
+			resolveUserLabel(item.authorUid),
+			commentExportText(item),
+		].map((column) => csvEscape(column)).join(';'))
+	const csv = [
+		['Fecha', 'Usuario', 'Comentario'].map((column) => csvEscape(column)).join(';'),
+		...rows,
+	].join('\r\n')
+	const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' })
+	const link = document.createElement('a')
+	link.href = URL.createObjectURL(blob)
+	link.download = `comentarios-${props.ticket.number}-${exportTimestamp()}.csv`
+	link.click()
+	URL.revokeObjectURL(link.href)
+}
+
+function openAttachment(attachment: TicketAttachment) {
+	if (attachment.sourceUrl) {
+		window.open(attachment.sourceUrl, '_blank', 'noopener,noreferrer')
+		return
+	}
+
+	emit('download', attachment.id)
+}
+
+function resolveUserLabel(userId: string | null | undefined) {
+	if (!userId) {
+		return 'Sin usuario'
+	}
+
+	return safeUsers.value.find((item) => item.id === userId)?.displayName ?? userId
+}
+
+function resolveGroupLabel(groupId: string | null | undefined) {
+	if (!groupId) {
+		return 'Sin grupo'
+	}
+
+	return safeGroups.value.find((item) => item.id === groupId)?.displayName ?? groupId
+}
+
+function formatPersonalDataLabel(key: string) {
+	if (key === 'email') {
+		return 'Correo'
+	}
+
+	if (key === 'phone') {
+		return 'Teléfono'
+	}
+
+	if (key === 'location') {
+		return 'Dirección'
+	}
+
+	return key
+		.replace(/[_-]+/g, ' ')
+		.replace(/([a-z])([A-Z])/g, '$1 $2')
+		.replace(/\s+/g, ' ')
+		.trim()
+		.replace(/^./, (char) => char.toUpperCase())
+}
+
+function saveChanges() {
+	if (!dirty.value) {
+		return
+	}
+
+	if (requiresCloseReason.value && closeReason.value.trim() === '') {
+		closeReasonDialogOpen.value = true
+		return
+	}
+
+	waitingForSaveSync.value = true
+	emit('save', {
+		...currentEditPayload.value,
+		supportDescription: sanitizeRichText(editableTicket.supportDescription),
+		closeReason: requiresCloseReason.value ? closeReason.value.trim() : undefined,
+	})
+}
+
+function assignToCurrentUser() {
+	if (!canEditTicket.value || !props.currentUserUid) {
+		return
+	}
+
+	onAssignedUserChange(props.currentUserUid)
+	waitingForSaveSync.value = true
+	emit('assign-to-me')
 }
 </script>
 
 <template>
-	<div v-if="ticket" class="gi-sidebar-panel">
+	<div v-if="ticket" class="gi-sidebar-panel" :class="{ 'gi-sidebar-panel--fullscreen': fullscreen }">
 		<header class="gi-sidebar-panel__header">
 			<div class="gi-sidebar-panel__title-block">
-				<strong>{{ ticket.number }}</strong>
+				<div class="gi-sidebar-panel__ticket-line">
+					<strong>{{ ticket.number }}</strong>
+					<span v-if="showSupportTabs && ticket.creatorUid" class="gi-sidebar-panel__requester-inline">
+						<span class="gi-sidebar-panel__requester-label">Creado por</span>
+						<button class="gi-sidebar-panel__requester-button" type="button" @click="openRequesterTab">
+							{{ resolveUserLabel(ticket.creatorUid) }}
+						</button>
+					</span>
+				</div>
 				<h2>{{ ticket.title }}</h2>
 				<div class="gi-sidebar-panel__actions">
 					<button v-if="showRepeat" class="gi-secondary-button gi-sidebar-panel__fullscreen-button" type="button" @click="emit('repeat')">
-						Repetir incidencia
+						Repetir ticket
 					</button>
 					<button v-if="showFullscreen && !fullscreen" class="gi-secondary-button gi-sidebar-panel__fullscreen-button" type="button" @click="emit('fullscreen')">
-					Pantalla completa
+						Pantalla completa
+					</button>
+					<button v-if="canAssignToCurrentUser" class="gi-secondary-button gi-sidebar-panel__fullscreen-button" type="button" @click="assignToCurrentUser">
+						Asignarme a mí
+					</button>
+					<button v-if="ticket.canReopen" class="gi-secondary-button gi-sidebar-panel__fullscreen-button" type="button" @click="emit('reopen')">
+						Reabrir ticket
+					</button>
+					<slot name="actions" />
+					<button v-if="canManage" class="gi-primary-button gi-sidebar-panel__save-button" type="button" :disabled="!dirty" @click="saveChanges">
+						Guardar
 					</button>
 				</div>
 			</div>
 		</header>
-		<section class="gi-sidebar-panel__block">
-			<p>{{ ticket.userDescription }}</p>
-		</section>
-		<section v-if="canManage" class="gi-sidebar-panel__block">
-			<div class="gi-form-grid">
-				<label class="gi-field">
-					<span>Estado</span>
-					<SearchableSelect :model-value="ticket.status" :options="statusOptions" placeholder="Estado" @update:modelValue="onStatusChange" />
+		<nav v-if="visibleTabs.length" class="gi-sidebar-panel__tabs" aria-label="Secciones del ticket">
+			<button v-for="tab in visibleTabs" :key="tab.id" class="gi-sidebar-panel__tab" :class="{ 'gi-sidebar-panel__tab--active': activeTab === tab.id }" type="button" @click="activeTab = tab.id">
+				{{ tab.label }}
+			</button>
+		</nav>
+		<section v-if="activeTab === 'detail'" class="gi-sidebar-panel__block gi-sidebar-panel__detail-block">
+			<div v-if="canEditTicket" class="gi-sidebar-panel__editor-form">
+				<label class="gi-field gi-field--wide">
+					<span>Título</span>
+					<input :id="getFieldId('title')" v-model="editableTicket.title" :name="getFieldId('title')" class="gi-input" type="text" />
 				</label>
-				<label class="gi-field">
-					<span>Criticidad</span>
-					<SearchableSelect :model-value="ticket.urgencyId ?? null" :options="urgencyOptions" placeholder="Sin criticidad" clearable @update:modelValue="onUrgencyChange" />
-				</label>
-				<label class="gi-field">
-					<span>Asignado a usuario</span>
-					<SearchableSelect :model-value="ticket.assignedUserUid ?? null" :options="userOptions" placeholder="Sin usuario" clearable @update:modelValue="onAssignedUserChange" />
-				</label>
-				<label class="gi-field">
-					<span>Asignado a grupo</span>
-					<SearchableSelect :model-value="ticket.assignedGroupId ?? null" :options="groupOptions" placeholder="Sin grupo" clearable @update:modelValue="onAssignedGroupChange" />
-				</label>
-				<label class="gi-field gi-field--wide"><span>Descripcion de soporte</span><textarea class="gi-textarea" :value="ticket.supportDescription" @change="emit('update', { supportDescription: ($event.target as HTMLTextAreaElement).value })" /></label>
-			</div>
-		</section>
-		<section class="gi-sidebar-panel__block">
-			<h3>Adjuntos</h3>
-			<button v-for="attachment in ticket.attachments || []" :key="attachment.id" class="gi-secondary-button gi-attachment-link" @click="emit('download', attachment.id)">{{ attachment.originalName }}</button>
-		</section>
-		<section class="gi-sidebar-panel__block">
-			<h3>Comentarios</h3>
-			<article v-for="item in ticket.comments || []" :key="item.id" class="gi-comment">
-				<strong>{{ item.authorUid }}</strong>
-				<p>{{ item.body }}</p>
-				<div v-if="item.attachments?.length" class="gi-comment__attachments">
-					<button v-for="attachment in item.attachments" :key="attachment.id" class="gi-secondary-button gi-comment__attachment gi-attachment-link" @click="emit('download', attachment.id)">{{ attachment.originalName }}</button>
+				<div class="gi-sidebar-panel__compact-select-grid">
+					<div class="gi-field gi-sidebar-panel__compact-field">
+						<span>Estado</span>
+						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.status" :options="statusOptions" placeholder="Estado" @update:modelValue="onStatusChange" />
+					</div>
+					<div class="gi-field gi-sidebar-panel__compact-field">
+						<span>Criticidad</span>
+						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.urgencyId" :options="urgencyOptions" placeholder="Sin criticidad" clearable @update:modelValue="onUrgencyChange" />
+					</div>
+					<div class="gi-field gi-sidebar-panel__compact-field">
+						<span>Asignado a usuario</span>
+						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.assignedUserUid" :options="userOptions" placeholder="Sin usuario" clearable @update:modelValue="onAssignedUserChange" />
+					</div>
+					<div class="gi-field gi-sidebar-panel__compact-field">
+						<span>Asignado a grupo</span>
+						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.assignedGroupId" :options="groupOptions" placeholder="Sin grupo" clearable @update:modelValue="onAssignedGroupChange" />
+					</div>
 				</div>
-			</article>
-			<textarea v-model="comment" class="gi-textarea" rows="4" placeholder="Añadir comentario" />
-			<div class="gi-sidebar-panel__composer-tools">
-				<label class="gi-secondary-button gi-sidebar-panel__file-trigger" for="ticket-comment-files">Adjuntar archivos</label>
-				<input id="ticket-comment-files" class="gi-sidebar-panel__file-input" type="file" multiple :accept="allowedExtensionsAccept" @change="onFileChange" />
-				<span v-if="allowedExtensionsLabel" class="gi-sidebar-panel__helper">Permitidos: {{ allowedExtensionsLabel }}</span>
+				<label v-if="requiresCloseReason" class="gi-field gi-field--wide">
+					<span>Motivo del cierre</span>
+					<PlainTextEditor :input-id="getFieldId('close-reason')" v-model="closeReason" placeholder="Explica el motivo del cierre. Se publicará como un comentario." :min-height="120" />
+				</label>
 			</div>
-			<ul v-if="selectedFiles.length" class="gi-sidebar-panel__selected-files">
-				<li v-for="(file, index) in selectedFiles" :key="`${file.name}-${file.size}-${file.lastModified}`" class="gi-sidebar-panel__selected-file">
-					<span>{{ file.name }}</span>
-					<button class="gi-tertiary-button" type="button" @click="removeSelectedFile(index)">Quitar</button>
-				</li>
-			</ul>
-			<p v-if="composerError" class="gi-form-error">{{ composerError }}</p>
-			<SearchableSelect v-if="canManage" v-model="visibility" :options="visibilityOptions" placeholder="Visibilidad" />
-			<button class="gi-primary-button" @click="sendComment">Publicar</button>
+			<div class="gi-sidebar-panel__description-stack">
+				<div class="gi-field gi-field--wide">
+					<span>Tipo</span>
+					<div class="gi-sidebar-panel__type-chip">{{ ticketTypeLabel }}</div>
+				</div>
+				<div class="gi-field gi-field--wide">
+					<span>Descripción del ticket</span>
+					<RichTextContent :value="ticket.userDescription" surface />
+				</div>
+			</div>
+			<div v-if="canEditTicket" class="gi-form-grid gi-sidebar-panel__support-editor-grid">
+				<div class="gi-field gi-field--wide">
+					<span>Descripción de soporte</span>
+					<RichTextEditor v-model="editableTicket.supportDescription" placeholder="Añade contexto interno, pasos realizados o capturas" :min-height="220" />
+				</div>
+			</div>
+			<div v-else-if="canManage" class="gi-sidebar-panel__closed-summary">
+				<div class="gi-sidebar-panel__summary-grid">
+					<div><span class="gi-sidebar-panel__summary-label">Tipo</span><strong>{{ ticketTypeLabel }}</strong></div>
+					<div><span class="gi-sidebar-panel__summary-label">Estado</span><strong>{{ ticket.status }}</strong></div>
+					<div><span class="gi-sidebar-panel__summary-label">Criticidad</span><strong>{{ ticket.urgencyId ?? 'Sin criticidad' }}</strong></div>
+					<div><span class="gi-sidebar-panel__summary-label">Asignado a usuario</span><strong>{{ resolveUserLabel(ticket.assignedUserUid) }}</strong></div>
+					<div><span class="gi-sidebar-panel__summary-label">Asignado a grupo</span><strong>{{ resolveGroupLabel(ticket.assignedGroupId) }}</strong></div>
+				</div>
+				<div>
+					<h3>Descripción de soporte</h3>
+					<RichTextContent :value="ticket.supportDescription" surface />
+				</div>
+			</div>
 		</section>
+		<section v-if="showSupportTabs ? activeTab === 'detail' : activeTab === 'attachments'" class="gi-sidebar-panel__block">
+			<h3>Adjuntos</h3>
+			<div class="gi-sidebar-panel__attachment-list">
+				<button v-for="attachment in ticket.attachments || []" :key="attachment.id" class="gi-secondary-button gi-attachment-link" @click="openAttachment(attachment)">{{ attachment.originalName }}</button>
+				<p v-if="!(ticket.attachments || []).length" class="gi-sidebar-panel__muted">No hay adjuntos publicados.</p>
+			</div>
+		</section>
+		<section v-if="showSupportTabs && activeTab === 'requester'" class="gi-sidebar-panel__block gi-sidebar-panel__requester-block">
+			<div class="gi-sidebar-panel__requester-header">
+				<div>
+					<p class="gi-sidebar-panel__section-kicker">Solicitante</p>
+					<h3>{{ ticket.creatorUid ? resolveUserLabel(ticket.creatorUid) : 'Sin solicitante' }}</h3>
+				</div>
+			</div>
+			<div v-if="requesterContactEntries.length" class="gi-sidebar-panel__requester-grid">
+				<article v-for="entry in requesterContactEntries" :key="entry.key" class="gi-sidebar-panel__requester-card">
+					<span class="gi-sidebar-panel__summary-label">{{ entry.label }}</span>
+					<strong>{{ entry.value }}</strong>
+				</article>
+			</div>
+			<p v-else class="gi-sidebar-panel__muted">No hay datos de contacto disponibles para este solicitante.</p>
+		</section>
+		<section v-if="activeTab === 'comments'" class="gi-sidebar-panel__block">
+			<template v-if="canPublishComment">
+				<div v-if="composerVisible" class="gi-sidebar-panel__comment-composer">
+					<div class="gi-sidebar-panel__comment-composer-header">
+						<strong>Nuevo comentario</strong>
+						<button class="gi-round-icon-button gi-sidebar-panel__icon-button" type="button" aria-label="Ocultar nuevo comentario" title="Ocultar nuevo comentario" @click="hideComposer">
+							<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z" fill="currentColor" /></svg>
+						</button>
+					</div>
+					<RichTextEditor v-model="comment" placeholder="Añade un comentario, pega una captura o inserta una imagen" :min-height="180" />
+					<AttachmentPicker v-model="attachmentsDraft" :allowed-extensions="allowedExtensions" :max-file-size-mb="maxFileSizeMb || 25" />
+					<p v-if="composerError" class="gi-form-error">{{ composerError }}</p>
+					<div class="gi-sidebar-panel__comment-composer-actions">
+						<SearchableSelect v-if="canManage" v-model="visibility" :options="visibilityOptions" placeholder="Visibilidad" />
+						<button class="gi-primary-button" @click="sendComment">Publicar</button>
+					</div>
+				</div>
+				<div v-else class="gi-sidebar-panel__comment-composer-toggle-row">
+					<button class="gi-secondary-button gi-sidebar-panel__composer-toggle-button" type="button" @click="showComposer">
+						<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a1 1 0 0 1 1 1v5h5a1 1 0 1 1 0 2h-5v5a1 1 0 1 1-2 0v-5H6a1 1 0 1 1 0-2h5V6a1 1 0 0 1 1-1" fill="currentColor" /></svg>
+						<span>Nuevo comentario</span>
+					</button>
+				</div>
+			</template>
+			<p v-else-if="isClosedTicket" class="gi-sidebar-panel__muted">Este ticket está cerrado. Reabre el ticket para volver a actuar sobre él.</p>
+			<h3>Histórico</h3>
+			<div class="gi-sidebar-panel__comments-toolbar">
+				<label class="gi-field gi-field--wide gi-sidebar-panel__comments-search"><span>Buscar texto</span><input :id="getFieldId('comments-search')" v-model="commentsSearchText" :name="getFieldId('comments-search')" class="gi-input" type="search" /></label>
+				<button class="gi-secondary-button gi-sidebar-panel__comments-mobile-toggle" :class="{ 'gi-sidebar-panel__comments-mobile-toggle--always': shouldCollapseCommentOptions }" type="button" :aria-expanded="commentsMobileMenuOpen ? 'true' : 'false'" @click="toggleCommentsMobileMenu">
+					{{ commentsMobileMenuOpen ? 'Cerrar opciones' : 'Opciones' }}
+				</button>
+				<div v-if="showSupportTabs" class="gi-sidebar-panel__comments-toolbar-actions">
+					<button v-if="filteredComments.length" class="gi-secondary-button" type="button" @click="exportComments">
+						Exportar comentarios
+					</button>
+					<button class="gi-secondary-button gi-sidebar-panel__sort-button" type="button" @click="toggleCommentsSortDirection">
+						{{ commentsSortDirection === 'desc' ? 'Fecha: más recientes primero' : 'Fecha: más antiguas primero' }}
+					</button>
+					<button v-if="!fullscreen" class="gi-secondary-button" type="button" @click="emit('fullscreen')">Expandir comentarios</button>
+					<button v-if="orderedComments.length" class="gi-secondary-button" type="button" @click="toggleAllVisibleComments">
+						{{ allVisibleCommentsExpanded ? 'Ocultar todos' : 'Expandir todos' }}
+					</button>
+				</div>
+			</div>
+			<div v-if="commentsMobileMenuOpen" class="gi-sidebar-panel__comments-mobile-menu" :class="{ 'gi-sidebar-panel__comments-mobile-menu--always': shouldCollapseCommentOptions }">
+				<div class="gi-sidebar-panel__comments-mobile-actions">
+					<button v-if="filteredComments.length" class="gi-secondary-button" type="button" @click="exportComments(); closeCommentsMobileMenu()">
+						Exportar comentarios
+					</button>
+					<button class="gi-secondary-button gi-sidebar-panel__sort-button" type="button" @click="toggleCommentsSortDirection(); closeCommentsMobileMenu()">
+						{{ commentsSortDirection === 'desc' ? 'Fecha: más recientes primero' : 'Fecha: más antiguas primero' }}
+					</button>
+					<button v-if="!fullscreen" class="gi-secondary-button" type="button" @click="emit('fullscreen'); closeCommentsMobileMenu()">Expandir comentarios</button>
+					<button v-if="orderedComments.length" class="gi-secondary-button" type="button" @click="toggleAllVisibleComments(); closeCommentsMobileMenu()">
+						{{ allVisibleCommentsExpanded ? 'Ocultar todos' : 'Expandir todos' }}
+					</button>
+				</div>
+				<div class="gi-form-grid gi-sidebar-panel__comments-mobile-filters">
+					<label class="gi-field"><span>Desde</span><input :id="getFieldId('comments-date-from-mobile')" v-model="commentsDateFrom" :name="getFieldId('comments-date-from-mobile')" class="gi-input" type="date" /></label>
+					<label class="gi-field"><span>Hasta</span><input :id="getFieldId('comments-date-to-mobile')" v-model="commentsDateTo" :name="getFieldId('comments-date-to-mobile')" class="gi-input" type="date" /></label>
+					<div class="gi-field"><span>Usuario</span><SearchableSelect :model-value="commentsAuthorUid" :options="commentAuthorOptions" placeholder="Todos" clearable @update:modelValue="commentsAuthorUid = $event ? String($event) : null" /></div>
+				</div>
+			</div>
+			<div v-if="showSupportTabs" class="gi-form-grid gi-sidebar-panel__comments-filters">
+				<label class="gi-field"><span>Desde</span><input :id="getFieldId('comments-date-from')" v-model="commentsDateFrom" :name="getFieldId('comments-date-from')" class="gi-input" type="date" /></label>
+				<label class="gi-field"><span>Hasta</span><input :id="getFieldId('comments-date-to')" v-model="commentsDateTo" :name="getFieldId('comments-date-to')" class="gi-input" type="date" /></label>
+				<div class="gi-field"><span>Usuario</span><SearchableSelect :model-value="commentsAuthorUid" :options="commentAuthorOptions" placeholder="Todos" clearable @update:modelValue="commentsAuthorUid = $event ? String($event) : null" /></div>
+			</div>
+			<div class="gi-sidebar-panel__comments-accordion">
+				<article v-for="item in orderedComments" :key="item.id" class="gi-sidebar-panel__accordion-item">
+					<button class="gi-sidebar-panel__accordion-trigger" type="button" @click="toggleExpandedComment(item.id)">
+						<span class="gi-sidebar-panel__accordion-trigger-content">
+							<span class="gi-sidebar-panel__accordion-meta">{{ formatDateTime(item.createdAt) }} · {{ resolveUserLabel(item.authorUid) }}</span>
+							<span class="gi-sidebar-panel__accordion-summary">{{ commentSummary(item) }}</span>
+						</span>
+						<span class="gi-sidebar-panel__accordion-icon" aria-hidden="true">{{ expandedCommentIds.includes(item.id) ? '▾' : '▸' }}</span>
+					</button>
+					<div v-if="expandedCommentIds.includes(item.id)" class="gi-sidebar-panel__accordion-body">
+						<RichTextContent :value="item.body" />
+						<div v-if="item.attachments?.length" class="gi-comment__attachments">
+							<button v-for="attachment in item.attachments" :key="attachment.id" class="gi-secondary-button gi-comment__attachment gi-attachment-link" @click="openAttachment(attachment)">{{ attachment.originalName }}</button>
+						</div>
+					</div>
+				</article>
+				<p v-if="orderedComments.length === 0" class="gi-sidebar-panel__muted">No hay comentarios que coincidan con los filtros actuales.</p>
+			</div>
+		</section>
+		<section v-if="showSupportTabs && activeTab === 'history'" class="gi-sidebar-panel__block">
+			<div class="gi-sidebar-panel__history-list">
+				<article v-for="entry in historyEntries" :key="entry.id" class="gi-sidebar-panel__history-item">
+					<div class="gi-sidebar-panel__history-meta">
+						<strong>{{ entry.title }}</strong>
+						<span>{{ formatDateTime(entry.createdAt) }} · {{ entry.actor }}</span>
+					</div>
+					<ul v-if="entry.details.length" class="gi-sidebar-panel__history-details">
+						<li v-for="detail in entry.details" :key="detail">{{ detail }}</li>
+					</ul>
+				</article>
+				<p v-if="historyEntries.length === 0" class="gi-sidebar-panel__muted">No hay cambios registrados todavía.</p>
+			</div>
+		</section>
+		<div v-if="discardChangesDialogOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="resolveDiscardChangesDialog(false)">
+			<section class="gi-app-dialog gi-dialog gi-dialog--compact" aria-label="Confirmar salida sin guardar">
+				<header class="gi-dialog__header">
+					<h3 class="gi-dialog__title">Cambios sin guardar</h3>
+					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="resolveDiscardChangesDialog(false)">x</button>
+				</header>
+				<p class="gi-dialog__message gi-dialog__message--neutral">Hay cambios sin guardar en esta incidencia. Si sales ahora, se perderán.</p>
+				<footer class="gi-dialog__footer">
+					<button class="gi-ghost-button" type="button" @click="resolveDiscardChangesDialog(false)">Seguir editando</button>
+					<button class="gi-primary-button" type="button" @click="resolveDiscardChangesDialog(true)">Salir sin guardar</button>
+				</footer>
+			</section>
+		</div>
+		<div v-if="closeReasonDialogOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="closeReasonDialogOpen = false">
+			<section class="gi-app-dialog gi-dialog gi-dialog--compact" aria-label="Motivo del cierre obligatorio">
+				<header class="gi-dialog__header">
+					<h3 class="gi-dialog__title">Motivo del cierre obligatorio</h3>
+					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeReasonDialogOpen = false">x</button>
+				</header>
+				<p class="gi-dialog__message gi-dialog__message--neutral">Debes indicar el motivo del cierre antes de guardar.</p>
+				<footer class="gi-dialog__footer">
+					<button class="gi-primary-button" type="button" @click="closeReasonDialogOpen = false">Entendido</button>
+				</footer>
+			</section>
+		</div>
 	</div>
 </template>
 
@@ -293,8 +926,68 @@ function onAssignedGroupChange(value: string | number | null) {
 	min-width: 0;
 }
 
+.gi-sidebar-panel__ticket-line {
+	display: flex;
+	align-items: center;
+	gap: .75rem;
+	flex-wrap: wrap;
+}
+
+.gi-sidebar-panel__requester-inline {
+	display: inline-flex;
+	align-items: center;
+	gap: .45rem;
+	flex-wrap: wrap;
+	color: #48645d;
+	font-size: .92rem;
+}
+
+.gi-sidebar-panel__requester-label {
+	font-weight: 600;
+}
+
+.gi-sidebar-panel__requester-button {
+	border: 0;
+	background: transparent;
+	padding: 0;
+	font: inherit;
+	font-weight: 700;
+	color: #0b6e4f;
+	text-decoration: underline;
+	text-underline-offset: .15em;
+	cursor: pointer;
+}
+
+.gi-sidebar-panel__requester-button:hover,
+.gi-sidebar-panel__requester-button:focus-visible {
+	color: #084f39;
+}
+
 .gi-sidebar-panel__header h2 {
 	margin: .3rem 0 0;
+}
+
+.gi-sidebar-panel__tabs {
+	display: flex;
+	gap: .6rem;
+	flex-wrap: wrap;
+}
+
+.gi-sidebar-panel__tab {
+	border: 1px solid rgba(49, 96, 91, .14);
+	border-radius: 999px;
+	padding: .55rem .9rem;
+	background: rgba(239, 245, 241, .96);
+	color: #29594e;
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.gi-sidebar-panel__tab--active {
+	background: #0b6e4f;
+	border-color: #0b6e4f;
+	color: #fff;
 }
 
 .gi-sidebar-panel__fullscreen-button {
@@ -307,9 +1000,71 @@ function onAssignedGroupChange(value: string | number | null) {
 	flex-wrap: wrap;
 }
 
+.gi-sidebar-panel__save-button:disabled {
+	opacity: .55;
+	cursor: not-allowed;
+}
+
+.gi-sidebar-panel__detail-block,
+.gi-sidebar-panel__description-stack,
+.gi-sidebar-panel__attachment-list,
+.gi-sidebar-panel__history-list,
+.gi-sidebar-panel__comment-list,
+.gi-sidebar-panel__closed-summary {
+	display: grid;
+	gap: 1rem;
+}
+
+.gi-sidebar-panel__support-editor-grid {
+	padding-top: 0;
+}
+
+.gi-sidebar-panel__editor-form {
+	display: grid;
+	gap: .85rem;
+	padding: 1rem 0;
+}
+
+.gi-sidebar-panel__compact-select-grid {
+	display: grid;
+	gap: .75rem;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	align-items: start;
+}
+
+.gi-sidebar-panel__compact-field {
+	gap: .25rem;
+}
+
+.gi-sidebar-panel__compact-field > span {
+	font-size: .73rem;
+}
+
+.gi-sidebar-panel__summary-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+	gap: .85rem;
+}
+
+.gi-sidebar-panel__summary-label {
+	display: block;
+	margin-bottom: .3rem;
+	font-size: .78rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: .04em;
+	color: #5a6f68;
+}
+
+.gi-textarea--plain {
+	width: 100%;
+	min-height: 6.5rem;
+	resize: vertical;
+}
+
 .gi-comment__attachments,
-.gi-sidebar-panel__composer-tools,
-.gi-sidebar-panel__selected-file {
+.gi-sidebar-panel__selected-file,
+.gi-sidebar-panel__comments-header {
 	display: flex;
 	gap: .65rem;
 	align-items: center;
@@ -324,39 +1079,180 @@ function onAssignedGroupChange(value: string | number | null) {
 	max-width: 100%;
 }
 
+.gi-sidebar-panel__comment-meta,
+.gi-sidebar-panel__history-meta {
+	display: flex;
+	justify-content: flex-start;
+	gap: .75rem;
+	align-items: baseline;
+	flex-wrap: wrap;
+}
+
+.gi-sidebar-panel__history-item {
+	padding: .95rem 1rem;
+	border-radius: 16px;
+	background: rgba(245, 249, 247, .96);
+	border: 1px solid rgba(49, 96, 91, .12);
+	display: grid;
+	gap: .7rem;
+}
+
+.gi-sidebar-panel__history-details {
+	margin: 0;
+	padding-left: 1rem;
+	display: grid;
+	gap: .35rem;
+	color: #4b6058;
+}
+
 .gi-attachment-link {
 	font-size: .82rem;
 	font-weight: 400 !important;
 	line-height: 1.25;
 }
 
-.gi-sidebar-panel__composer-tools {
-	margin-top: .75rem;
-}
 
-.gi-sidebar-panel__file-trigger {
-	cursor: pointer;
-}
-
-.gi-sidebar-panel__file-input {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	opacity: 0;
-	pointer-events: none;
-}
-
-.gi-sidebar-panel__helper {
+.gi-sidebar-panel__muted {
+	margin: 0;
 	color: #5f726b;
-	font-size: .9rem;
 }
 
-.gi-sidebar-panel__selected-files {
-	list-style: none;
-	padding: 0;
-	margin: .75rem 0 0;
+.gi-sidebar-panel__section-kicker {
+	margin: .1rem 0 -.1rem;
+	font-size: .8rem;
+	font-weight: 700;
+	line-height: 1.2;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: #547068;
+}
+
+.gi-sidebar-panel__comments-header {
+	justify-content: space-between;
+}
+
+.gi-sidebar-panel__requester-block,
+.gi-sidebar-panel__requester-grid {
 	display: grid;
+	gap: 1rem;
+}
+
+.gi-sidebar-panel__requester-header h3 {
+	margin: 0;
+}
+
+.gi-sidebar-panel__requester-grid {
+	grid-template-columns: 1fr;
+}
+
+.gi-sidebar-panel__requester-card {
+	padding: .95rem 1rem;
+	border-radius: 16px;
+	background: rgba(245, 249, 247, .96);
+	border: 1px solid rgba(49, 96, 91, .12);
+	display: grid;
+	gap: .35rem;
+	justify-items: start;
+}
+
+.gi-sidebar-panel__comments-header-actions,
+.gi-sidebar-panel__comment-composer-actions,
+.gi-sidebar-panel__comments-toolbar-actions {
+	display: flex;
+	gap: .65rem;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.gi-sidebar-panel__comment-composer,
+.gi-sidebar-panel__comments-toolbar {
+	display: grid;
+	gap: .85rem;
+}
+
+.gi-sidebar-panel__type-chip {
+	padding: .8rem .95rem;
+	border: 1px solid rgba(49, 96, 91, .12);
+	border-radius: 14px;
+	background: rgba(245, 249, 247, .96);
+	font-weight: 600;
+	color: #2f554c;
+}
+
+.gi-sidebar-panel__comments-mobile-toggle,
+.gi-sidebar-panel__comments-mobile-menu {
+	display: none;
+}
+
+.gi-sidebar-panel__comments-mobile-toggle--always {
+	display: inline-flex;
+	justify-content: center;
+}
+
+.gi-sidebar-panel__comments-mobile-menu--always {
+	display: grid;
+	gap: .85rem;
+	padding: .9rem 1rem;
+	border: 1px solid rgba(49, 96, 91, .12);
+	border-radius: 16px;
+	background: rgba(247, 250, 248, .95);
+}
+
+.gi-sidebar-panel__comment-composer-toggle-row {
+	display: flex;
+	justify-content: flex-start;
+	margin-bottom: .35rem;
+}
+
+.gi-sidebar-panel__comment-composer {
+	padding: 1rem;
+	border: 1px solid rgba(49, 96, 91, .12);
+	border-radius: 16px;
+	background: rgba(247, 250, 248, .95);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6);
+	margin-bottom: 1rem;
+}
+
+.gi-sidebar-panel__comment-composer-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: .75rem;
+}
+
+.gi-sidebar-panel__icon-button,
+.gi-sidebar-panel__composer-toggle-button {
+	display: inline-flex;
+	align-items: center;
 	gap: .45rem;
+}
+
+.gi-sidebar-panel__icon-button svg,
+.gi-sidebar-panel__composer-toggle-button svg {
+	width: 1rem;
+	height: 1rem;
+}
+
+.gi-sidebar-panel__comments-toolbar {
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+}
+
+.gi-sidebar-panel__comments-toolbar-actions {
+	justify-content: flex-start;
+}
+
+.gi-sidebar-panel__comments-search {
+	margin: 0;
+}
+
+.gi-sidebar-panel__sort-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	justify-self: flex-start;
+	min-height: 2.364rem;
+	white-space: nowrap;
 }
 
 .gi-sidebar-panel__selected-file {
@@ -365,5 +1261,129 @@ function onAssignedGroupChange(value: string | number | null) {
 	border: 1px solid rgba(33, 53, 68, .12);
 	border-radius: 12px;
 	background: rgba(255, 255, 255, .7);
+}
+
+.gi-sidebar-panel__comments-filters,
+.gi-sidebar-panel__comments-mobile-actions,
+.gi-sidebar-panel__comments-mobile-filters,
+.gi-sidebar-panel__comments-accordion {
+	display: grid;
+	gap: .75rem;
+}
+
+.gi-sidebar-panel--fullscreen,
+.gi-sidebar-panel--fullscreen .gi-sidebar-panel__block,
+.gi-sidebar-panel--fullscreen .gi-sidebar-panel__comments-accordion,
+.gi-sidebar-panel--fullscreen .gi-sidebar-panel__comment-list {
+	width: 100%;
+	max-width: none;
+}
+
+.gi-sidebar-panel__accordion-item {
+	border: 1px solid rgba(49, 96, 91, .12);
+	border-radius: 16px;
+	overflow: hidden;
+	background: rgba(255, 255, 255, .9);
+}
+
+.gi-sidebar-panel__accordion-trigger {
+	width: 100%;
+	padding: .9rem 1rem;
+	border: none;
+	background: rgba(239, 245, 241, .98);
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: .75rem;
+	text-align: left;
+	font: inherit;
+	cursor: pointer;
+}
+
+.gi-sidebar-panel__accordion-trigger-content {
+	display: grid;
+	gap: .35rem;
+	min-width: 0;
+}
+
+.gi-sidebar-panel__accordion-meta {
+	font-size: .87rem;
+	font-weight: 700;
+	color: #385b53;
+	line-height: 1.35;
+}
+
+.gi-sidebar-panel__accordion-summary {
+	color: #516862;
+	line-height: 1.45;
+	word-break: break-word;
+}
+
+.gi-sidebar-panel__accordion-icon {
+	font-size: 1rem;
+	line-height: 1;
+	color: #4d6962;
+	padding-top: .1rem;
+}
+
+.gi-sidebar-panel__accordion-body {
+	padding: .9rem 1rem 1rem;
+	display: grid;
+	gap: .75rem;
+}
+
+@media (max-width: 900px) {
+	.gi-sidebar-panel__compact-select-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.gi-sidebar-panel__comment-meta,
+	.gi-sidebar-panel__history-meta,
+	.gi-sidebar-panel__comments-header,
+	.gi-sidebar-panel__comments-header-actions,
+	.gi-sidebar-panel__comment-composer-actions,
+	.gi-sidebar-panel__comments-toolbar-actions,
+	.gi-sidebar-panel__comment-composer-header {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.gi-sidebar-panel__sort-button,
+	.gi-sidebar-panel__comments-toolbar-actions > .gi-secondary-button {
+		width: 100%;
+	}
+
+	.gi-sidebar-panel__comments-toolbar {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 640px) {
+	.gi-sidebar-panel__compact-select-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.gi-sidebar-panel__comments-mobile-toggle {
+		display: inline-flex;
+		justify-content: center;
+	}
+
+	.gi-sidebar-panel__comments-toolbar-actions,
+	.gi-sidebar-panel__comments-filters {
+		display: none;
+	}
+
+	.gi-sidebar-panel__comments-mobile-menu {
+		display: grid;
+		gap: .85rem;
+		padding: .9rem 1rem;
+		border: 1px solid rgba(49, 96, 91, .12);
+		border-radius: 16px;
+		background: rgba(247, 250, 248, .95);
+	}
+
+	.gi-sidebar-panel__comments-mobile-actions > .gi-secondary-button {
+		width: 100%;
+	}
 }
 </style>

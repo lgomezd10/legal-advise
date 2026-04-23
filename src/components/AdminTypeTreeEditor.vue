@@ -28,16 +28,16 @@ function buildPath(node: EditableTypeNode): string {
 			<div class="gi-admin-tree__row">
 				<label class="gi-field gi-admin-tree__field">
 					<span>Nombre</span>
-					<input v-model="node.name" class="gi-input" type="text" placeholder="Nombre del tipo" />
+					<input :id="`type-name-${node.clientId}`" v-model="node.name" :name="`type-name-${node.clientId}`" class="gi-input" type="text" placeholder="Nombre del tipo" />
 				</label>
 				<label class="gi-field gi-admin-tree__toggle">
 					<span>Activo</span>
-					<input v-model="node.active" type="checkbox" />
+					<input :id="`type-active-${node.clientId}`" v-model="node.active" :name="`type-active-${node.clientId}`" type="checkbox" />
 				</label>
 				<div class="gi-admin-tree__actions">
 					<span class="gi-meta-pill">{{ buildPath(node) }}</span>
 					<button class="gi-secondary-button" type="button" @click="emit('add-child', node)">
-						Anadir subtipo
+						Añadir subtipo
 					</button>
 				</div>
 			</div>
@@ -94,16 +94,6 @@ function buildPath(node: EditableTypeNode): string {
 	justify-content: flex-end;
 	align-items: center;
 	flex-wrap: wrap;
-}
-
-.gi-meta-pill {
-	display: inline-flex;
-	align-items: center;
-	padding: .2rem .55rem;
-	border-radius: 999px;
-	background: rgba(49, 96, 91, .08);
-	color: #4d635d;
-	font-size: .82rem;
 }
 
 @media (max-width: 900px) {

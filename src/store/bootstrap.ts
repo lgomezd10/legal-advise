@@ -8,7 +8,7 @@ const fallbackState: BootstrapData = {
 	roles: [],
 	navigation: [],
 	personalConfig: {},
-	catalogs: { statuses: [], urgencies: [], types: [], fields: [], provinces: [], attachmentConfig: { allowedExtensions: [] } },
+	catalogs: { statuses: [], urgencies: [], types: [], fields: [], provinces: [], attachmentConfig: { allowedExtensions: [], maxFileSizeMb: 25 } },
 	supportFilters: [],
 	assignables: { users: [], groups: [] },
 	tasksIntegration: { available: false, config: {} },
@@ -28,6 +28,25 @@ export const useBootstrapStore = defineStore('bootstrap', {
 			this.data = await fetchBootstrap()
 			this.loading = false
 		},
+			ensureProvinceOption(province: string | null | undefined) {
+				const trimmed = String(province ?? '').trim()
+				if (trimmed === '') {
+					return
+				}
+
+				const exists = this.data.catalogs.provinces.some((entry) => entry.trim().toLocaleLowerCase() === trimmed.toLocaleLowerCase())
+				if (exists) {
+					return
+				}
+
+				this.data = {
+					...this.data,
+					catalogs: {
+						...this.data.catalogs,
+						provinces: [...this.data.catalogs.provinces, trimmed],
+					},
+				}
+			},
 		setPersonalConfig(personalConfig: Record<string, string>) {
 			this.data = {
 				...this.data,

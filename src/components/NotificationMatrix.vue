@@ -22,7 +22,7 @@ function toggle(index: number | string, event: Event) {
 		<div v-for="(item, index) in props.items" :key="`${item.scopeId}-${item.eventName}-${item.channel}`" class="gi-matrix-row">
 			<span>{{ item.scopeId }} · {{ item.eventName }}</span>
 			<span>{{ item.channel }}</span>
-			<label><input type="checkbox" :checked="Boolean(item.enabled)" @change="toggle(index, $event)" /> {{ item.enabled ? 'Activo' : 'Desactivado' }}</label>
+			<label><input :id="`notification-enabled-${index}`" :name="`notification-enabled-${item.scopeId}-${item.eventName}-${item.channel}`" type="checkbox" :checked="Boolean(item.enabled)" @change="toggle(index, $event)" /> {{ item.enabled ? 'Activo' : 'Desactivado' }}</label>
 		</div>
 	</div>
 </template>

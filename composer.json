@@ -5,12 +5,12 @@
   "license": "AGPL-3.0-or-later",
   "autoload": {
     "psr-4": {
-      "OCA\\Gestion_incidencias\\": "lib/"
+      "OCA\\ConsultasLegales\\": "lib/"
     }
   },
   "autoload-dev": {
     "psr-4": {
-      "OCA\\Gestion_incidencias\\Tests\\": "tests/"
+      "OCA\\ConsultasLegales\\Tests\\": "tests/"
     }
   },
   "require-dev": {

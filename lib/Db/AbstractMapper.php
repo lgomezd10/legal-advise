@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Db;
+namespace OCA\ConsultasLegales\Db;
 
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\MultipleObjectsReturnedException;

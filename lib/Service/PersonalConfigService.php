@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Service;
+namespace OCA\ConsultasLegales\Service;
 
-use OCA\Gestion_incidencias\Db\AppSetting;
-use OCA\Gestion_incidencias\Db\AppSettingMapper;
-use OCA\Gestion_incidencias\Db\CustomFieldMapper;
+use OCA\ConsultasLegales\Db\AppSetting;
+use OCA\ConsultasLegales\Db\AppSettingMapper;
+use OCA\ConsultasLegales\Db\CustomFieldMapper;
 use OCP\Accounts\IAccountManager;
 use OCP\Accounts\PropertyDoesNotExistException;
 use OCP\IUser;
@@ -69,6 +69,10 @@ class PersonalConfigService {
 	private function normalizeValues(array $values): array {
 		$normalized = [];
 		foreach ($this->fieldMapper->findAllOrdered('sort_order', 'ASC') as $field) {
+			if (!(bool) $field->getActive()) {
+				continue;
+			}
+
 			$fieldKey = (string) $field->getFieldKey();
 			$normalized[$fieldKey] = trim((string) ($values[$fieldKey] ?? ''));
 		}
@@ -81,6 +85,10 @@ class PersonalConfigService {
 		$account = $this->accountManager->getAccount($user);
 
 		foreach ($this->fieldMapper->findAllOrdered('sort_order', 'ASC') as $field) {
+			if (!(bool) $field->getActive()) {
+				continue;
+			}
+
 			$fieldKey = (string) $field->getFieldKey();
 			$source = (string) ($field->getPreloadSource() ?? '');
 			$defaults[$fieldKey] = match ($source) {

@@ -5,6 +5,7 @@ import TicketSidebarPanel from '@/components/TicketSidebarPanel.vue'
 import { createRepeatTicketDraft } from '@/services/ticketDraft'
 import { useBootstrapStore } from '@/store/bootstrap'
 import { useTicketsStore } from '@/store/tickets'
+import type { TicketAttachmentLinkDraft } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,12 +31,20 @@ async function download(attachmentId: number) {
 	URL.revokeObjectURL(link.href)
 }
 
-async function commentOnTicket(payload: { body: string, visibility: 'interno' | 'publico', files: File[] }) {
+async function commentOnTicket(payload: { body: string, visibility: 'interno' | 'publico', files: File[], links: TicketAttachmentLinkDraft[] }) {
 	if (!ticketsStore.selected) {
 		return
 	}
 
 	await ticketsStore.comment(ticketsStore.selected.id, payload)
+}
+
+async function reopenTicket() {
+	if (!ticketsStore.selected) {
+		return
+	}
+
+	await ticketsStore.reopen(ticketsStore.selected.id)
 }
 
 function backToUserConsole() {
@@ -66,21 +75,26 @@ function repeatTicket() {
 	<section class="gi-page">
 		<header class="gi-page__header gi-page__header--dense">
 			<div>
-				<p class="gi-kicker">Usuario</p>
-				<h1>Detalle de incidencia</h1>
-				<p class="gi-page__subtitle">Desde esta vista solo puedes consultar la incidencia y anadir comentarios o adjuntos.</p>
+				<h1>Detalle del ticket</h1>			
 			</div>
-			<button class="gi-secondary-button" type="button" @click="backToUserConsole">Volver a mis incidencias</button>
+			<button class="gi-secondary-button" type="button" @click="backToUserConsole">Volver a mis tickets</button>
 		</header>
 		<TicketSidebarPanel
 			:ticket="ticketsStore.selected"
 			:roles="['usuario']"
+			:users="bootstrapStore.data.assignables.users"
+			:groups="bootstrapStore.data.assignables.groups"
+			:types="bootstrapStore.data.catalogs.types"
+			:fields="bootstrapStore.data.catalogs.fields"
+			:current-user-uid="bootstrapStore.data.currentUser.uid"
 			:allowed-extensions="bootstrapStore.data.catalogs.attachmentConfig.allowedExtensions"
+			:max-file-size-mb="bootstrapStore.data.catalogs.attachmentConfig.maxFileSizeMb"
 			fullscreen
 			:read-only="true"
 			:show-repeat="true"
 			@comment="commentOnTicket"
 			@download="download"
+			@reopen="reopenTicket"
 			@repeat="repeatTicket"
 		/>
 	</section>

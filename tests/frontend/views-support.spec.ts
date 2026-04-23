@@ -1,0 +1,275 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { defineComponent } from 'vue'
+import SupportConsoleView from '@/views/SupportConsoleView.vue'
+import SupportNewTicketView from '@/views/SupportNewTicketView.vue'
+import SupportTicketFullView from '@/views/SupportTicketFullView.vue'
+import TicketSidebarView from '@/views/TicketSidebarView.vue'
+import { bootstrapStoreMock, routeState, routerPushMock, supportFiltersStoreMock, ticketsStoreMock } from './helpers/mockState'
+import { SearchableSelectStub, SupportFilterBuilderStub, SupportTicketTableStub, TicketFormStub, TicketSidebarPanelStub } from './helpers/stubs'
+import { createBootstrapData, createTicket } from './helpers/testData'
+
+describe('Pantallas de soporte', () => {
+	it('rehidrata en el builder los criterios persistidos sin filtro guardado', async() => {
+		const SupportFilterBuilderPropsStub = defineComponent({
+			name: 'SupportFilterBuilder',
+			props: {
+				initialFilterId: { type: Number, default: null },
+				initialCriteria: { type: Object, default: () => ({}) },
+			},
+			template: `<div class="support-filter-builder-props-stub">{{ JSON.stringify(initialCriteria) }}</div>`,
+		})
+
+		bootstrapStoreMock.data = createBootstrapData({
+			roles: ['soporte'],
+			navigation: [{ id: 'soporte', label: 'Consola de soporte', route: '/soporte', visible: true }],
+		})
+		window.localStorage.setItem('legal_advice:support_console_state', JSON.stringify({
+			visibleColumns: ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription'],
+			columnEditorOrder: ['number', 'updatedAt', 'assignment', 'createdBy', 'province', 'title', 'userDescription', 'status', 'urgency', 'createdAt'],
+			criteria: { province: 'Sevilla', text: 'seguimiento' },
+			sortKey: 'updatedAt',
+			sortDirection: 'desc',
+			selectedFilterId: null,
+		}))
+
+		const wrapper = mount(SupportConsoleView, {
+			global: {
+				stubs: {
+					SupportFilterBuilder: SupportFilterBuilderPropsStub,
+					SupportTicketTable: SupportTicketTableStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const builder = wrapper.getComponent(SupportFilterBuilderPropsStub)
+		expect(builder.props('initialFilterId')).toBe(null)
+		expect(builder.props('initialCriteria')).toEqual({ province: 'Sevilla', text: 'seguimiento' })
+		expect(ticketsStoreMock.load).toHaveBeenCalledWith('support', { province: 'Sevilla', text: 'seguimiento' })
+	})
+
+	it('aplica un filtro de soporte indicado en la query de la ruta', async() => {
+		const SupportFilterBuilderPropsStub = defineComponent({
+			name: 'SupportFilterBuilder',
+			props: {
+				initialFilterId: { type: Number, default: null },
+				initialCriteria: { type: Object, default: () => ({}) },
+			},
+			template: `<div class="support-filter-builder-props-stub">{{ initialFilterId }}</div>`,
+		})
+
+		bootstrapStoreMock.data = createBootstrapData({
+			roles: ['soporte'],
+			navigation: [{ id: 'soporte', label: 'Consola de soporte', route: '/soporte', visible: true }],
+		})
+		routeState.path = '/soporte'
+		routeState.query = { filterId: '20' }
+		supportFiltersStoreMock.items = [
+			{ id: 10, name: 'Asignadas a mi', criteria: { assignedUser: '__me__' }, isPredefined: true, active: true, isDefault: true, sortOrder: 10 },
+			{ id: 20, name: 'Madrid abiertas', criteria: { province: 'Madrid', status: ['nuevo'] }, isPredefined: false, active: true, isDefault: false, sortOrder: 20 },
+		]
+
+		const wrapper = mount(SupportConsoleView, {
+			global: {
+				stubs: {
+					SupportFilterBuilder: SupportFilterBuilderPropsStub,
+					SupportTicketTable: SupportTicketTableStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const builder = wrapper.getComponent(SupportFilterBuilderPropsStub)
+		expect(builder.props('initialFilterId')).toBe(20)
+		expect(ticketsStoreMock.load).toHaveBeenCalledWith('support', { province: 'Madrid', status: ['nuevo'] })
+	})
+
+	it('muestra acciones principales y editor de columnas en la consola de soporte', async() => {
+		bootstrapStoreMock.data = createBootstrapData({
+			roles: ['soporte'],
+			navigation: [{ id: 'soporte', label: 'Consola de soporte', route: '/soporte', visible: true }],
+		})
+		supportFiltersStoreMock.items = [{ id: 10, name: 'Asignadas a mi', criteria: { assignedUser: '__me__' }, isPredefined: true, active: true, isDefault: true, sortOrder: 10 }]
+		ticketsStoreMock.items = [createTicket({ id: 100 })]
+
+		const wrapper = mount(SupportConsoleView, {
+			global: {
+				stubs: {
+					SupportFilterBuilder: SupportFilterBuilderStub,
+					SupportTicketTable: SupportTicketTableStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		expect(supportFiltersStoreMock.load).toHaveBeenCalled()
+		expect(ticketsStoreMock.load).toHaveBeenCalledWith('support', expect.any(Object))
+		expect(wrapper.text()).toContain('Nuevo ticket')
+		expect(wrapper.text()).toContain('Editar columnas')
+		expect(wrapper.text()).toContain('Exportar CSV')
+
+		await wrapper.get('button').trigger('click')
+		await wrapper.get('button:nth-of-type(2)').trigger('click')
+		expect(wrapper.text()).toContain('Número de ticket')
+		expect(wrapper.text()).toContain('Última modificación')
+		expect(wrapper.text()).toContain('Provincia')
+		expect(wrapper.text()).toContain('Restaurar por defecto')
+		expect(wrapper.text()).toContain('Listo')
+	})
+
+	it('migra el estado guardado antiguo a las nuevas columnas por defecto de soporte', async() => {
+		bootstrapStoreMock.data = createBootstrapData({
+			roles: ['soporte'],
+			navigation: [{ id: 'soporte', label: 'Consola de soporte', route: '/soporte', visible: true }],
+		})
+		supportFiltersStoreMock.items = [{ id: 10, name: 'Asignadas a mi', criteria: { assignedUser: '__me__' }, isPredefined: true, active: true, isDefault: true, sortOrder: 10 }]
+		ticketsStoreMock.items = [createTicket({ id: 100 })]
+		window.localStorage.setItem('legal_advice:support_console_state', JSON.stringify({
+			visibleColumns: ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription'],
+			columnEditorOrder: ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription', 'status', 'urgency', 'createdAt'],
+			criteria: {},
+			sortKey: 'updatedAt',
+			sortDirection: 'desc',
+			selectedFilterId: null,
+		}))
+
+		const wrapper = mount(SupportConsoleView, {
+			global: {
+				stubs: {
+					SupportFilterBuilder: SupportFilterBuilderStub,
+					SupportTicketTable: SupportTicketTableStub,
+				},
+			},
+		})
+
+		await flushPromises()
+		await wrapper.get('button:nth-of-type(2)').trigger('click')
+
+		const provinceRow = wrapper.findAll('.gi-support-column-editor__item').find((row) => row.text().includes('Provincia'))
+		expect(provinceRow).toBeTruthy()
+		const provinceCheckbox = provinceRow!.get('input[type="checkbox"]')
+		expect((provinceCheckbox.element as HTMLInputElement).checked).toBe(true)
+
+		await provinceCheckbox.setValue(false)
+		expect((provinceCheckbox.element as HTMLInputElement).checked).toBe(false)
+		await provinceCheckbox.setValue(true)
+		expect((provinceCheckbox.element as HTMLInputElement).checked).toBe(true)
+	})
+
+	it('muestra la pantalla de nuevo ticket de soporte con provincia y asignacion', () => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
+
+		const wrapper = mount(SupportNewTicketView, {
+			global: {
+				stubs: {
+					SearchableSelect: SearchableSelectStub,
+					TicketForm: TicketFormStub,
+				},
+			},
+		})
+
+		expect(wrapper.text()).toContain('Nuevo ticket')
+		expect(wrapper.text()).toContain('Alta rápida desde soporte')
+		expect(wrapper.text()).toContain('Provincia')
+		expect(wrapper.text()).toContain('Asignado a grupo')
+		expect(wrapper.text()).toContain('Asignado a usuario')
+		expect(wrapper.text()).toContain('Cancelar')
+		expect(wrapper.text()).toContain('Madrid')
+		expect(wrapper.text()).toContain('Grupo Soporte')
+		expect(wrapper.text()).toContain('Soporte Uno')
+	})
+
+	it('permite crear tickets de soporte sin provincia', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
+
+		const wrapper = mount(SupportNewTicketView, {
+			global: {
+				stubs: {
+					SearchableSelect: SearchableSelectStub,
+					TicketForm: TicketFormStub,
+				},
+			},
+		})
+
+		wrapper.getComponent(TicketFormStub).vm.$emit('submit', {
+			title: 'Ticket soporte',
+			userDescription: '<p>Texto</p>',
+			urgencyId: 1,
+			communicationChannel: 'nextcloud_mail',
+			personalData: { email: 'soporte@example.com' },
+		})
+		await flushPromises()
+
+		expect(ticketsStoreMock.create).toHaveBeenCalledWith(expect.objectContaining({
+			province: null,
+		}))
+	})
+
+	it('muestra la pantalla completa de soporte con acciones de vuelta', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
+		routeState.path = '/soporte/100/completo'
+		routeState.params = { ticketId: '100' }
+		ticketsStoreMock.selected = createTicket({ id: 100 })
+
+		const wrapper = mount(SupportTicketFullView, {
+			global: {
+				stubs: {
+					TicketSidebarPanel: TicketSidebarPanelStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		expect(ticketsStoreMock.select).toHaveBeenCalledWith(100)
+		expect(wrapper.text()).toContain('Volver al ticket')
+		expect(wrapper.text()).toContain('Volver a consola')
+	})
+
+	it('configura el panel lateral en modo soporte con edición habilitada', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
+		routeState.path = '/soporte/100'
+		routeState.params = { ticketId: '100' }
+		ticketsStoreMock.selected = createTicket({ id: 100, canManage: true })
+
+		const wrapper = mount(TicketSidebarView, {
+			global: {
+				stubs: {
+					TicketSidebarPanel: TicketSidebarPanelStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const panel = wrapper.getComponent(TicketSidebarPanelStub)
+		expect(panel.props('readOnly')).toBe(false)
+		expect(panel.props('showRepeat')).toBe(false)
+		expect(panel.props('showFullscreen')).toBe(true)
+		expect(panel.props('initialComposerVisible')).toBe(false)
+	})
+
+	it('configura el panel lateral en modo usuario con repetición y solo lectura', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['usuario'] })
+		routeState.path = '/mis-incidencias/100'
+		routeState.params = { ticketId: '100' }
+		ticketsStoreMock.selected = createTicket({ id: 100, canManage: true })
+
+		const wrapper = mount(TicketSidebarView, {
+			global: {
+				stubs: {
+					TicketSidebarPanel: TicketSidebarPanelStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const panel = wrapper.getComponent(TicketSidebarPanelStub)
+		expect(panel.props('readOnly')).toBe(true)
+		expect(panel.props('showRepeat')).toBe(true)
+	})
+})

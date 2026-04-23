@@ -26,7 +26,7 @@ async function save() {
 	}, {})
 	const saved = await updatePersonalConfig(payload)
 	bootstrapStore.setPersonalConfig(saved)
-	state.message = 'Configuracion personal guardada.'
+	state.message = 'Configuración personal guardada.'
 	state.saving = false
 }
 </script>
@@ -38,11 +38,11 @@ async function save() {
 				<p class="gi-page__subtitle">Estos datos vienen de la configuración de tu perfil. Si los modifcas, será sólo para esta apliación.</p>
 			</div>
 		</header>
-		<section class="gi-personal-config-card">
+		<section class="gi-personal-config-card gi-surface-elevated">
 			<div class="gi-form-grid">
 				<label v-for="field in fields" :key="field.fieldKey" class="gi-field">
 					<span>{{ field.label }}</span>
-					<input v-model="form[field.fieldKey]" :type="field.fieldType" class="gi-input" :required="field.required" />
+					<input :id="`personal-config-${field.fieldKey}`" v-model="form[field.fieldKey]" :name="`personal-config-${field.fieldKey}`" :type="field.fieldType" class="gi-input" :required="field.required" />
 				</label>
 			</div>
 			<footer class="gi-personal-config-card__footer">
@@ -58,10 +58,7 @@ async function save() {
 	display: grid;
 	gap: 1rem;
 	padding: 1.25rem;
-	border: 1px solid rgba(49, 96, 91, .12);
 	border-radius: 22px;
-	background: rgba(255, 255, 255, .94);
-	box-shadow: 0 20px 48px rgba(34, 62, 55, .06);
 }
 
 .gi-personal-config-card__footer {

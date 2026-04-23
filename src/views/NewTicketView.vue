@@ -23,25 +23,18 @@ const provinceOptions = computed<SearchableSelectOption[]>(() => bootstrapStore.
 const draft = computed(() => ticketsStore.draft ?? createDefaultTicketDraft(bootstrapStore.data.personalConfig, urgencies.value))
 const selectedPath = ref<number[]>([...(draft.value.selectedPath ?? [])])
 const selectedProvince = ref<string | null>(draft.value.province ?? null)
-const withoutProvince = ref(Boolean(draft.value.withoutProvince ?? false))
-const step = ref(selectedPath.value.length > 0 && (selectedProvince.value !== null || withoutProvince.value) ? 'details' : 'type')
+const step = ref(selectedPath.value.length > 0 && selectedProvince.value !== null ? 'details' : 'type')
 const typeSummary = computed(() => getTypeLabelsForPath(types.value, selectedPath.value))
-const provinceSummary = computed(() => withoutProvince.value ? 'Sin provincia' : (selectedProvince.value ?? 'Sin seleccionar'))
+const provinceSummary = computed(() => selectedProvince.value ?? 'Sin seleccionar')
 const typeStepError = ref('')
 
 if (!ticketsStore.draft) {
 	ticketsStore.replaceDraft(draft.value)
 }
 
-watch(withoutProvince, (nextValue) => {
-	if (nextValue) {
-		selectedProvince.value = null
-	}
-	typeStepError.value = ''
-})
-
 watch(selectedProvince, () => {
 	if (selectedProvince.value) {
+		bootstrapStore.ensureProvinceOption(selectedProvince.value)
 		typeStepError.value = ''
 	}
 })
@@ -51,15 +44,14 @@ function continueToDetails() {
 		return
 	}
 
-	if (!withoutProvince.value && !selectedProvince.value) {
-		typeStepError.value = 'Debes seleccionar una provincia o marcar "Sin provincia".'
+	if (!selectedProvince.value) {
+		typeStepError.value = 'Debes seleccionar una provincia o Añadir una nueva.'
 		return
 	}
 
 	ticketsStore.mergeDraft({
 		selectedPath: [...selectedPath.value],
-		province: withoutProvince.value ? null : selectedProvince.value,
-		withoutProvince: withoutProvince.value,
+		province: selectedProvince.value,
 	})
 	typeStepError.value = ''
 	step.value = 'details'
@@ -75,13 +67,19 @@ function cancel() {
 }
 
 async function submit(payload: Record<string, unknown>) {
+	const nextPersonalConfig = {
+		...bootstrapStore.data.personalConfig,
+		...((payload.personalData as Record<string, string> | undefined) ?? {}),
+		province: selectedProvince.value ?? '',
+	}
 	const finalPayload = {
 		...payload,
-		province: withoutProvince.value ? null : selectedProvince.value,
-		withoutProvince: withoutProvince.value,
+		province: selectedProvince.value,
+		personalData: nextPersonalConfig,
 	}
 	ticketsStore.mergeDraft(finalPayload as typeof draft.value)
 	await ticketsStore.create(finalPayload)
+	bootstrapStore.setPersonalConfig(nextPersonalConfig)
 	ticketsStore.clearDraft()
 	await ticketsStore.load('user')
 	await router.push('/mis-incidencias')
@@ -96,7 +94,7 @@ async function submit(payload: Record<string, unknown>) {
 			</div>
 			<button class="gi-secondary-button" type="button" @click="cancel">Cancelar</button>
 		</header>
-		<section v-if="step === 'type'" class="gi-ticket-creation-card">
+		<section v-if="step === 'type'" class="gi-ticket-creation-card gi-surface-elevated">
 			<div class="gi-ticket-creation-card__header">
 				<div>
 					<h2>Seleccion de tipo</h2>
@@ -106,16 +104,12 @@ async function submit(payload: Record<string, unknown>) {
 			<TypeCascadeSelector v-model="selectedPath" :types="types" />
 			<label class="gi-field gi-field--wide">
 				<span>Provincia</span>
-				<SearchableSelect v-model="selectedProvince" :options="provinceOptions" placeholder="Selecciona provincia" search-placeholder="Buscar provincia" :disabled="withoutProvince" clearable />
-			</label>
-			<label class="gi-ticket-creation-card__checkbox">
-				<input v-model="withoutProvince" type="checkbox" />
-				<span>Sin provincia</span>
+				<SearchableSelect v-model="selectedProvince" :options="provinceOptions" placeholder="Selecciona provincia" search-placeholder="Buscar provincia" clearable allow-create create-label="Añadir provincia" />
 			</label>
 			<p v-if="typeStepError" class="gi-ticket-creation-card__error">{{ typeStepError }}</p>
 			<div class="gi-ticket-type-summary">
 				<span class="gi-ticket-type-summary__label">Ruta elegida</span>
-				<strong>{{ typeSummary.length > 0 ? typeSummary.join(' > ') : 'Todavia no has seleccionado un tipo' }}</strong>
+				<strong>{{ typeSummary.length > 0 ? typeSummary.join(' > ') : 'Todavía no has seleccionado un tipo' }}</strong>
 			</div>
 			<div class="gi-ticket-type-summary">
 				<span class="gi-ticket-type-summary__label">Provincia</span>
@@ -125,7 +119,7 @@ async function submit(payload: Record<string, unknown>) {
 				<button class="gi-primary-button" type="button" :disabled="selectedPath.length === 0" @click="continueToDetails">Continuar</button>
 			</div>
 		</section>
-		<section v-else class="gi-ticket-creation-card gi-ticket-creation-card--details">
+		<section v-else class="gi-ticket-creation-card gi-ticket-creation-card--details gi-surface-elevated">
 			<header class="gi-ticket-creation-card__header gi-ticket-creation-card__header--summary">
 				<div class="gi-ticket-creation-card__summary-grid">
 					<div class="gi-ticket-creation-card__type-line">
@@ -137,7 +131,7 @@ async function submit(payload: Record<string, unknown>) {
 						<strong class="gi-ticket-creation-card__type-path">{{ provinceSummary }}</strong>
 					</div>
 				</div>
-				<button class="gi-icon-button" type="button" aria-label="Modificar tipo de incidencia" title="Modificar tipo" @click="editType">
+				<button class="gi-round-icon-button gi-round-icon-button--large gi-icon-button" type="button" aria-label="Modificar tipo de ticket" title="Modificar tipo" @click="editType">
 					<span aria-hidden="true">&#9998;</span>
 				</button>
 			</header>
@@ -146,6 +140,8 @@ async function submit(payload: Record<string, unknown>) {
 				:types="types"
 				:fields="fields"
 				:urgencies="urgencies"
+				:allowed-extensions="bootstrapStore.data.catalogs.attachmentConfig.allowedExtensions"
+				:max-file-size-mb="bootstrapStore.data.catalogs.attachmentConfig.maxFileSizeMb"
 				:initial-draft="draft"
 				:locked-type-path="selectedPath"
 				@submit="submit"
@@ -159,10 +155,7 @@ async function submit(payload: Record<string, unknown>) {
 	display: grid;
 	gap: 1rem;
 	padding: 1.25rem;
-	border: 1px solid rgba(49, 96, 91, .12);
 	border-radius: 22px;
-	background: rgba(255, 255, 255, .94);
-	box-shadow: 0 20px 48px rgba(34, 62, 55, .06);
 }
 
 .gi-ticket-creation-card__header h2,
@@ -172,7 +165,7 @@ async function submit(payload: Record<string, unknown>) {
 
 .gi-ticket-creation-card__header p {
 	margin-top: .2rem;
-	color: #5e706a;
+	color: var(--gi-color-text-muted);
 }
 
 .gi-ticket-creation-card__header--summary {
@@ -201,14 +194,6 @@ async function submit(payload: Record<string, unknown>) {
 	word-break: break-word;
 }
 
-.gi-ticket-creation-card__checkbox {
-	display: inline-flex;
-	align-items: center;
-	gap: .55rem;
-	font-weight: 600;
-	color: #274b43;
-}
-
 .gi-ticket-creation-card__error {
 	margin: 0;
 	color: #9a3d2d;
@@ -220,33 +205,15 @@ async function submit(payload: Record<string, unknown>) {
 	gap: .35rem;
 	padding: .9rem 1rem;
 	border-radius: 18px;
-	background: rgba(239, 245, 241, .98);
-	border: 1px solid rgba(49, 96, 91, .1);
+	background: var(--gi-color-primary-soft);
+	border: 1px solid var(--gi-color-border);
 }
 
 .gi-ticket-type-summary__label {
 	font-size: .74rem;
 	text-transform: uppercase;
 	letter-spacing: .06em;
-	color: #60746d;
+	color: var(--gi-color-text-muted);
 }
 
-.gi-icon-button {
-	width: 2.5rem;
-	height: 2.5rem;
-	display: inline-grid;
-	place-items: center;
-	border: 1px solid rgba(11, 110, 79, .16);
-	border-radius: 999px;
-	background: rgba(239, 245, 241, .98);
-	color: #0b6e4f;
-	cursor: pointer;
-	font: inherit;
-	font-size: 1rem;
-	box-shadow: 0 10px 22px rgba(34, 62, 55, .06);
-}
-
-.gi-icon-button:hover {
-	background: rgba(227, 238, 232, .98);
-}
 </style>

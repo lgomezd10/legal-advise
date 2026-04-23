@@ -46,7 +46,7 @@ function optionsForLevel(options: TypeNode[]): SearchableSelectOption[] {
 
 <template>
 	<div class="gi-type-grid">
-		<label v-for="(options, index) in levels" :key="index" class="gi-field">
+		<div v-for="(options, index) in levels" :key="index" class="gi-field">
 			<span>Tipo {{ index + 1 }}</span>
 			<SearchableSelect
 				:model-value="props.modelValue[index] ?? null"
@@ -55,7 +55,7 @@ function optionsForLevel(options: TypeNode[]): SearchableSelectOption[] {
 				clearable
 				@update:modelValue="updateLevel(index, $event)"
 			/>
-		</label>
+		</div>
 	</div>
 </template>
 

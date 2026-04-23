@@ -2,6 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { SearchableSelectOption } from '@/types'
 
+let searchableSelectIdSequence = 0
+
 const props = withDefaults(defineProps<{
 	modelValue?: string | number | null
 	options: SearchableSelectOption[]
@@ -10,6 +12,10 @@ const props = withDefaults(defineProps<{
 	emptyLabel?: string
 	clearable?: boolean
 	disabled?: boolean
+	allowCreate?: boolean
+	createLabel?: string
+	inputId?: string
+	inputName?: string
 }>(), {
 	modelValue: null,
 	placeholder: 'Selecciona',
@@ -17,6 +23,10 @@ const props = withDefaults(defineProps<{
 	emptyLabel: 'Sin resultados',
 	clearable: false,
 	disabled: false,
+	allowCreate: false,
+	createLabel: 'Añadir',
+	inputId: undefined,
+	inputName: undefined,
 })
 
 const emit = defineEmits<{
@@ -28,6 +38,7 @@ const rootRef = ref<HTMLElement | null>(null)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const open = ref(false)
 const query = ref('')
+const instanceId = `gi-search-select-${++searchableSelectIdSequence}`
 
 function normalizeOptions(options: SearchableSelectOption[] | Record<string, SearchableSelectOption> | undefined | null): SearchableSelectOption[] {
 	if (Array.isArray(options)) {
@@ -44,6 +55,17 @@ function normalizeOptions(options: SearchableSelectOption[] | Record<string, Sea
 const safeOptions = computed(() => normalizeOptions(props.options))
 const normalizedModelValue = computed(() => props.modelValue === null || props.modelValue === undefined ? '' : String(props.modelValue))
 const selectedOption = computed(() => safeOptions.value.find((option: SearchableSelectOption) => String(option.value) === normalizedModelValue.value) ?? null)
+const triggerLabel = computed(() => {
+	if (selectedOption.value) {
+		return selectedOption.value.label
+	}
+
+	if (props.allowCreate && normalizedModelValue.value.trim() !== '') {
+		return normalizedModelValue.value
+	}
+
+	return props.placeholder
+})
 const filteredOptions = computed(() => {
 	const term = query.value.trim().toLowerCase()
 	if (!term) {
@@ -52,6 +74,21 @@ const filteredOptions = computed(() => {
 
 	return safeOptions.value.filter((option: SearchableSelectOption) => `${option.label} ${option.searchText ?? ''}`.toLowerCase().includes(term))
 })
+
+const canCreateOption = computed(() => {
+	if (!props.allowCreate) {
+		return false
+	}
+
+	const trimmed = query.value.trim()
+	if (trimmed === '') {
+		return false
+	}
+
+	return !safeOptions.value.some((option: SearchableSelectOption) => option.label.trim().toLowerCase() === trimmed.toLowerCase())
+})
+const searchInputId = computed(() => props.inputId ?? `${instanceId}-search`)
+const searchInputName = computed(() => props.inputName ?? searchInputId.value)
 
 function closeDropdown() {
 	open.value = false
@@ -107,18 +144,21 @@ onBeforeUnmount(() => {
 <template>
 	<div ref="rootRef" class="gi-search-select" :class="{ 'gi-search-select--open': open, 'gi-search-select--disabled': disabled }">
 		<button class="gi-search-select__trigger" type="button" :disabled="disabled" @click="toggleDropdown">
-			<span class="gi-search-select__trigger-text" :class="{ 'gi-search-select__trigger-text--placeholder': !selectedOption }">
-				{{ selectedOption?.label ?? placeholder }}
+			<span class="gi-search-select__trigger-text" :class="{ 'gi-search-select__trigger-text--placeholder': !selectedOption && !(allowCreate && normalizedModelValue.trim() !== '') }">
+				{{ triggerLabel }}
 			</span>
 			<span class="gi-search-select__trigger-icon">▾</span>
 		</button>
 
 		<div v-if="open" class="gi-search-select__panel">
-			<input ref="searchInputRef" v-model="query" class="gi-input gi-search-select__search" :placeholder="searchPlaceholder" />
+			<input ref="searchInputRef" v-model="query" :id="searchInputId" :name="searchInputName" class="gi-input gi-search-select__search" :placeholder="searchPlaceholder" />
 			<button v-if="clearable && normalizedModelValue" class="gi-search-select__clear" type="button" @click="selectOption(null)">
 				Limpiar seleccion
 			</button>
 			<div class="gi-search-select__options">
+				<button v-if="canCreateOption" class="gi-search-select__option gi-search-select__option--create" type="button" @click="selectOption(query.trim())">
+					{{ createLabel }} "{{ query.trim() }}"
+				</button>
 				<button
 					v-for="option in filteredOptions"
 					:key="`${option.value}`"
@@ -149,10 +189,10 @@ onBeforeUnmount(() => {
 	justify-content: space-between;
 	gap: .75rem;
 	padding: .68rem .85rem;
-	border: 1px solid rgba(67, 104, 99, .22);
+	border: 1px solid var(--gi-color-border-strong);
 	border-radius: 12px;
-	background: rgba(255, 255, 255, .96);
-	color: var(--color-main-text, #222);
+	background: var(--gi-color-surface);
+	color: var(--gi-color-text);
 	font: inherit;
 	font-weight: 400;
 	text-align: left;
@@ -161,8 +201,8 @@ onBeforeUnmount(() => {
 }
 
 .gi-search-select__trigger:focus-visible {
-	outline: 2px solid rgba(46, 118, 108, .22);
-	border-color: rgba(46, 118, 108, .45);
+	outline: 2px solid var(--gi-color-primary-soft);
+	border-color: var(--gi-color-primary);
 }
 
 .gi-search-select__trigger-text {
@@ -175,13 +215,31 @@ onBeforeUnmount(() => {
 }
 
 .gi-search-select__trigger-text--placeholder {
-	color: #6a7b75;
+	color: var(--gi-color-text-muted);
 }
 
 .gi-search-select__trigger-icon {
 	flex: none;
 	font-size: .8rem;
-	color: #5c6f68;
+	color: var(--gi-color-text-muted);
+}
+
+.gi-search-select--compact .gi-search-select__trigger {
+	min-height: 2.2rem;
+	padding: .42rem .65rem;
+	border-radius: 10px;
+	font-size: .86rem;
+	gap: .5rem;
+}
+
+.gi-search-select--compact .gi-search-select__trigger-icon {
+	font-size: .72rem;
+}
+
+.gi-search-select--compact .gi-search-select__panel {
+	top: calc(100% + .25rem);
+	padding: .55rem;
+	border-radius: 14px;
 }
 
 .gi-search-select__panel {
@@ -194,9 +252,9 @@ onBeforeUnmount(() => {
 	gap: .55rem;
 	padding: .65rem;
 	border-radius: 16px;
-	background: rgba(255, 255, 255, .99);
-	border: 1px solid rgba(49, 96, 91, .14);
-	box-shadow: 0 18px 42px rgba(34, 62, 55, .14);
+	background: var(--gi-color-surface-plain);
+	border: 1px solid var(--gi-color-border-strong);
+	box-shadow: 0 18px 42px var(--gi-color-shadow-medium);
 }
 
 .gi-search-select__search {
@@ -207,14 +265,14 @@ onBeforeUnmount(() => {
 
 .gi-search-select__clear {
 	border: none;
-	background: rgba(49, 96, 91, .08);
+	background: var(--gi-color-primary-soft);
 	border-radius: 10px;
 	padding: .45rem .6rem;
 	font: inherit;
 	font-weight: 400;
 	text-align: left;
 	cursor: pointer;
-	color: #214f45;
+	color: var(--gi-color-primary-soft-text);
 }
 
 .gi-search-select__options {
@@ -238,13 +296,19 @@ onBeforeUnmount(() => {
 	border: none;
 	background: transparent;
 	cursor: pointer;
-	color: #22342f;
+	color: var(--gi-color-text);
 }
 
 .gi-search-select__option:hover,
 .gi-search-select__option--active {
-	background: rgba(49, 96, 91, .1);
-	color: #214f45;
+	background: var(--gi-color-primary-soft);
+	color: var(--gi-color-primary-soft-text);
+}
+
+.gi-search-select__option--create {
+	font-weight: 600;
+	border: 1px dashed var(--gi-color-border-strong);
+	background: var(--gi-color-primary-soft-hover);
 }
 
 .gi-search-select__option--disabled {
@@ -253,8 +317,8 @@ onBeforeUnmount(() => {
 }
 
 .gi-search-select__empty {
-	color: #697b75;
-	background: rgba(49, 96, 91, .04);
+	color: var(--gi-color-text-muted);
+	background: var(--gi-color-surface-subtle);
 }
 
 .gi-search-select--disabled .gi-search-select__trigger {

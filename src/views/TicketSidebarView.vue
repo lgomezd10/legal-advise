@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import TicketSidebarPanel from '@/components/TicketSidebarPanel.vue'
 import { createRepeatTicketDraft } from '@/services/ticketDraft'
 import { useBootstrapStore } from '@/store/bootstrap'
 import { useTicketsStore } from '@/store/tickets'
+import type { TicketAttachmentLinkDraft } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -12,6 +13,21 @@ const bootstrapStore = useBootstrapStore()
 const ticketsStore = useTicketsStore()
 const supportMode = computed(() => route.path.startsWith('/soporte'))
 const panelRoles = computed(() => supportMode.value ? bootstrapStore.data.roles : ['usuario'])
+const panelRef = ref<{ confirmDiscardChanges: () => boolean | Promise<boolean> } | null>(null)
+
+function canLeaveTicket() {
+	return panelRef.value?.confirmDiscardChanges() ?? true
+}
+
+onBeforeRouteLeave(() => canLeaveTicket())
+
+onBeforeRouteUpdate((to) => {
+	if (to.params.ticketId === route.params.ticketId) {
+		return true
+	}
+
+	return canLeaveTicket()
+})
 
 watch(() => route.params.ticketId, async(nextTicketId) => {
 	const ticketId = Number(nextTicketId)
@@ -32,7 +48,7 @@ async function download(attachmentId: number) {
 	URL.revokeObjectURL(link.href)
 }
 
-async function commentOnTicket(payload: { body: string, visibility: 'interno' | 'publico', files: File[] }) {
+async function commentOnTicket(payload: { body: string, visibility: 'interno' | 'publico', files: File[], links: TicketAttachmentLinkDraft[] }) {
 	if (!ticketsStore.selected) {
 		return
 	}
@@ -40,12 +56,28 @@ async function commentOnTicket(payload: { body: string, visibility: 'interno' | 
 	await ticketsStore.comment(ticketsStore.selected.id, payload)
 }
 
-async function updateTicket(payload: Record<string, unknown>) {
+async function saveTicket(payload: Record<string, unknown>) {
 	if (!ticketsStore.selected) {
 		return
 	}
 
 	await ticketsStore.update(ticketsStore.selected.id, payload)
+}
+
+async function reopenTicket() {
+	if (!ticketsStore.selected) {
+		return
+	}
+
+	await ticketsStore.reopen(ticketsStore.selected.id)
+}
+
+async function assignToCurrentUser() {
+	if (!ticketsStore.selected || !supportMode.value) {
+		return
+	}
+
+	await ticketsStore.update(ticketsStore.selected.id, { assignedUserUid: bootstrapStore.data.currentUser.uid })
 }
 
 function openFullscreen() {
@@ -73,20 +105,28 @@ function repeatTicket() {
 
 <template>
 	<TicketSidebarPanel
+		ref="panelRef"
 		:ticket="ticketsStore.selected"
 		:roles="panelRoles"
 		:users="bootstrapStore.data.assignables.users"
 		:groups="bootstrapStore.data.assignables.groups"
+		:types="bootstrapStore.data.catalogs.types"
+		:fields="bootstrapStore.data.catalogs.fields"
+		:current-user-uid="bootstrapStore.data.currentUser.uid"
 		:statuses="bootstrapStore.data.catalogs.statuses"
 		:urgencies="bootstrapStore.data.catalogs.urgencies"
 		:allowed-extensions="bootstrapStore.data.catalogs.attachmentConfig.allowedExtensions"
-		:read-only="!supportMode"
+		:max-file-size-mb="bootstrapStore.data.catalogs.attachmentConfig.maxFileSizeMb"
+		:initial-composer-visible="!supportMode"
+		:read-only="!supportMode || !ticketsStore.selected?.canManage"
 		:show-fullscreen="true"
 		:show-repeat="!supportMode"
 		@comment="commentOnTicket"
-		@update="updateTicket"
+		@save="saveTicket"
 		@download="download"
 		@fullscreen="openFullscreen"
+		@reopen="reopenTicket"
+		@assign-to-me="assignToCurrentUser"
 		@repeat="repeatTicket"
 	/>
 </template>

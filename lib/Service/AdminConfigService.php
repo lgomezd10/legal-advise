@@ -2,26 +2,29 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Service;
+namespace OCA\ConsultasLegales\Service;
 
-use OCA\Gestion_incidencias\Db\AppSettingMapper;
-use OCA\Gestion_incidencias\Db\AssignmentRule;
-use OCA\Gestion_incidencias\Db\AssignmentRuleMapper;
-use OCA\Gestion_incidencias\Db\CustomField;
-use OCA\Gestion_incidencias\Db\CustomFieldMapper;
+use OCA\ConsultasLegales\Db\AppSettingMapper;
+use OCA\ConsultasLegales\Db\AssignmentRule;
+use OCA\ConsultasLegales\Db\AssignmentRuleMapper;
+use OCA\ConsultasLegales\Db\CustomField;
+use OCA\ConsultasLegales\Db\CustomFieldMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
-use OCA\Gestion_incidencias\Db\IncidentType;
-use OCA\Gestion_incidencias\Db\IncidentTypeMapper;
-use OCA\Gestion_incidencias\Db\ProfileAssignment;
-use OCA\Gestion_incidencias\Db\ProfileAssignmentMapper;
-use OCA\Gestion_incidencias\Db\Urgency;
-use OCA\Gestion_incidencias\Db\UrgencyMapper;
+use OCA\ConsultasLegales\Db\IncidentType;
+use OCA\ConsultasLegales\Db\IncidentTypeMapper;
+use OCA\ConsultasLegales\Db\ProfileAssignment;
+use OCA\ConsultasLegales\Db\ProfileAssignmentMapper;
+use OCA\ConsultasLegales\Db\Urgency;
+use OCA\ConsultasLegales\Db\UrgencyMapper;
 
 class AdminConfigService {
+	private const ALLOWED_PROFILES = [RoleService::USER, RoleService::SUPPORT, RoleService::ADMIN];
+
 	public function __construct(
 		private readonly DefaultConfigService $defaultConfigService,
 		private readonly ProvinceCatalogService $provinceCatalogService,
 		private readonly CatalogService $catalogService,
+		private readonly SupportFilterService $supportFilterService,
 		private readonly IncidentTypeMapper $typeMapper,
 		private readonly UrgencyMapper $urgencyMapper,
 		private readonly CustomFieldMapper $fieldMapper,
@@ -35,9 +38,11 @@ class AdminConfigService {
 		$this->defaultConfigService->ensureDefaults();
 
 		return [
+			'statuses' => $this->catalogService->getStatuses(),
 			'types' => $this->catalogService->getTypeTree(),
 			'urgencies' => $this->catalogService->getUrgencies(),
-			'fields' => $this->catalogService->getFields(),
+			'fields' => $this->catalogService->getFields(false),
+			'filters' => $this->supportFilterService->listForAdmin(),
 			'rules' => array_map(static fn ($row) => $row->jsonSerialize(), $this->ruleMapper->findAllOrdered('priority', 'DESC')),
 			'profiles' => array_map(static fn ($row) => $row->jsonSerialize(), $this->profileMapper->findAllOrdered('profile', 'ASC')),
 			'attachmentConfig' => $this->catalogService->getAttachmentConfig(),
@@ -47,6 +52,18 @@ class AdminConfigService {
 
 	public function update(array $payload): array {
 		$this->defaultConfigService->ensureDefaults();
+
+		if (isset($payload['statuses']) && is_array($payload['statuses'])) {
+			$setting = $this->settingMapper->findOneBy('config_key', 'status_catalog');
+			$setting->setConfigValue(CatalogService::getDefaultStatusCatalogFromCurrent(array_map(static function (array $status): array {
+				return [
+					'id' => (string) ($status['id'] ?? ''),
+					'label' => (string) ($status['label'] ?? ''),
+					'active' => (bool) ($status['active'] ?? true),
+				];
+			}, $payload['statuses'])));
+			$this->settingMapper->update($setting);
+		}
 
 		if (isset($payload['urgencies']) && is_array($payload['urgencies'])) {
 			foreach ($payload['urgencies'] as $row) {
@@ -84,6 +101,10 @@ class AdminConfigService {
 			}
 		}
 
+		if (isset($payload['filters']) && is_array($payload['filters'])) {
+			$this->supportFilterService->saveForAdmin($payload['filters']);
+		}
+
 		if (isset($payload['types']) && is_array($payload['types'])) {
 			$this->saveTypes($payload['types']);
 		}
@@ -111,17 +132,40 @@ class AdminConfigService {
 		}
 
 		if (isset($payload['profiles']) && is_array($payload['profiles'])) {
+			$normalizedProfiles = [];
 			foreach ($payload['profiles'] as $row) {
-				$entity = new ProfileAssignment();
-				$entity->setProfile((string) $row['profile']);
-				$entity->setPrincipalType((string) $row['principalType']);
-				$entity->setPrincipalId((string) $row['principalId']);
-				if (isset($row['id'])) {
-					$entity->setId((int) $row['id']);
-					$this->profileMapper->update($entity);
-				} else {
-					$this->profileMapper->insert($entity);
+				$profile = trim((string) ($row['profile'] ?? ''));
+				if (!in_array($profile, self::ALLOWED_PROFILES, true)) {
+					throw new \InvalidArgumentException('El perfil indicado no es válido.');
 				}
+
+				$principalType = trim((string) ($row['principalType'] ?? ''));
+				if (!in_array($principalType, ['user', 'group'], true)) {
+					throw new \InvalidArgumentException('El tipo de principal no es válido.');
+				}
+
+				$principalId = trim((string) ($row['principalId'] ?? ''));
+				if ($principalId === '') {
+					throw new \InvalidArgumentException('Debes indicar un usuario o grupo para el perfil.');
+				}
+
+				$normalizedProfiles[$profile . '|' . $principalType . '|' . $principalId] = [
+					'profile' => $profile,
+					'principalType' => $principalType,
+					'principalId' => $principalId,
+				];
+			}
+
+			foreach ($this->profileMapper->findAllOrdered('id', 'ASC') as $existingProfile) {
+				$this->profileMapper->delete($existingProfile);
+			}
+
+			foreach (array_values($normalizedProfiles) as $row) {
+				$entity = new ProfileAssignment();
+				$entity->setProfile($row['profile']);
+				$entity->setPrincipalType($row['principalType']);
+				$entity->setPrincipalId($row['principalId']);
+				$this->profileMapper->insert($entity);
 			}
 		}
 
@@ -135,6 +179,7 @@ class AdminConfigService {
 			$setting = $this->settingMapper->findOneBy('config_key', 'attachment_config');
 			$setting->setConfigValue([
 				'allowedExtensions' => $this->normalizeAllowedExtensions($payload['attachmentConfig']['allowedExtensions'] ?? []),
+				'maxFileSizeMb' => $this->normalizeMaxFileSizeMb($payload['attachmentConfig']['maxFileSizeMb'] ?? null),
 			]);
 			$this->settingMapper->update($setting);
 		}
@@ -153,6 +198,11 @@ class AdminConfigService {
 		);
 
 		return array_values(array_unique(array_filter($normalized, static fn (string $extension): bool => $extension !== '')));
+	}
+
+	private function normalizeMaxFileSizeMb(mixed $value): int {
+		$normalized = (int) $value;
+		return max(1, $normalized > 0 ? $normalized : 25);
 	}
 
 	private function saveTypes(array $rows, ?int $parentId = null, string $parentSlug = '', int $level = 0): void {

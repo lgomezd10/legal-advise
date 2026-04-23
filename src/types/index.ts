@@ -48,7 +48,12 @@ export interface EditableTypeNode {
 	clientId: string
 }
 
-export type SupportColumnKey = 'number' | 'title' | 'userDescription' | 'assignment' | 'status' | 'urgency' | 'createdAt'
+export type SupportColumnKey = 'number' | 'createdBy' | 'province' | 'title' | 'userDescription' | 'assignment' | 'status' | 'urgency' | 'createdAt' | 'updatedAt'
+
+export interface TicketAttachmentLinkDraft {
+	url: string
+	label: string
+}
 
 export interface TicketComment {
 	id: number
@@ -61,6 +66,17 @@ export interface TicketComment {
 	attachments?: TicketAttachment[]
 }
 
+export interface TicketHistoryEntry {
+	id: number
+	ticketId: number
+	actorUid?: string | null
+	actorRole?: string | null
+	eventType: string
+	visibility: 'interno' | 'publico'
+	payload?: Record<string, unknown> | null
+	createdAt: number
+}
+
 export interface TicketAttachment {
 	id: number
 	ticketId: number
@@ -69,6 +85,7 @@ export interface TicketAttachment {
 	mimeType: string
 	size: number
 	createdAt: number
+	sourceUrl?: string | null
 }
 
 export interface Ticket {
@@ -84,6 +101,7 @@ export interface Ticket {
 	title: string
 	userDescription: string
 	supportDescription: string
+	publicCommentSearchText?: string
 	assignedUserUid?: string | null
 	assignedGroupId?: string | null
 	province?: string | null
@@ -91,9 +109,13 @@ export interface Ticket {
 	metadata?: Record<string, unknown>
 	attachments?: TicketAttachment[]
 	comments?: TicketComment[]
-	history?: Array<Record<string, unknown>>
+	history?: TicketHistoryEntry[]
 	personalData?: Array<Record<string, unknown>>
 	taskSync?: Record<string, unknown> | null
+	canRead?: boolean
+	canManage?: boolean
+	canComment?: boolean
+	canReopen?: boolean
 }
 
 export interface AssignableOption {
@@ -130,14 +152,26 @@ export interface NotificationMatrixItem {
 export interface StatusOption {
 	id: string
 	label: string
+	active?: boolean
+	closed?: boolean
+	fixed?: boolean
+	toggleable?: boolean
+}
+
+export interface AdminStatusOption extends StatusOption {
+	fixed?: boolean
+	description?: string
 }
 
 export interface SavedFilter {
 	id: number
 	ownerUid?: string | null
+	scopeType?: string | null
 	name: string
 	criteria: Record<string, unknown>
 	isPredefined: boolean
+	active?: boolean
+	isDefault?: boolean
 	sortOrder: number
 }
 
@@ -150,13 +184,14 @@ export interface BootstrapData {
 	navigation: NavigationItem[]
 	personalConfig: Record<string, string>
 	catalogs: {
-		statuses: Array<{ id: string, label: string }>
+		statuses: StatusOption[]
 		urgencies: UrgencyCatalogItem[]
 		types: TypeNode[]
 		fields: CatalogField[]
 		provinces: string[]
 		attachmentConfig: {
 			allowedExtensions: string[]
+			maxFileSizeMb: number
 		}
 	}
 	supportFilters: SavedFilter[]
@@ -174,10 +209,13 @@ export interface TicketDraft {
 	selectedPath?: number[]
 	typeId?: number | null
 	province?: string | null
-	withoutProvince?: boolean
 	title?: string
 	userDescription?: string
 	urgencyId?: string | null
 	communicationChannel?: string
 	personalData?: Record<string, string>
+	attachments?: {
+		files: File[]
+		links: TicketAttachmentLinkDraft[]
+	}
 }

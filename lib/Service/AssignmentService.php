@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace OCA\Gestion_incidencias\Service;
+namespace OCA\ConsultasLegales\Service;
 
-use OCA\Gestion_incidencias\Db\AssignmentRuleMapper;
-use OCA\Gestion_incidencias\Db\IncidentTypeMapper;
+use OCA\ConsultasLegales\Db\AssignmentRuleMapper;
+use OCA\ConsultasLegales\Db\IncidentTypeMapper;
 
 class AssignmentService {
 	public function __construct(
