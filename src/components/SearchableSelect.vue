@@ -2,6 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { SearchableSelectOption } from '@/types'
 
+let searchableSelectIdSequence = 0
+
 const props = withDefaults(defineProps<{
 	modelValue?: string | number | null
 	options: SearchableSelectOption[]
@@ -12,6 +14,8 @@ const props = withDefaults(defineProps<{
 	disabled?: boolean
 	allowCreate?: boolean
 	createLabel?: string
+	inputId?: string
+	inputName?: string
 }>(), {
 	modelValue: null,
 	placeholder: 'Selecciona',
@@ -21,6 +25,8 @@ const props = withDefaults(defineProps<{
 	disabled: false,
 	allowCreate: false,
 	createLabel: 'Añadir',
+	inputId: undefined,
+	inputName: undefined,
 })
 
 const emit = defineEmits<{
@@ -32,6 +38,7 @@ const rootRef = ref<HTMLElement | null>(null)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const open = ref(false)
 const query = ref('')
+const instanceId = `gi-search-select-${++searchableSelectIdSequence}`
 
 function normalizeOptions(options: SearchableSelectOption[] | Record<string, SearchableSelectOption> | undefined | null): SearchableSelectOption[] {
 	if (Array.isArray(options)) {
@@ -80,6 +87,8 @@ const canCreateOption = computed(() => {
 
 	return !safeOptions.value.some((option: SearchableSelectOption) => option.label.trim().toLowerCase() === trimmed.toLowerCase())
 })
+const searchInputId = computed(() => props.inputId ?? `${instanceId}-search`)
+const searchInputName = computed(() => props.inputName ?? searchInputId.value)
 
 function closeDropdown() {
 	open.value = false
@@ -142,7 +151,7 @@ onBeforeUnmount(() => {
 		</button>
 
 		<div v-if="open" class="gi-search-select__panel">
-			<input ref="searchInputRef" v-model="query" class="gi-input gi-search-select__search" :placeholder="searchPlaceholder" />
+			<input ref="searchInputRef" v-model="query" :id="searchInputId" :name="searchInputName" class="gi-input gi-search-select__search" :placeholder="searchPlaceholder" />
 			<button v-if="clearable && normalizedModelValue" class="gi-search-select__clear" type="button" @click="selectOption(null)">
 				Limpiar seleccion
 			</button>

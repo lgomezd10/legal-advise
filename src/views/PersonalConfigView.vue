@@ -42,7 +42,7 @@ async function save() {
 			<div class="gi-form-grid">
 				<label v-for="field in fields" :key="field.fieldKey" class="gi-field">
 					<span>{{ field.label }}</span>
-					<input v-model="form[field.fieldKey]" :type="field.fieldType" class="gi-input" :required="field.required" />
+					<input :id="`personal-config-${field.fieldKey}`" v-model="form[field.fieldKey]" :name="`personal-config-${field.fieldKey}`" :type="field.fieldType" class="gi-input" :required="field.required" />
 				</label>
 			</div>
 			<footer class="gi-personal-config-card__footer">

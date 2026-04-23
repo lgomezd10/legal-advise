@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, reactive, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import type { CatalogField, SearchableSelectOption, TicketAttachmentLinkDraft, TicketDraft, TypeNode, UrgencyCatalogItem } from '@/types'
 import AttachmentPicker from './AttachmentPicker.vue'
+import RichTextEditor from './RichTextEditor.vue'
 import SearchableSelect from './SearchableSelect.vue'
 import TypeCascadeSelector from './TypeCascadeSelector.vue'
 import { isRichTextEmpty } from '@/utils/richText'
-
-const RichTextEditor = defineAsyncComponent(() => import(/* webpackChunkName: "rich-text-editor" */ './RichTextEditor.vue'))
 
 const props = defineProps<{
 	types: TypeNode[]
@@ -89,20 +88,20 @@ const canSubmit = computed(() => Boolean(selectedTypeId.value) && form.title.tri
 	<div class="gi-form-shell">
 		<TypeCascadeSelector v-if="!props.lockedTypePath?.length" v-model="form.selectedPath" :types="types" />
 		<div class="gi-form-grid">
-			<label class="gi-field gi-field--wide"><span>Título</span><input v-model="form.title" class="gi-input" /></label>
-			<label class="gi-field"><span>Criticidad</span><SearchableSelect v-model="form.urgencyId" :options="urgencyOptions" placeholder="Selecciona" clearable /></label>
-			<label class="gi-field"><span>Canal de comunicación</span><SearchableSelect v-model="form.communicationChannel" :options="channelOptions" placeholder="Selecciona" /></label>
+			<label class="gi-field gi-field--wide"><span>Título</span><input id="ticket-form-title" v-model="form.title" name="ticket-form-title" class="gi-input" /></label>
+			<div class="gi-field"><span>Criticidad</span><SearchableSelect v-model="form.urgencyId" :options="urgencyOptions" placeholder="Selecciona" clearable /></div>
+			<div class="gi-field"><span>Canal de comunicación</span><SearchableSelect v-model="form.communicationChannel" :options="channelOptions" placeholder="Selecciona" /></div>
 			<div class="gi-field gi-field--wide">
 				<span>Descripción</span>
-				<RichTextEditor v-model="form.userDescription" placeholder="Describe el ticket y, si lo necesitas, pega capturas o inserta imágenes" :min-height="220" />
+				<RichTextEditor v-model="form.userDescription" placeholder="Describe el ticket" :min-height="220" />
 			</div>
-			<label class="gi-field gi-field--wide">
+			<div class="gi-field gi-field--wide">
 				<span>Adjuntos iniciales</span>
 				<AttachmentPicker v-model="form.attachments" :allowed-extensions="allowedExtensions" :max-file-size-mb="maxFileSizeMb || 25" />
-			</label>
+			</div>
 			<label v-for="field in visibleFields" :key="field.fieldKey" class="gi-field">
 				<span>{{ field.label }}</span>
-				<input v-model="form.personalData[field.fieldKey]" :type="field.fieldType" class="gi-input" :required="field.required" />
+				<input :id="`ticket-form-${field.fieldKey}`" v-model="form.personalData[field.fieldKey]" :name="`ticket-form-${field.fieldKey}`" :type="field.fieldType" class="gi-input" :required="field.required" />
 			</label>
 		</div>
 		<div class="gi-actions">

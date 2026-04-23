@@ -75,13 +75,13 @@ function save() {
 				<div class="gi-filter-catalog-row__header">
 					<label class="gi-field gi-filter-catalog-row__name-field">
 						<span>Nombre</span>
-						<input v-model="filter.name" class="gi-input" type="text" placeholder="Nombre del filtro" :disabled="lockPredefinedFilters && filter.isPredefined" />
+						<input :id="`filter-name-${filter.clientId}`" v-model="filter.name" :name="`filter-name-${filter.clientId}`" class="gi-input" type="text" placeholder="Nombre del filtro" :disabled="lockPredefinedFilters && filter.isPredefined" />
 					</label>
 					<div class="gi-filter-catalog-row__toggle-field">
-						<input v-model="filter.active" type="checkbox" aria-label="Filtro activo" title="Activo" />
+						<input :id="`filter-active-${filter.clientId}`" v-model="filter.active" :name="`filter-active-${filter.clientId}`" type="checkbox" aria-label="Filtro activo" title="Activo" />
 					</div>
 					<div class="gi-filter-catalog-row__toggle-field">
-						<input :checked="Boolean(filter.isDefault)" :disabled="!filter.active" type="radio" :name="defaultGroupName" aria-label="Filtro predeterminado" title="Predeterminado" @change="setDefault(filter.clientId)" />
+						<input :id="`filter-default-${filter.clientId}`" :checked="Boolean(filter.isDefault)" :disabled="!filter.active" type="radio" :name="defaultGroupName" aria-label="Filtro predeterminado" title="Predeterminado" @change="setDefault(filter.clientId)" />
 					</div>
 					<div class="gi-filter-catalog-row__actions">
 						<button v-if="canRemove(filter)" class="gi-ghost-button" type="button" @click="removeFilter(filter.clientId)">Eliminar</button>

@@ -70,13 +70,15 @@ class TicketService {
 		$roles = $this->roleService->getEffectiveRoles($uid);
 		$isSupportActor = in_array(RoleService::SUPPORT, $roles, true) || in_array(RoleService::ADMIN, $roles, true);
 		$province = $this->resolveProvinceSelection($payload, !$isSupportActor);
-		$assignment = $isSupportActor
-			? [
-				'assignedUserUid' => $this->normalizeOptionalString($payload['assignedUserUid'] ?? null),
-				'assignedGroupId' => $this->normalizeOptionalString($payload['assignedGroupId'] ?? null),
-			]
+		$manualAssignment = [
+			'assignedUserUid' => $this->normalizeOptionalString($payload['assignedUserUid'] ?? null),
+			'assignedGroupId' => $this->normalizeOptionalString($payload['assignedGroupId'] ?? null),
+		];
+		$hasManualAssignment = $manualAssignment['assignedUserUid'] !== null || $manualAssignment['assignedGroupId'] !== null;
+		$assignment = ($isSupportActor && $hasManualAssignment)
+			? $manualAssignment
 			: $this->assignmentService->resolveForType(isset($payload['typeId']) ? (int) $payload['typeId'] : null, $province);
-		if ($isSupportActor) {
+		if ($isSupportActor && $hasManualAssignment) {
 			$this->assertAssignmentPayloadAllowed($uid, ['assignedGroupId' => $assignment['assignedGroupId']], null);
 		}
 		$this->assertAssignmentConsistency($assignment['assignedUserUid'], $assignment['assignedGroupId']);

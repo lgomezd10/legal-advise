@@ -3,6 +3,8 @@ import { computed, reactive, ref, watch } from 'vue'
 import type { AssignableOption, SearchableSelectOption, StatusOption, TypeNode } from '@/types'
 import SearchableSelect from './SearchableSelect.vue'
 
+let filterCriteriaEditorIdSequence = 0
+
 type CriteriaKey = 'status' | 'assignedUser' | 'assignedGroup' | 'typeId' | 'city' | 'text' | 'updatedWithinDays' | 'unassigned' | 'hasAttachments'
 
 type FilterCriteriaState = {
@@ -40,6 +42,7 @@ const draftCriteria = reactive<FilterCriteriaState>({ status: [], assignedUser: 
 const modalOpen = ref(false)
 const modalCriterionKey = ref<CriteriaKey | ''>('')
 const syncingFromModelValue = ref(false)
+const instanceId = `gi-filter-criteria-${++filterCriteriaEditorIdSequence}`
 
 function normalizeCollection<T>(items: T[] | Record<string, T> | undefined | null): T[] {
 	if (Array.isArray(items)) {
@@ -256,6 +259,10 @@ function formatType(typeId: string) {
 	const selected = typeOptions.value.find((item) => item.id === Number(typeId))
 	return selected?.label ?? typeId
 }
+
+function getFieldId(suffix: string) {
+	return `${instanceId}-${suffix}`
+}
 </script>
 
 <template>
@@ -283,23 +290,23 @@ function formatType(typeId: string) {
 				</header>
 				<label class="gi-field">
 					<span>Tipo de filtro</span>
-					<SearchableSelect :model-value="modalCriterionKey || null" :options="criterionTypeOptions" placeholder="Selecciona un criterio" @update:modelValue="modalCriterionKey = String($event ?? '') as CriteriaKey" />
+					<SearchableSelect :model-value="modalCriterionKey || null" :options="criterionTypeOptions" :input-id="getFieldId('criterion-type-search')" :input-name="getFieldId('criterion-type-search')" placeholder="Selecciona un criterio" @update:modelValue="modalCriterionKey = String($event ?? '') as CriteriaKey" />
 				</label>
 				<div v-if="modalCriterionKey" class="gi-dialog__body">
 					<div v-if="modalCriterionKey === 'status'" class="gi-option-grid gi-option-grid--compact">
 						<label v-for="status in safeStatuses" :key="status.id" class="gi-check-tile" :class="{ 'gi-check-tile--disabled': !isStatusSelectable(status.id) }">
-							<input :checked="draftCriteria.status.includes(status.id)" :disabled="!isStatusSelectable(status.id)" type="checkbox" @change="draftCriteria.status = ($event.target as HTMLInputElement).checked ? [...new Set([...draftCriteria.status, status.id])] : draftCriteria.status.filter((item) => item !== status.id)" />
+							<input :id="getFieldId(`status-${status.id}`)" :name="getFieldId('status')" :checked="draftCriteria.status.includes(status.id)" :disabled="!isStatusSelectable(status.id)" type="checkbox" @change="draftCriteria.status = ($event.target as HTMLInputElement).checked ? [...new Set([...draftCriteria.status, status.id])] : draftCriteria.status.filter((item) => item !== status.id)" />
 							<span>{{ status.label }}</span>
 						</label>
 					</div>
-					<label v-else-if="modalCriterionKey === 'assignedUser'" class="gi-field"><span>Usuario asignado</span><SearchableSelect :model-value="draftCriteria.assignedUser || null" :options="draftUserOptions" placeholder="Selecciona un usuario" @update:modelValue="draftCriteria.assignedUser = String($event ?? '')" /></label>
-					<label v-else-if="modalCriterionKey === 'assignedGroup'" class="gi-field"><span>Grupo asignado</span><SearchableSelect :model-value="draftCriteria.assignedGroup || null" :options="draftGroupOptions" placeholder="Selecciona un grupo" @update:modelValue="draftCriteria.assignedGroup = String($event ?? '')" /></label>
-					<label v-else-if="modalCriterionKey === 'typeId'" class="gi-field"><span>Tipo</span><SearchableSelect :model-value="draftCriteria.typeId || null" :options="typeSelectOptions" placeholder="Selecciona un tipo" @update:modelValue="draftCriteria.typeId = String($event ?? '')" /></label>
-					<label v-else-if="modalCriterionKey === 'city'" class="gi-field"><span>Ciudad</span><input v-model="draftCriteria.city" class="gi-input" /></label>
-					<label v-else-if="modalCriterionKey === 'text'" class="gi-field"><span>Texto libre</span><input v-model="draftCriteria.text" class="gi-input" /></label>
-					<label v-else-if="modalCriterionKey === 'updatedWithinDays'" class="gi-field"><span>Ultimos dias</span><input v-model="draftCriteria.updatedWithinDays" class="gi-input" /></label>
-					<label v-else-if="modalCriterionKey === 'hasAttachments'" class="gi-switch-row"><input v-model="draftCriteria.hasAttachments" type="checkbox" /><span>Solo con adjuntos o rutas URL</span></label>
-					<label v-else class="gi-switch-row"><input v-model="draftCriteria.unassigned" type="checkbox" /><span>Solo sin asignar</span></label>
+					<label v-else-if="modalCriterionKey === 'assignedUser'" class="gi-field"><span>Usuario asignado</span><SearchableSelect :model-value="draftCriteria.assignedUser || null" :options="draftUserOptions" :input-id="getFieldId('assigned-user-search')" :input-name="getFieldId('assigned-user-search')" placeholder="Selecciona un usuario" @update:modelValue="draftCriteria.assignedUser = String($event ?? '')" /></label>
+					<label v-else-if="modalCriterionKey === 'assignedGroup'" class="gi-field"><span>Grupo asignado</span><SearchableSelect :model-value="draftCriteria.assignedGroup || null" :options="draftGroupOptions" :input-id="getFieldId('assigned-group-search')" :input-name="getFieldId('assigned-group-search')" placeholder="Selecciona un grupo" @update:modelValue="draftCriteria.assignedGroup = String($event ?? '')" /></label>
+					<label v-else-if="modalCriterionKey === 'typeId'" class="gi-field"><span>Tipo</span><SearchableSelect :model-value="draftCriteria.typeId || null" :options="typeSelectOptions" :input-id="getFieldId('type-search')" :input-name="getFieldId('type-search')" placeholder="Selecciona un tipo" @update:modelValue="draftCriteria.typeId = String($event ?? '')" /></label>
+					<label v-else-if="modalCriterionKey === 'city'" class="gi-field"><span>Ciudad</span><input :id="getFieldId('city')" :name="getFieldId('city')" v-model="draftCriteria.city" class="gi-input" /></label>
+					<label v-else-if="modalCriterionKey === 'text'" class="gi-field"><span>Texto libre</span><input :id="getFieldId('text')" :name="getFieldId('text')" v-model="draftCriteria.text" class="gi-input" /></label>
+					<label v-else-if="modalCriterionKey === 'updatedWithinDays'" class="gi-field"><span>Ultimos dias</span><input :id="getFieldId('updated-within-days')" :name="getFieldId('updated-within-days')" v-model="draftCriteria.updatedWithinDays" class="gi-input" /></label>
+					<label v-else-if="modalCriterionKey === 'hasAttachments'" class="gi-switch-row"><input :id="getFieldId('has-attachments')" :name="getFieldId('has-attachments')" v-model="draftCriteria.hasAttachments" type="checkbox" /><span>Solo con adjuntos o rutas URL</span></label>
+					<label v-else class="gi-switch-row"><input :id="getFieldId('unassigned')" :name="getFieldId('unassigned')" v-model="draftCriteria.unassigned" type="checkbox" /><span>Solo sin asignar</span></label>
 				</div>
 				<footer class="gi-dialog__footer">
 					<button class="gi-primary-button" type="button" :disabled="!modalCriterionKey || !hasDraftValue(modalCriterionKey)" @click="applyDraftCriterion">Añadir</button>

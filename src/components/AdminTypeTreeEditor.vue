@@ -28,11 +28,11 @@ function buildPath(node: EditableTypeNode): string {
 			<div class="gi-admin-tree__row">
 				<label class="gi-field gi-admin-tree__field">
 					<span>Nombre</span>
-					<input v-model="node.name" class="gi-input" type="text" placeholder="Nombre del tipo" />
+					<input :id="`type-name-${node.clientId}`" v-model="node.name" :name="`type-name-${node.clientId}`" class="gi-input" type="text" placeholder="Nombre del tipo" />
 				</label>
 				<label class="gi-field gi-admin-tree__toggle">
 					<span>Activo</span>
-					<input v-model="node.active" type="checkbox" />
+					<input :id="`type-active-${node.clientId}`" v-model="node.active" :name="`type-active-${node.clientId}`" type="checkbox" />
 				</label>
 				<div class="gi-admin-tree__actions">
 					<span class="gi-meta-pill">{{ buildPath(node) }}</span>

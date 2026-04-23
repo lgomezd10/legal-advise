@@ -3,6 +3,7 @@ import { computed, onErrorCaptured, onMounted, reactive, ref, watch } from 'vue'
 import AdminTypeTreeEditor from '@/components/AdminTypeTreeEditor.vue'
 import FilterCatalogEditor from '@/components/FilterCatalogEditor.vue'
 import NotificationMatrix from '@/components/NotificationMatrix.vue'
+import PlainTextEditor from '@/components/PlainTextEditor.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import { useAdminConfigStore } from '@/store/adminConfig'
 import { useBootstrapStore } from '@/store/bootstrap'
@@ -702,7 +703,7 @@ async function saveAttachmentConfig() {
 		</header>
 		<label class="gi-field gi-admin-mobile-menu" aria-label="Sección de administración">
 			<span class="gi-filter-toolbar__label">Sección</span>
-			<select v-model="activeSection" class="gi-input gi-admin-mobile-menu__select">
+			<select id="admin-active-section" v-model="activeSection" name="admin-active-section" class="gi-input gi-admin-mobile-menu__select">
 				<option v-for="section in adminSections" :key="section.id" :value="section.id">{{ section.label }}</option>
 			</select>
 		</label>
@@ -737,11 +738,11 @@ async function saveAttachmentConfig() {
 						</div>
 						<label class="gi-field gi-field--wide">
 							<span>Etiqueta visible</span>
-							<input v-model="status.label" class="gi-input" type="text" placeholder="Etiqueta del estado" />
+							<input :id="`status-label-${status.clientId}`" v-model="status.label" :name="`status-label-${status.id}`" class="gi-input" type="text" placeholder="Etiqueta del estado" />
 						</label>
 						<label class="gi-field gi-admin-row__toggle">
 							<span>Activo</span>
-							<input v-model="status.active" type="checkbox" :disabled="!status.toggleable" />
+							<input :id="`status-active-${status.clientId}`" v-model="status.active" :name="`status-active-${status.id}`" type="checkbox" :disabled="!status.toggleable" />
 						</label>
 					</li>
 				</ul>
@@ -765,19 +766,19 @@ async function saveAttachmentConfig() {
 					<li v-for="urgency in urgencyItems" :key="urgency.clientId" class="gi-admin-row gi-admin-row--form">
 						<label class="gi-field">
 							<span>Nombre</span>
-							<input v-model="urgency.name" class="gi-input" type="text" placeholder="Alta" />
+							<input :id="`urgency-name-${urgency.clientId}`" v-model="urgency.name" :name="`urgency-name-${urgency.clientId}`" class="gi-input" type="text" placeholder="Alta" />
 						</label>
 						<label class="gi-field gi-admin-row__weight">
 							<span>Peso</span>
-							<input v-model.number="urgency.weight" class="gi-input" type="number" min="1" />
+							<input :id="`urgency-weight-${urgency.clientId}`" v-model.number="urgency.weight" :name="`urgency-weight-${urgency.clientId}`" class="gi-input" type="number" min="1" />
 						</label>
 						<label class="gi-field gi-admin-row__color">
 							<span>Color</span>
-							<input v-model="urgency.color" class="gi-input gi-input--color" type="color" />
+							<input :id="`urgency-color-${urgency.clientId}`" v-model="urgency.color" :name="`urgency-color-${urgency.clientId}`" class="gi-input gi-input--color" type="color" />
 						</label>
 						<label class="gi-field gi-admin-row__toggle">
 							<span>Activa</span>
-							<input v-model="urgency.active" type="checkbox" />
+							<input :id="`urgency-active-${urgency.clientId}`" v-model="urgency.active" :name="`urgency-active-${urgency.clientId}`" type="checkbox" />
 						</label>
 					</li>
 				</ul>
@@ -826,11 +827,11 @@ async function saveAttachmentConfig() {
 					<li v-for="field in fieldItems" :key="field.clientId" class="gi-admin-row gi-admin-row--form gi-admin-row--stacked">
 						<label class="gi-field">
 							<span>Clave</span>
-							<input v-model="field.fieldKey" class="gi-input" type="text" placeholder="city" />
+							<input :id="`field-key-${field.clientId}`" v-model="field.fieldKey" :name="`field-key-${field.clientId}`" class="gi-input" type="text" placeholder="city" />
 						</label>
 						<label class="gi-field">
 							<span>Etiqueta</span>
-							<input v-model="field.label" class="gi-input" type="text" placeholder="Ciudad" />
+							<input :id="`field-label-${field.clientId}`" v-model="field.label" :name="`field-label-${field.clientId}`" class="gi-input" type="text" placeholder="Ciudad" />
 						</label>
 						<label class="gi-field">
 							<span>Tipo</span>
@@ -842,15 +843,15 @@ async function saveAttachmentConfig() {
 						</label>
 						<label class="gi-field gi-admin-row__weight">
 							<span>Orden</span>
-							<input v-model.number="field.sortOrder" class="gi-input" type="number" min="0" />
+							<input :id="`field-order-${field.clientId}`" v-model.number="field.sortOrder" :name="`field-order-${field.clientId}`" class="gi-input" type="number" min="0" />
 						</label>
 						<label class="gi-field gi-admin-row__toggle">
 							<span>Obligatorio</span>
-							<input v-model="field.required" type="checkbox" />
+							<input :id="`field-required-${field.clientId}`" v-model="field.required" :name="`field-required-${field.clientId}`" type="checkbox" />
 						</label>
 						<label class="gi-field gi-admin-row__toggle">
 							<span>Activo</span>
-							<input v-model="field.active" type="checkbox" />
+							<input :id="`field-active-${field.clientId}`" v-model="field.active" :name="`field-active-${field.clientId}`" type="checkbox" />
 						</label>
 					</li>
 				</ul>
@@ -883,7 +884,7 @@ async function saveAttachmentConfig() {
 					</div>
 				</div>
 				<label class="gi-switch-row">
-					<input v-model="taskConfig.enabled" type="checkbox" />
+					<input id="tasks-enabled" v-model="taskConfig.enabled" name="tasks-enabled" type="checkbox" />
 					<span>Activar sincronizacion con Tasks</span>
 				</label>
 				<button class="gi-secondary-button gi-admin-card__action" @click="saveTasksConfig">Guardar</button>
@@ -904,11 +905,11 @@ async function saveAttachmentConfig() {
 				</div>
 				<label class="gi-field">
 					<span>Tamano maximo por fichero (MB)</span>
-					<input v-model.number="attachmentConfig.maxFileSizeMb" class="gi-input" type="number" min="1" />
+					<input id="attachment-max-file-size" v-model.number="attachmentConfig.maxFileSizeMb" name="attachment-max-file-size" class="gi-input" type="number" min="1" />
 				</label>
 				<label class="gi-field gi-field--wide">
 					<span>Extensiones permitidas</span>
-					<textarea v-model="attachmentConfig.allowedExtensionsText" class="gi-textarea" rows="5" placeholder=".pdf, .doc, .docx, .xls, .xlsx, .csv, .jpg, .png, .mp3, .mp4, .mov" />
+					<PlainTextEditor input-id="attachment-allowed-extensions" v-model="attachmentConfig.allowedExtensionsText" placeholder=".pdf, .doc, .docx, .xls, .xlsx, .csv, .jpg, .png, .mp3, .mp4, .mov" :min-height="132" />
 				</label>
 				<p class="gi-admin-feedback">Introduce las extensiones separadas por comas, espacios o saltos de linea.</p>
 				<p v-if="saveState.attachments" class="gi-admin-feedback">{{ saveState.attachments }}</p>
@@ -947,7 +948,7 @@ async function saveAttachmentConfig() {
 						</label>
 						<label class="gi-field gi-admin-row__weight">
 							<span>Prioridad</span>
-							<input v-model.number="rule.priority" class="gi-input" type="number" min="0" />
+							<input :id="`rule-priority-${rule.clientId}`" v-model.number="rule.priority" :name="`rule-priority-${rule.clientId}`" class="gi-input" type="number" min="0" />
 						</label>
 					</li>
 				</ul>

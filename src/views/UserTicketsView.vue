@@ -120,22 +120,22 @@ function isClosedTicket(ticket: Ticket) {
 			<div class="gi-ticket-list-header__filters">
 				<label class="gi-search-box gi-ticket-list-header__search">
 					<span class="gi-search-box__label">Buscar</span>
-					<input v-model="searchText" class="gi-search-box__input" type="search" placeholder="Buscar por número, estado, título, descripción, comentarios, fecha, provincia o ciudad" />
+					<input id="user-tickets-search" v-model="searchText" name="user-tickets-search" class="gi-search-box__input" type="search" placeholder="Buscar por número, estado, título, descripción, comentarios, fecha, provincia o ciudad" />
 				</label>
 				<label class="gi-field gi-ticket-list-header__date-field">
 					<span>Fecha</span>
-					<select v-model="dateField" class="gi-input gi-ticket-list-header__date-field-select">
+					<select id="user-tickets-date-field" v-model="dateField" name="user-tickets-date-field" class="gi-input gi-ticket-list-header__date-field-select">
 						<option value="createdAt">Creación</option>
 						<option value="updatedAt">Última modificación</option>
 					</select>
 				</label>
 				<label class="gi-field">
 					<span>Desde</span>
-					<input v-model="createdFrom" class="gi-input" type="date" />
+					<input id="user-tickets-date-from" v-model="createdFrom" name="user-tickets-date-from" class="gi-input" type="date" />
 				</label>
 				<label class="gi-field">
 					<span>Hasta</span>
-					<input v-model="createdTo" class="gi-input" type="date" />
+					<input id="user-tickets-date-to" v-model="createdTo" name="user-tickets-date-to" class="gi-input" type="date" />
 				</label>
 			</div>
 		</header>

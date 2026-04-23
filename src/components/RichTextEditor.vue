@@ -1,12 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Editor, EditorContent } from '@tiptap/vue-3'
-import StarterKit from '@tiptap/starter-kit'
-import Link from '@tiptap/extension-link'
-import Placeholder from '@tiptap/extension-placeholder'
-import TextAlign from '@tiptap/extension-text-align'
-import Underline from '@tiptap/extension-underline'
-import ResizableImage from '@/extensions/ResizableImage'
+import { computed, markRaw, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { isRichTextEmpty, richTextToPlainText, sanitizeRichText, sanitizeRichTextForPaste } from '@/utils/richText'
 
 type RichTextEditorChain = {
@@ -48,6 +41,19 @@ type RichTextEditorInstance = {
 	getAttributes(name: string): Record<string, unknown>
 }
 
+type TiptapEditorConstructor = new (options: Record<string, unknown>) => RichTextEditorInstance
+
+type TiptapModuleSet = {
+	Editor: TiptapEditorConstructor
+	EditorContent: unknown
+	StarterKit: { configure(options: Record<string, unknown>): unknown }
+	Link: { configure(options: Record<string, unknown>): unknown }
+	Placeholder: { configure(options: Record<string, unknown>): unknown }
+	TextAlign: { configure(options: Record<string, unknown>): unknown }
+	Underline: unknown
+	ResizableImage: { configure(options: Record<string, unknown>): unknown }
+}
+
 const props = withDefaults(defineProps<{
 	modelValue?: string | null
 	placeholder?: string
@@ -65,13 +71,38 @@ const emit = defineEmits<{
 }>()
 
 const editor = ref<RichTextEditorInstance | null>(null)
+const editorContentComponent = shallowRef<unknown | null>(null)
 const fallbackContent = ref('')
-const showFallback = ref(false)
+const showFallback = ref(true)
 const fallbackReason = ref('')
 const showHtmlSource = ref(false)
 const htmlSource = ref('')
 let syncingFromExternal = false
 let pendingImageDialogFocusHandler: (() => void) | null = null
+let isUnmounted = false
+
+async function loadTiptapModules(): Promise<TiptapModuleSet> {
+	const [vueTiptap, starterKit, link, placeholder, textAlign, underline, resizableImage] = await Promise.all([
+		import('@tiptap/vue-3'),
+		import('@tiptap/starter-kit'),
+		import('@tiptap/extension-link'),
+		import('@tiptap/extension-placeholder'),
+		import('@tiptap/extension-text-align'),
+		import('@tiptap/extension-underline'),
+		import('@/extensions/ResizableImage'),
+	])
+
+	return {
+		Editor: vueTiptap.Editor as TiptapEditorConstructor,
+		EditorContent: markRaw(vueTiptap.EditorContent),
+		StarterKit: starterKit.default,
+		Link: link.default,
+		Placeholder: placeholder.default,
+		TextAlign: textAlign.default,
+		Underline: underline.default,
+		ResizableImage: resizableImage.default,
+	}
+}
 
 function normalizeEditorContent(value: string | null | undefined) {
 	const sanitized = sanitizeRichText(value)
@@ -92,10 +123,11 @@ watch(() => props.disabled, (disabled) => {
 })
 
 onMounted(() => {
-	initializeEditor()
+	void initializeEditor()
 })
 
 onBeforeUnmount(() => {
+	isUnmounted = true
 	clearPendingImageDialogFocusHandler()
 	editor.value?.destroy()
 	editor.value = null
@@ -167,36 +199,44 @@ function setEditorHtml(value: string) {
 	syncingFromExternal = false
 }
 
-function initializeEditor() {
-	showFallback.value = false
-	fallbackReason.value = ''
+async function initializeEditor() {
+	showFallback.value = true
+	fallbackReason.value = 'Cargando editor avanzado...'
+	editorContentComponent.value = null
+	editor.value?.destroy()
+	editor.value = null
 
 	try {
+		const tiptapModules = await loadTiptapModules()
+		if (isUnmounted) {
+			return
+		}
+
 		let instance: RichTextEditorInstance | null = null
-		instance = new Editor({
+		instance = new tiptapModules.Editor({
 			content: normalizeEditorContent(props.modelValue),
 			editable: !props.disabled,
 			extensions: [
-				StarterKit.configure({
+				tiptapModules.StarterKit.configure({
 					heading: { levels: [2, 3] },
 					link: false,
 					underline: false,
 				}),
-				Underline,
-				Link.configure({
+				tiptapModules.Underline,
+				tiptapModules.Link.configure({
 					openOnClick: false,
 					HTMLAttributes: {
 						target: '_blank',
 						rel: 'noopener noreferrer',
 					},
 				}),
-				ResizableImage.configure({
+				tiptapModules.ResizableImage.configure({
 					allowBase64: true,
 				}),
-				Placeholder.configure({
+				tiptapModules.Placeholder.configure({
 					placeholder: props.placeholder,
 				}),
-				TextAlign.configure({
+				tiptapModules.TextAlign.configure({
 					types: ['heading', 'paragraph'],
 				}),
 			],
@@ -229,12 +269,16 @@ function initializeEditor() {
 			},
 		})
 
+		editorContentComponent.value = tiptapModules.EditorContent
 		editor.value = instance
 		showFallback.value = false
 		fallbackReason.value = ''
 	}
 	catch (error) {
 		console.error('No se ha podido inicializar Tiptap', error)
+		editor.value?.destroy()
+		editor.value = null
+		editorContentComponent.value = null
 		showFallback.value = true
 		fallbackReason.value = 'El editor avanzado no se ha cargado. Puedes escribir aqui igualmente.'
 	}
@@ -499,7 +543,7 @@ function openImageDialog() {
 				</button>
 			</div>
 			<textarea v-if="showHtmlSource" class="gi-rich-text-editor__html-source" :disabled="disabled" :value="htmlSource" aria-label="HTML del contenido" spellcheck="false" @input="onHtmlSourceInput" />
-			<EditorContent v-else :editor="editor as never" class="gi-rich-text-editor__content" />
+			<component :is="editorContentComponent" v-else :editor="editor as never" class="gi-rich-text-editor__content" />
 		</div>
 	</div>
 </template>

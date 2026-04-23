@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { AssignableOption, CatalogField, SearchableSelectOption, StatusOption, Ticket, TicketAttachment, TicketAttachmentLinkDraft, TicketComment, TypeNode, UrgencyCatalogItem } from '@/types'
 import { formatDateTime } from '@/utils/formatting'
 import { formatHistoryEntries } from '@/utils/history'
 import { excerptRichText, isRichTextEmpty, richTextToPlainText, sanitizeRichText } from '@/utils/richText'
 import { getTicketPersonalDataRecord, getTypeLabel } from '@/services/ticketDraft'
 import AttachmentPicker from './AttachmentPicker.vue'
+import PlainTextEditor from './PlainTextEditor.vue'
+import RichTextEditor from './RichTextEditor.vue'
 import RichTextContent from './RichTextContent.vue'
 import SearchableSelect from './SearchableSelect.vue'
 
-const RichTextEditor = defineAsyncComponent(() => import(/* webpackChunkName: "rich-text-editor" */ './RichTextEditor.vue'))
+let ticketSidebarPanelIdSequence = 0
 
 type TicketSidebarTabId = 'comments' | 'detail' | 'attachments' | 'requester' | 'history'
 
@@ -69,6 +71,11 @@ const closeReason = ref('')
 const editableBaseSnapshot = ref('')
 const syncedTicketId = ref<number | null>(null)
 const waitingForSaveSync = ref(false)
+const instanceId = `gi-ticket-sidebar-${++ticketSidebarPanelIdSequence}`
+
+function getFieldId(suffix: string) {
+	return `${instanceId}-${suffix}`
+}
 
 function normalizeAssignableOptions(options: AssignableOption[] | Record<string, AssignableOption> | undefined | null): AssignableOption[] {
 	if (Array.isArray(options)) {
@@ -541,6 +548,22 @@ function commentExportText(item: TicketComment) {
 	return (item.attachments ?? []).map((attachment) => attachment.originalName).join(', ')
 }
 
+function csvEscape(value: string) {
+	return `"${value.replace(/"/g, '""')}"`
+}
+
+function exportTimestamp() {
+	const now = new Date()
+	const year = String(now.getFullYear())
+	const month = String(now.getMonth() + 1).padStart(2, '0')
+	const day = String(now.getDate()).padStart(2, '0')
+	const hours = String(now.getHours()).padStart(2, '0')
+	const minutes = String(now.getMinutes()).padStart(2, '0')
+	const seconds = String(now.getSeconds()).padStart(2, '0')
+
+	return `${year}${month}${day}-${hours}${minutes}${seconds}`
+}
+
 function exportComments() {
 	if (!props.ticket || filteredComments.value.length === 0) {
 		return
@@ -548,23 +571,19 @@ function exportComments() {
 
 	const rows = [...filteredComments.value]
 		.sort((left, right) => right.createdAt - left.createdAt)
-		.map((item) => `<tr><td>${escapeHtml(formatDateTime(item.createdAt))}</td><td>${escapeHtml(resolveUserLabel(item.authorUid))}</td><td>${escapeHtml(commentExportText(item)).replace(/\n/g, '<br>')}</td></tr>`)
-		.join('')
-	const documentHtml = [
-		'<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">',
-		'<head><meta charset="utf-8"></head>',
-		'<body>',
-		'<table border="1">',
-		'<thead><tr><th>Fecha</th><th>Usuario</th><th>Comentario</th></tr></thead>',
-		`<tbody>${rows}</tbody>`,
-		'</table>',
-		'</body>',
-		'</html>',
-	].join('')
-	const blob = new Blob([`\uFEFF${documentHtml}`], { type: 'application/vnd.ms-excel;charset=utf-8;' })
+		.map((item) => [
+			formatDateTime(item.createdAt),
+			resolveUserLabel(item.authorUid),
+			commentExportText(item),
+		].map((column) => csvEscape(column)).join(';'))
+	const csv = [
+		['Fecha', 'Usuario', 'Comentario'].map((column) => csvEscape(column)).join(';'),
+		...rows,
+	].join('\r\n')
+	const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' })
 	const link = document.createElement('a')
 	link.href = URL.createObjectURL(blob)
-	link.download = `comentarios-${props.ticket.number}.xls`
+	link.download = `comentarios-${props.ticket.number}-${exportTimestamp()}.csv`
 	link.click()
 	URL.revokeObjectURL(link.href)
 }
@@ -687,40 +706,40 @@ function assignToCurrentUser() {
 			<div v-if="canEditTicket" class="gi-sidebar-panel__editor-form">
 				<label class="gi-field gi-field--wide">
 					<span>Título</span>
-					<input v-model="editableTicket.title" class="gi-input" type="text" />
+					<input :id="getFieldId('title')" v-model="editableTicket.title" :name="getFieldId('title')" class="gi-input" type="text" />
 				</label>
 				<div class="gi-sidebar-panel__compact-select-grid">
-					<label class="gi-field gi-sidebar-panel__compact-field">
+					<div class="gi-field gi-sidebar-panel__compact-field">
 						<span>Estado</span>
 						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.status" :options="statusOptions" placeholder="Estado" @update:modelValue="onStatusChange" />
-					</label>
-					<label class="gi-field gi-sidebar-panel__compact-field">
+					</div>
+					<div class="gi-field gi-sidebar-panel__compact-field">
 						<span>Criticidad</span>
 						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.urgencyId" :options="urgencyOptions" placeholder="Sin criticidad" clearable @update:modelValue="onUrgencyChange" />
-					</label>
-					<label class="gi-field gi-sidebar-panel__compact-field">
+					</div>
+					<div class="gi-field gi-sidebar-panel__compact-field">
 						<span>Asignado a usuario</span>
 						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.assignedUserUid" :options="userOptions" placeholder="Sin usuario" clearable @update:modelValue="onAssignedUserChange" />
-					</label>
-					<label class="gi-field gi-sidebar-panel__compact-field">
+					</div>
+					<div class="gi-field gi-sidebar-panel__compact-field">
 						<span>Asignado a grupo</span>
 						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.assignedGroupId" :options="groupOptions" placeholder="Sin grupo" clearable @update:modelValue="onAssignedGroupChange" />
-					</label>
+					</div>
 				</div>
 				<label v-if="requiresCloseReason" class="gi-field gi-field--wide">
 					<span>Motivo del cierre</span>
-					<textarea v-model="closeReason" class="gi-textarea gi-textarea--plain" rows="4" placeholder="Explica el motivo del cierre. Se publicará como un comentario." />
+					<PlainTextEditor :input-id="getFieldId('close-reason')" v-model="closeReason" placeholder="Explica el motivo del cierre. Se publicará como un comentario." :min-height="120" />
 				</label>
 			</div>
 			<div class="gi-sidebar-panel__description-stack">
-				<label class="gi-field gi-field--wide">
+				<div class="gi-field gi-field--wide">
 					<span>Tipo</span>
 					<div class="gi-sidebar-panel__type-chip">{{ ticketTypeLabel }}</div>
-				</label>
-				<label class="gi-field gi-field--wide">
+				</div>
+				<div class="gi-field gi-field--wide">
 					<span>Descripción del ticket</span>
 					<RichTextContent :value="ticket.userDescription" surface />
-				</label>
+				</div>
 			</div>
 			<div v-if="canEditTicket" class="gi-form-grid gi-sidebar-panel__support-editor-grid">
 				<div class="gi-field gi-field--wide">
@@ -791,7 +810,7 @@ function assignToCurrentUser() {
 			<p v-else-if="isClosedTicket" class="gi-sidebar-panel__muted">Este ticket está cerrado. Reabre el ticket para volver a actuar sobre él.</p>
 			<h3>Histórico</h3>
 			<div class="gi-sidebar-panel__comments-toolbar">
-				<label class="gi-field gi-field--wide gi-sidebar-panel__comments-search"><span>Buscar texto</span><input v-model="commentsSearchText" class="gi-input" type="search" /></label>
+				<label class="gi-field gi-field--wide gi-sidebar-panel__comments-search"><span>Buscar texto</span><input :id="getFieldId('comments-search')" v-model="commentsSearchText" :name="getFieldId('comments-search')" class="gi-input" type="search" /></label>
 				<button class="gi-secondary-button gi-sidebar-panel__comments-mobile-toggle" :class="{ 'gi-sidebar-panel__comments-mobile-toggle--always': shouldCollapseCommentOptions }" type="button" :aria-expanded="commentsMobileMenuOpen ? 'true' : 'false'" @click="toggleCommentsMobileMenu">
 					{{ commentsMobileMenuOpen ? 'Cerrar opciones' : 'Opciones' }}
 				</button>
@@ -822,15 +841,15 @@ function assignToCurrentUser() {
 					</button>
 				</div>
 				<div class="gi-form-grid gi-sidebar-panel__comments-mobile-filters">
-					<label class="gi-field"><span>Desde</span><input v-model="commentsDateFrom" class="gi-input" type="date" /></label>
-					<label class="gi-field"><span>Hasta</span><input v-model="commentsDateTo" class="gi-input" type="date" /></label>
-					<label class="gi-field"><span>Usuario</span><SearchableSelect :model-value="commentsAuthorUid" :options="commentAuthorOptions" placeholder="Todos" clearable @update:modelValue="commentsAuthorUid = $event ? String($event) : null" /></label>
+					<label class="gi-field"><span>Desde</span><input :id="getFieldId('comments-date-from-mobile')" v-model="commentsDateFrom" :name="getFieldId('comments-date-from-mobile')" class="gi-input" type="date" /></label>
+					<label class="gi-field"><span>Hasta</span><input :id="getFieldId('comments-date-to-mobile')" v-model="commentsDateTo" :name="getFieldId('comments-date-to-mobile')" class="gi-input" type="date" /></label>
+					<div class="gi-field"><span>Usuario</span><SearchableSelect :model-value="commentsAuthorUid" :options="commentAuthorOptions" placeholder="Todos" clearable @update:modelValue="commentsAuthorUid = $event ? String($event) : null" /></div>
 				</div>
 			</div>
 			<div v-if="showSupportTabs" class="gi-form-grid gi-sidebar-panel__comments-filters">
-				<label class="gi-field"><span>Desde</span><input v-model="commentsDateFrom" class="gi-input" type="date" /></label>
-				<label class="gi-field"><span>Hasta</span><input v-model="commentsDateTo" class="gi-input" type="date" /></label>
-				<label class="gi-field"><span>Usuario</span><SearchableSelect :model-value="commentsAuthorUid" :options="commentAuthorOptions" placeholder="Todos" clearable @update:modelValue="commentsAuthorUid = $event ? String($event) : null" /></label>
+				<label class="gi-field"><span>Desde</span><input :id="getFieldId('comments-date-from')" v-model="commentsDateFrom" :name="getFieldId('comments-date-from')" class="gi-input" type="date" /></label>
+				<label class="gi-field"><span>Hasta</span><input :id="getFieldId('comments-date-to')" v-model="commentsDateTo" :name="getFieldId('comments-date-to')" class="gi-input" type="date" /></label>
+				<div class="gi-field"><span>Usuario</span><SearchableSelect :model-value="commentsAuthorUid" :options="commentAuthorOptions" placeholder="Todos" clearable @update:modelValue="commentsAuthorUid = $event ? String($event) : null" /></div>
 			</div>
 			<div class="gi-sidebar-panel__comments-accordion">
 				<article v-for="item in orderedComments" :key="item.id" class="gi-sidebar-panel__accordion-item">

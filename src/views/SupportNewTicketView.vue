@@ -92,25 +92,25 @@ async function submit(payload: Record<string, unknown>) {
 		<header class="gi-page__header">
 			<div>
 				<h1>Nuevo ticket</h1>
-				<p class="gi-page__subtitle">Alta rápida desde soporte, con asignación manual y sin reglas automáticas.</p>
+				<p class="gi-page__subtitle">Alta rápida desde soporte, con asignación manual opcional y reglas automáticas cuando no se indica destinatario.</p>
 			</div>
 			<button class="gi-secondary-button" type="button" @click="cancel">Cancelar</button>
 		</header>
 
 		<section class="gi-support-new-ticket-card">
 			<div class="gi-form-grid gi-support-new-ticket-card__meta-grid">
-				<label class="gi-field">
+				<div class="gi-field">
 					<span>Provincia</span>
 					<SearchableSelect :model-value="selectedProvince" :options="provinceOptions" placeholder="Selecciona provincia" search-placeholder="Buscar provincia" clearable allow-create create-label="Añadir provincia" @update:modelValue="selectedProvince = $event ? String($event) : null" />
-				</label>
-				<label class="gi-field">
+				</div>
+				<div class="gi-field">
 					<span>Asignado a grupo</span>
 					<SearchableSelect :model-value="assignedGroupId" :options="groupOptions" placeholder="Sin grupo" clearable @update:modelValue="onAssignedGroupSelect" />
-				</label>
-				<label class="gi-field">
+				</div>
+				<div class="gi-field">
 					<span>Asignado a usuario</span>
 					<SearchableSelect :model-value="assignedUserUid" :options="userOptions" placeholder="Sin usuario" clearable @update:modelValue="onAssignedUserSelect" />
-				</label>
+				</div>
 			</div>
 			<p v-if="submitError" class="gi-support-new-ticket-card__error">{{ submitError }}</p>
 			<TicketForm :types="types" :fields="fields" :urgencies="urgencies" :initial-draft="initialDraft" :allowed-extensions="bootstrapStore.data.catalogs.attachmentConfig.allowedExtensions" :max-file-size-mb="bootstrapStore.data.catalogs.attachmentConfig.maxFileSizeMb" @submit="submit" />

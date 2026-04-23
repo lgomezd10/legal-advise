@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { TicketAttachmentLinkDraft } from '@/types'
 
+let attachmentPickerIdSequence = 0
+
 type AttachmentDraft = {
 	files: File[]
 	links: TicketAttachmentLinkDraft[]
@@ -32,6 +34,7 @@ const urlError = ref('')
 const extensionsInfoOpen = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 let pendingFocusHandler: (() => void) | null = null
+const instanceId = `gi-attachment-picker-${++attachmentPickerIdSequence}`
 
 const normalizedAllowedExtensions = computed(() => (props.allowedExtensions ?? []).map((extension: string) => extension.trim().toLowerCase()).filter((extension: string) => extension !== ''))
 const allowedExtensionsAccept = computed(() => normalizedAllowedExtensions.value.map((extension: string) => `.${extension}`).join(','))
@@ -170,7 +173,7 @@ function saveUrl() {
 	<div class="gi-attachment-picker">
 		<div class="gi-attachment-picker__toolbar">
 			<button class="gi-secondary-button gi-attachment-picker__trigger" type="button" @click="openFileDialog">Adjuntar archivos</button>
-			<input ref="fileInputRef" class="gi-attachment-picker__input" type="file" multiple :accept="allowedExtensionsAccept" @change="onFileChange" />
+			<input :id="`${instanceId}-files`" ref="fileInputRef" :name="`${instanceId}-files`" class="gi-attachment-picker__input" type="file" multiple :accept="allowedExtensionsAccept" @change="onFileChange" />
 			<button class="gi-secondary-button" type="button" @click="openUrlModal">Adjuntar URL</button>
 			<div v-if="allowedExtensionsLabel" class="gi-attachment-picker__helper-info">
 				<button class="gi-round-icon-button gi-attachment-picker__helper-button" type="button" aria-label="Ver tipos de archivo permitidos" :aria-expanded="extensionsInfoOpen" @click="extensionsInfoOpen = !extensionsInfoOpen">
@@ -223,11 +226,11 @@ function saveUrl() {
 				</header>
 				<label class="gi-field">
 					<span>Ruta URL</span>
-					<input v-model="urlDraft.url" class="gi-input" placeholder="https://..." />
+					<input :id="`${instanceId}-url`" v-model="urlDraft.url" :name="`${instanceId}-url`" class="gi-input" placeholder="https://..." />
 				</label>
 				<label class="gi-field">
 					<span>Nombre visible</span>
-					<input v-model="urlDraft.label" class="gi-input" placeholder="Video reunion.mp4" />
+					<input :id="`${instanceId}-label`" v-model="urlDraft.label" :name="`${instanceId}-label`" class="gi-input" placeholder="Video reunion.mp4" />
 				</label>
 				<p v-if="urlError" class="gi-form-error">{{ urlError }}</p>
 				<footer class="gi-dialog__footer">

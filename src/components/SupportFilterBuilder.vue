@@ -3,6 +3,8 @@ import { computed, reactive, ref, watch } from 'vue'
 import type { AssignableOption, SavedFilter, SearchableSelectOption, StatusOption, TypeNode } from '@/types'
 import SearchableSelect from './SearchableSelect.vue'
 
+let supportFilterBuilderIdSequence = 0
+
 type CriteriaKey = 'status' | 'createdBy' | 'assignedUser' | 'assignedGroup' | 'typeId' | 'province' | 'text' | 'updatedWithinDays' | 'createdAt' | 'updatedAt' | 'unassigned' | 'hasAttachments'
 
 type FilterCriteriaState = {
@@ -136,6 +138,11 @@ const overwriteCandidateId = ref<number | null>(null)
 const initializedStateKey = ref('')
 const textSearchInput = ref('')
 const suppressApply = ref(false)
+const instanceId = `gi-support-filter-builder-${++supportFilterBuilderIdSequence}`
+
+function getFieldId(suffix: string) {
+	return `${instanceId}-${suffix}`
+}
 
 function normalizeCollection<T>(items: T[] | Record<string, T> | undefined | null): T[] {
 	if (Array.isArray(items)) {
@@ -874,7 +881,7 @@ function getSuggestedSaveName() {
 		<div class="gi-filter-toolbar">
 			<label class="gi-field gi-filter-toolbar__field gi-filter-toolbar__field--search">
 				<span class="gi-filter-toolbar__label">Buscar</span>
-				<input v-model="textSearchInput" class="gi-input gi-filter-toolbar__search-input" type="search" placeholder="Buscar en cualquier campo del ticket y en comentarios" />
+				<input :id="getFieldId('search')" v-model="textSearchInput" :name="getFieldId('search')" class="gi-input gi-filter-toolbar__search-input" type="search" placeholder="Buscar en cualquier campo del ticket y en comentarios" />
 			</label>
 			<label class="gi-field gi-filter-toolbar__field">
 				<span class="gi-filter-toolbar__label">Filtros guardados</span>
@@ -918,86 +925,86 @@ function getSuggestedSaveName() {
 
 				<label class="gi-field">
 					<span>Tipo de filtro</span>
-					<SearchableSelect :model-value="modalCriterionKey || null" :options="criterionTypeOptions" placeholder="Selecciona un criterio" @update:modelValue="onModalCriterionChange(String($event ?? ''))" />
+					<SearchableSelect :model-value="modalCriterionKey || null" :options="criterionTypeOptions" :input-id="getFieldId('criterion-type-search')" :input-name="getFieldId('criterion-type-search')" placeholder="Selecciona un criterio" @update:modelValue="onModalCriterionChange(String($event ?? ''))" />
 				</label>
 
 				<div v-if="modalCriterionKey" class="gi-dialog__body">
 					<div v-if="modalCriterionKey === 'status'" class="gi-option-grid gi-option-grid--compact">
 						<label v-for="status in safeStatuses" :key="status.id" class="gi-check-tile" :class="{ 'gi-check-tile--disabled': !isDraftStatusSelectable(status.id) }">
-							<input :checked="draftCriteria.status.includes(status.id)" :disabled="!isDraftStatusSelectable(status.id)" type="checkbox" @change="toggleDraftStatus(status.id, ($event.target as HTMLInputElement).checked)" />
+							<input :id="getFieldId(`status-${status.id}`)" :name="getFieldId('status')" :checked="draftCriteria.status.includes(status.id)" :disabled="!isDraftStatusSelectable(status.id)" type="checkbox" @change="toggleDraftStatus(status.id, ($event.target as HTMLInputElement).checked)" />
 							<span>{{ status.label }}</span>
 						</label>
 					</div>
 
 					<label v-else-if="modalCriterionKey === 'assignedUser'" class="gi-field">
 						<span>Usuario asignado</span>
-						<SearchableSelect :model-value="draftCriteria.assignedUser || null" :options="draftUserOptions" placeholder="Selecciona un usuario" @update:modelValue="onDraftAssignedUserSelect" />
+						<SearchableSelect :model-value="draftCriteria.assignedUser || null" :options="draftUserOptions" :input-id="getFieldId('assigned-user-search')" :input-name="getFieldId('assigned-user-search')" placeholder="Selecciona un usuario" @update:modelValue="onDraftAssignedUserSelect" />
 					</label>
 
 					<label v-else-if="modalCriterionKey === 'createdBy'" class="gi-field">
 						<span>Creado por</span>
-						<SearchableSelect :model-value="draftCriteria.createdBy || null" :options="createdByOptions" placeholder="Selecciona un usuario" @update:modelValue="draftCriteria.createdBy = $event ? String($event) : ''" />
+						<SearchableSelect :model-value="draftCriteria.createdBy || null" :options="createdByOptions" :input-id="getFieldId('created-by-search')" :input-name="getFieldId('created-by-search')" placeholder="Selecciona un usuario" @update:modelValue="draftCriteria.createdBy = $event ? String($event) : ''" />
 					</label>
 
 					<label v-else-if="modalCriterionKey === 'assignedGroup'" class="gi-field">
 						<span>Grupo asignado</span>
-						<SearchableSelect :model-value="draftCriteria.assignedGroup || null" :options="draftGroupOptions" placeholder="Selecciona un grupo" @update:modelValue="onDraftAssignedGroupSelect" />
+						<SearchableSelect :model-value="draftCriteria.assignedGroup || null" :options="draftGroupOptions" :input-id="getFieldId('assigned-group-search')" :input-name="getFieldId('assigned-group-search')" placeholder="Selecciona un grupo" @update:modelValue="onDraftAssignedGroupSelect" />
 					</label>
 
 					<label v-else-if="modalCriterionKey === 'typeId'" class="gi-field">
 						<span>Tipo</span>
-						<SearchableSelect :model-value="draftCriteria.typeId || null" :options="typeSelectOptions" placeholder="Selecciona un tipo" @update:modelValue="onDraftTypeSelect" />
+						<SearchableSelect :model-value="draftCriteria.typeId || null" :options="typeSelectOptions" :input-id="getFieldId('type-search')" :input-name="getFieldId('type-search')" placeholder="Selecciona un tipo" @update:modelValue="onDraftTypeSelect" />
 					</label>
 
 					<label v-else-if="modalCriterionKey === 'province'" class="gi-field">
 						<span>Provincia</span>
-						<SearchableSelect :model-value="draftCriteria.province || null" :options="provinceOptions" placeholder="Selecciona una provincia" search-placeholder="Buscar provincia" clearable @update:modelValue="draftCriteria.province = $event ? String($event) : ''" />
+						<SearchableSelect :model-value="draftCriteria.province || null" :options="provinceOptions" :input-id="getFieldId('province-search')" :input-name="getFieldId('province-search')" placeholder="Selecciona una provincia" search-placeholder="Buscar provincia" clearable @update:modelValue="draftCriteria.province = $event ? String($event) : ''" />
 					</label>
 
 					<label v-else-if="modalCriterionKey === 'text'" class="gi-field">
 						<span>Texto libre</span>
-						<input v-model="draftCriteria.text" class="gi-input" placeholder="Título, descripción o seguimiento" />
+						<input :id="getFieldId('text')" v-model="draftCriteria.text" :name="getFieldId('text')" class="gi-input" placeholder="Título, descripción o seguimiento" />
 					</label>
 
 					<label v-else-if="modalCriterionKey === 'updatedWithinDays'" class="gi-field">
 						<span>Ultimos dias</span>
-						<input v-model="draftCriteria.updatedWithinDays" class="gi-input" inputmode="numeric" placeholder="30" />
+						<input :id="getFieldId('updated-within-days')" v-model="draftCriteria.updatedWithinDays" :name="getFieldId('updated-within-days')" class="gi-input" inputmode="numeric" placeholder="30" />
 					</label>
 
 					<div v-else-if="modalCriterionKey === 'createdAt'" class="gi-filter-modal__date-range">
 						<label class="gi-field">
 							<span>Fecha de inicio</span>
-							<input v-model="draftCriteria.createdAtFrom" class="gi-input" type="date" @input="syncDraftDateRange('createdAt', 'from')" />
+							<input :id="getFieldId('created-at-from')" v-model="draftCriteria.createdAtFrom" :name="getFieldId('created-at-from')" class="gi-input" type="date" @input="syncDraftDateRange('createdAt', 'from')" />
 						</label>
 						<label class="gi-field">
 							<span>Fecha de fin</span>
-							<input v-model="draftCriteria.createdAtTo" class="gi-input" type="date" @input="syncDraftDateRange('createdAt', 'to')" />
+							<input :id="getFieldId('created-at-to')" v-model="draftCriteria.createdAtTo" :name="getFieldId('created-at-to')" class="gi-input" type="date" @input="syncDraftDateRange('createdAt', 'to')" />
 						</label>
 					</div>
 
 					<div v-else-if="modalCriterionKey === 'updatedAt'" class="gi-filter-modal__date-range">
 						<label class="gi-field">
 							<span>Fecha de inicio</span>
-							<input v-model="draftCriteria.updatedAtFrom" class="gi-input" type="date" @input="syncDraftDateRange('updatedAt', 'from')" />
+							<input :id="getFieldId('updated-at-from')" v-model="draftCriteria.updatedAtFrom" :name="getFieldId('updated-at-from')" class="gi-input" type="date" @input="syncDraftDateRange('updatedAt', 'from')" />
 						</label>
 						<label class="gi-field">
 							<span>Fecha de fin</span>
-							<input v-model="draftCriteria.updatedAtTo" class="gi-input" type="date" @input="syncDraftDateRange('updatedAt', 'to')" />
+							<input :id="getFieldId('updated-at-to')" v-model="draftCriteria.updatedAtTo" :name="getFieldId('updated-at-to')" class="gi-input" type="date" @input="syncDraftDateRange('updatedAt', 'to')" />
 						</label>
 					</div>
 
 					<label v-else-if="modalCriterionKey === 'hasAttachments'" class="gi-switch-row gi-switch-row--modal">
-						<input v-model="draftCriteria.hasAttachments" type="checkbox" />
+						<input :id="getFieldId('has-attachments')" v-model="draftCriteria.hasAttachments" :name="getFieldId('has-attachments')" type="checkbox" />
 						<span>Solo tickets con adjuntos o rutas URL</span>
 					</label>
 
 					<label v-else class="gi-switch-row gi-switch-row--modal">
-						<input v-model="draftCriteria.unassigned" type="checkbox" />
+						<input :id="getFieldId('unassigned')" v-model="draftCriteria.unassigned" :name="getFieldId('unassigned')" type="checkbox" />
 						<span>Mostrar solo tickets sin usuario ni grupo asignado</span>
 					</label>
 
 					<label class="gi-switch-row gi-switch-row--modal">
-						<input :checked="getDraftNegation(modalCriterionKey)" type="checkbox" @change="setDraftNegation(modalCriterionKey, ($event.target as HTMLInputElement).checked)" />
+						<input :id="getFieldId('negated-filter')" :name="getFieldId('negated-filter')" :checked="getDraftNegation(modalCriterionKey)" type="checkbox" @change="setDraftNegation(modalCriterionKey, ($event.target as HTMLInputElement).checked)" />
 						<span>Negar este filtro</span>
 					</label>
 				</div>
@@ -1018,7 +1025,7 @@ function getSuggestedSaveName() {
 
 				<label class="gi-field">
 					<span>Nombre del filtro</span>
-					<input v-model="saveName" class="gi-input" placeholder="Nombre del filtro" />
+					<input :id="getFieldId('save-name')" v-model="saveName" :name="getFieldId('save-name')" class="gi-input" placeholder="Nombre del filtro" />
 				</label>
 
 				<p v-if="saveModalError" class="gi-dialog__message">{{ saveModalError }}</p>

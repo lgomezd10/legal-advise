@@ -68,6 +68,7 @@ class Version000001Date20260310090000 extends SimpleMigrationStep {
 			$table->addColumn('uploaded_by', Types::STRING, ['length' => 64, 'notnull' => true]);
 			$table->addColumn('original_name', Types::STRING, ['length' => 255, 'notnull' => true]);
 			$table->addColumn('stored_name', Types::STRING, ['length' => 255, 'notnull' => true]);
+			$table->addColumn('source_url', Types::STRING, ['length' => 2048, 'notnull' => false]);
 			$table->addColumn('mime_type', Types::STRING, ['length' => 190, 'notnull' => true]);
 			$table->addColumn('size', Types::INTEGER, ['notnull' => true]);
 			$table->addColumn('created_at', Types::INTEGER, ['notnull' => true]);
@@ -166,11 +167,15 @@ class Version000001Date20260310090000 extends SimpleMigrationStep {
 			$table = $schema->createTable('tk_filters');
 			$table->addColumn('id', Types::BIGINT, ['autoincrement' => true, 'notnull' => true, 'unsigned' => true]);
 			$table->addColumn('owner_uid', Types::STRING, ['length' => 64, 'notnull' => false]);
+			$table->addColumn('scope_type', Types::STRING, ['length' => 16, 'notnull' => false]);
 			$table->addColumn('name', Types::STRING, ['length' => 128, 'notnull' => true]);
 			$table->addColumn('criteria', Types::JSON, ['notnull' => true]);
+			$table->addColumn('active', Types::BOOLEAN, ['default' => true, 'notnull' => true]);
+			$table->addColumn('is_default', Types::BOOLEAN, ['default' => false, 'notnull' => true]);
 			$table->addColumn('is_predefined', Types::BOOLEAN, ['notnull' => false, 'default' => false]);
 			$table->addColumn('sort_order', Types::INTEGER, ['notnull' => true, 'default' => 0]);
 			$table->setPrimaryKey(['id']);
+			$table->addIndex(['scope_type', 'owner_uid'], 'tk_filters_scope_owner_ix');
 		}
 
 		if (!$schema->hasTable('tk_notif_prefs')) {
@@ -378,8 +383,11 @@ class Version000001Date20260310090000 extends SimpleMigrationStep {
 			if (!$this->exists('tk_filters', 'name', $filter['name'])) {
 				$this->insert('tk_filters', [
 					'owner_uid' => null,
+					'scope_type' => 'global',
 					'name' => $filter['name'],
 					'criteria' => json_encode($filter['criteria'], JSON_THROW_ON_ERROR),
+					'active' => true,
+					'is_default' => $filter['name'] === 'Asignadas a mi',
 					'is_predefined' => $filter['is_predefined'],
 					'sort_order' => $filter['sort_order'],
 				]);

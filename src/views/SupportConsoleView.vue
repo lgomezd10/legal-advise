@@ -322,7 +322,7 @@ function closeColumnEditor() {
 				</header>
 				<div class="gi-support-column-editor-modal__grid">
 					<div v-for="column in orderedColumns" :key="column.key" class="gi-switch-row gi-support-column-editor__item">
-						<input :checked="visibleColumns.includes(column.key)" type="checkbox" @change="toggleColumn(column.key, ($event.target as HTMLInputElement).checked)" />
+						<input :id="`support-column-visible-${column.key}`" :name="`support-column-visible-${column.key}`" :checked="visibleColumns.includes(column.key)" type="checkbox" @change="toggleColumn(column.key, ($event.target as HTMLInputElement).checked)" />
 						<span>{{ column.label }}</span>
 						<div class="gi-support-column-editor__order-actions">
 							<button class="gi-round-icon-button gi-support-column-editor__move-button" type="button" aria-label="Subir columna" title="Subir columna" :disabled="!visibleColumns.includes(column.key) || orderedVisibleColumns.indexOf(column.key) === 0" @click="moveColumn(column.key, -1)">
