@@ -4,11 +4,13 @@
     <name>Consultas Legales</name>
     <summary>Gestion integral de consultas legales con consola de usuario, soporte y administracion</summary>
     <description>Aplicacion nativa de Nextcloud para registrar, enrutar, gestionar y resolver consultas legales con integracion opcional con Tasks.</description>
-    <version>0.1.4</version>
+    <version>0.1.5</version>
     <licence>AGPL-3.0-or-later</licence>
-    <author mail="">lgomezd10</author>
+    <author mail="">lgdproyectos</author>
     <namespace>ConsultasLegales</namespace>
-    <category>productivity</category>
+    <category>organization</category>
+    <category>social</category>
+    <category>tools</category>
     <navigations>
         <navigation>
             <id>legal_advice</id>
@@ -20,7 +22,7 @@
         </navigation>
     </navigations>
     <dependencies>
-        <nextcloud min-version="30" max-version="30"/>
+        <nextcloud min-version="30" max-version="33"/>
         <php min-version="8.1"/>
         <database>sqlite</database>
         <database>mysql</database>

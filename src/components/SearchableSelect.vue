@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { SearchableSelectOption } from '@/types'
 
 let searchableSelectIdSequence = 0
@@ -35,10 +35,13 @@ const emit = defineEmits<{
 }>()
 
 const rootRef = ref<HTMLElement | null>(null)
+const panelRef = ref<HTMLElement | null>(null)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const open = ref(false)
 const query = ref('')
+const panelOffset = ref(0)
 const instanceId = `gi-search-select-${++searchableSelectIdSequence}`
+const viewportMargin = 16
 
 function normalizeOptions(options: SearchableSelectOption[] | Record<string, SearchableSelectOption> | undefined | null): SearchableSelectOption[] {
 	if (Array.isArray(options)) {
@@ -93,6 +96,30 @@ const searchInputName = computed(() => props.inputName ?? searchInputId.value)
 function closeDropdown() {
 	open.value = false
 	query.value = ''
+	panelOffset.value = 0
+}
+
+function updatePanelPosition() {
+	const panelElement = panelRef.value
+	if (!open.value || !panelElement || typeof window === 'undefined') {
+		panelOffset.value = 0
+		return
+	}
+
+	panelOffset.value = 0
+	const panelRect = panelElement.getBoundingClientRect()
+	const maxRight = window.innerWidth - viewportMargin
+	let nextOffset = 0
+
+	if (panelRect.right > maxRight) {
+		nextOffset -= panelRect.right - maxRight
+	}
+
+	if (panelRect.left + nextOffset < viewportMargin) {
+		nextOffset += viewportMargin - (panelRect.left + nextOffset)
+	}
+
+	panelOffset.value = nextOffset
 }
 
 async function openDropdown() {
@@ -103,6 +130,7 @@ async function openDropdown() {
 	open.value = true
 	query.value = ''
 	await nextTick()
+	updatePanelPosition()
 	searchInputRef.value?.focus()
 }
 
@@ -132,12 +160,29 @@ function handleDocumentPointerDown(event: Event) {
 	closeDropdown()
 }
 
+function handleWindowLayoutChange() {
+	updatePanelPosition()
+}
+
 onMounted(() => {
 	document.addEventListener('pointerdown', handleDocumentPointerDown)
+	window.addEventListener('resize', handleWindowLayoutChange)
+	window.addEventListener('scroll', handleWindowLayoutChange, true)
 })
 
 onBeforeUnmount(() => {
 	document.removeEventListener('pointerdown', handleDocumentPointerDown)
+	window.removeEventListener('resize', handleWindowLayoutChange)
+	window.removeEventListener('scroll', handleWindowLayoutChange, true)
+})
+
+watch(() => [open.value, query.value, filteredOptions.value.length], async ([isOpen]) => {
+	if (!isOpen) {
+		return
+	}
+
+	await nextTick()
+	updatePanelPosition()
 })
 </script>
 
@@ -150,7 +195,7 @@ onBeforeUnmount(() => {
 			<span class="gi-search-select__trigger-icon">▾</span>
 		</button>
 
-		<div v-if="open" class="gi-search-select__panel">
+		<div v-if="open" ref="panelRef" class="gi-search-select__panel" :style="{ transform: `translateX(${panelOffset}px)` }">
 			<input ref="searchInputRef" v-model="query" :id="searchInputId" :name="searchInputName" class="gi-input gi-search-select__search" :placeholder="searchPlaceholder" />
 			<button v-if="clearable && normalizedModelValue" class="gi-search-select__clear" type="button" @click="selectOption(null)">
 				Limpiar seleccion
@@ -178,6 +223,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .gi-search-select {
 	position: relative;
+	--gi-search-select-panel-min-width: 18rem;
 	min-width: 0;
 }
 
@@ -245,16 +291,19 @@ onBeforeUnmount(() => {
 .gi-search-select__panel {
 	position: absolute;
 	left: 0;
-	right: 0;
 	top: calc(100% + .35rem);
 	z-index: 20;
 	display: grid;
 	gap: .55rem;
+	min-width: var(--gi-search-select-panel-min-width);
+	width: max-content;
+	max-width: min(36rem, calc(100vw - 2rem));
 	padding: .65rem;
 	border-radius: 16px;
 	background: var(--gi-color-surface-plain);
 	border: 1px solid var(--gi-color-border-strong);
 	box-shadow: 0 18px 42px var(--gi-color-shadow-medium);
+	box-sizing: border-box;
 }
 
 .gi-search-select__search {

@@ -55,6 +55,7 @@ export const useTicketsStore = defineStore('tickets', {
 			}
 
 			await this.select(ticketId)
+			this.items = this.items.map((item) => item.id === ticketId && this.selected ? this.selected : item)
 		},
 		async reopen(ticketId: number) {
 			this.selected = await reopenTicket(ticketId)

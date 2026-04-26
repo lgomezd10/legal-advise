@@ -80,6 +80,7 @@ watch(() => props.modelValue, () => {
 <style scoped>
 .gi-plain-text-editor {
 	position: relative;
+	width: 100%;
 }
 
 .gi-plain-text-editor__surface {

@@ -176,6 +176,12 @@ export interface SavedFilter {
 }
 
 export interface BootstrapData {
+		appInfo: {
+			id: string
+			version: string
+			storageBytes: number
+			storageLabel: string
+		}
 	currentUser: {
 		uid: string
 		displayName: string

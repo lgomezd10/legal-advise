@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive } from 'vue'
-import type { SupportColumnKey, Ticket, TypeNode } from '@/types'
+import type { SupportColumnKey, Ticket, TypeNode, UrgencyCatalogItem } from '@/types'
 import { getTypeLabel } from '@/services/ticketDraft'
 import { formatDateTime } from '@/utils/formatting'
 import { excerptRichText, richTextToPlainText } from '@/utils/richText'
@@ -19,6 +19,7 @@ const props = defineProps<{
 	emptyLabel: string
 	visibleColumns: SupportColumnKey[]
 	types?: TypeNode[]
+	urgencies?: UrgencyCatalogItem[]
 	sortKey?: SupportColumnKey | 'createdBy'
 	sortDirection?: 'asc' | 'desc'
 }>()
@@ -69,6 +70,7 @@ const tableStyle = computed(() => ({
 	width: `${columns.value.reduce((total, column) => total + (columnWidths[column.key] ?? column.defaultWidth), 0)}px`,
 }))
 const safeTypes = computed<TypeNode[]>(() => props.types ?? [])
+const urgencyMap = computed<Map<number, UrgencyCatalogItem>>(() => new Map((props.urgencies ?? []).map((urgency: UrgencyCatalogItem) => [Number(urgency.id ?? 0), urgency])))
 
 function formatAssignment(ticket: Ticket) {
 	const parts = [ticket.assignedUserUid, ticket.assignedGroupId ? `Grupo ${ticket.assignedGroupId}` : '']
@@ -87,12 +89,61 @@ function resolveTypeLabel(ticket: Ticket) {
 	return province ? `${province}: ${typeLabel}` : typeLabel
 }
 
+function resolveUrgency(ticket: Ticket): UrgencyCatalogItem | null {
+	const urgencyId = Number(ticket.urgencyId ?? 0)
+	if (!urgencyId) {
+		return null
+	}
+
+	return urgencyMap.value.get(urgencyId) ?? null
+}
+
+function getUrgencyLabel(ticket: Ticket) {
+	const urgency = resolveUrgency(ticket)
+	if (!urgency) {
+		return ticket.urgencyId ? `Criticidad ${ticket.urgencyId}` : 'Sin criticidad'
+	}
+
+	return urgency.name
+}
+
+function getUrgencyStyle(ticket: Ticket) {
+	const urgency = resolveUrgency(ticket)
+	if (!urgency?.color) {
+		return undefined
+	}
+
+	const color = urgency.color
+	const textColor = getReadableTextColor(color)
+	return {
+		'--gi-urgency-color': color,
+		'--gi-urgency-text-color': textColor,
+	}
+}
+
+function getReadableTextColor(color: string) {
+	const normalized = color.trim().replace('#', '')
+	if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+		return '#1f2937'
+	}
+
+	const red = Number.parseInt(normalized.slice(0, 2), 16)
+	const green = Number.parseInt(normalized.slice(2, 4), 16)
+	const blue = Number.parseInt(normalized.slice(4, 6), 16)
+	const luminance = (0.299 * red) + (0.587 * green) + (0.114 * blue)
+	return luminance > 160 ? '#1f2937' : '#ffffff'
+}
+
 function getColumnStyle(column: SupportColumn) {
 	const width = columnWidths[column.key] ?? column.defaultWidth
 	return {
 		width: `${width}px`,
 		minWidth: `${width}px`,
 	}
+}
+
+function isBadgeColumn(columnKey: SupportColumnKey) {
+	return columnKey === 'status' || columnKey === 'urgency'
 }
 
 function getCellTitle(columnKey: SupportColumnKey, ticket: Ticket) {
@@ -125,7 +176,7 @@ function getCellTitle(columnKey: SupportColumnKey, ticket: Ticket) {
 	}
 
 	if (columnKey === 'urgency') {
-		return String(ticket.urgencyId ?? 'Sin criticidad')
+		return getUrgencyLabel(ticket)
 	}
 
 	if (columnKey === 'createdAt') {
@@ -198,7 +249,7 @@ onBeforeUnmount(() => {
 				</colgroup>
 				<thead>
 					<tr>
-						<th v-for="column in columns" :key="column.key" :style="getColumnStyle(column)">
+						<th v-for="column in columns" :key="column.key" :class="{ 'gi-support-table__column--badge': isBadgeColumn(column.key) }" :style="getColumnStyle(column)">
 							<div class="gi-support-table__header-content">
 								<button class="gi-support-table__sort-button" type="button" @click="toggleSort(column.key)">
 									<span class="gi-support-table__header-label">{{ column.label }}</span>
@@ -211,7 +262,7 @@ onBeforeUnmount(() => {
 				</thead>
 				<tbody>
 					<tr v-for="ticket in tickets" :key="ticket.id" class="gi-support-table__row" @click="emit('open', ticket.id)">
-						<td v-for="column in columns" :key="column.key" :style="getColumnStyle(column)" :title="getCellTitle(column.key, ticket)">
+						<td v-for="column in columns" :key="column.key" :class="{ 'gi-support-table__column--badge': isBadgeColumn(column.key) }" :style="getColumnStyle(column)" :title="getCellTitle(column.key, ticket)">
 							<template v-if="column.key === 'number'">
 								<strong class="gi-support-table__cell-text">{{ ticket.number }}</strong>
 							</template>
@@ -232,10 +283,10 @@ onBeforeUnmount(() => {
 								<span class="gi-support-table__cell-text">{{ formatAssignment(ticket) }}</span>
 							</template>
 							<template v-else-if="column.key === 'status'">
-								<span class="gi-badge gi-badge--success gi-support-table__cell-text">{{ ticket.status }}</span>
+								<span class="gi-badge gi-badge--success gi-support-table__badge gi-support-table__status">{{ ticket.status }}</span>
 							</template>
 							<template v-else-if="column.key === 'urgency'">
-								<span class="gi-support-table__cell-text">{{ ticket.urgencyId ?? 'Sin criticidad' }}</span>
+								<span class="gi-badge gi-support-table__badge gi-support-table__urgency" :style="getUrgencyStyle(ticket)">{{ getUrgencyLabel(ticket) }}</span>
 							</template>
 							<template v-else-if="column.key === 'createdAt'">
 								<span class="gi-support-table__cell-text">{{ formatDateTime(ticket.createdAt) }}</span>
@@ -266,6 +317,10 @@ onBeforeUnmount(() => {
 }
 
 .gi-support-table {
+	--gi-column-padding-x: .8rem;
+	--gi-column-padding-x-badge: 1.15rem;
+	--gi-resize-handle-width: .7rem;
+	--gi-resize-handle-gap: .35rem;
 	min-width: 0;
 	border-collapse: separate;
 	border-spacing: 0;
@@ -276,12 +331,18 @@ onBeforeUnmount(() => {
 .gi-support-table td {
 	min-width: 0;
 	max-width: 0;
-	padding: .95rem 1rem;
+	padding: .95rem var(--gi-column-padding-x);
 	text-align: left;
 	vertical-align: top;
 	border-bottom: 1px solid var(--gi-color-border);
 	background: var(--gi-color-surface);
 	overflow: hidden;
+}
+
+.gi-support-table th.gi-support-table__column--badge,
+.gi-support-table td.gi-support-table__column--badge {
+	padding-left: var(--gi-column-padding-x-badge);
+	padding-right: var(--gi-column-padding-x-badge);
 }
 
 .gi-support-table thead th {
@@ -299,7 +360,7 @@ onBeforeUnmount(() => {
 	position: relative;
 	min-height: 1.8rem;
 	min-width: 0;
-	padding-right: 1rem;
+	padding-right: calc((var(--gi-resize-handle-width) / 2) + var(--gi-resize-handle-gap));
 }
 
 .gi-support-table__header-label {
@@ -314,7 +375,7 @@ onBeforeUnmount(() => {
 	display: inline-flex;
 	align-items: center;
 	gap: .35rem;
-	max-width: calc(100% - 1rem);
+	max-width: calc(100% - ((var(--gi-resize-handle-width) / 2) + var(--gi-resize-handle-gap)));
 	min-width: 0;
 	border: none;
 	padding: 0;
@@ -341,18 +402,43 @@ onBeforeUnmount(() => {
 	text-overflow: ellipsis;
 }
 
+.gi-support-table__badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: auto;
+	max-width: 100%;
+	margin-inline: auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gi-support-table__status,
+.gi-support-table__urgency {
+	text-align: center;
+	background: var(--gi-urgency-color, var(--gi-color-surface-subtle));
+	color: var(--gi-urgency-text-color, var(--gi-color-text));
+}
+
+.gi-support-table__status {
+	background: #e3f4e6;
+	color: #1f7a31;
+}
+
 .gi-support-table__resize-handle {
 	position: absolute;
-	right: 0;
+	right: calc(var(--gi-resize-handle-width) / -2);
 	top: 50%;
 	transform: translateY(-50%);
-	width: .8rem;
+	width: var(--gi-resize-handle-width);
 	height: 1.8rem;
 	border: none;
 	border-radius: 999px;
 	background: linear-gradient(180deg, var(--gi-color-border), var(--gi-color-border-strong));
 	cursor: col-resize;
 	padding: 0;
+	z-index: 3;
 }
 
 .gi-support-table__row {

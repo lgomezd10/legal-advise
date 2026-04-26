@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace OCA\ConsultasLegales\Service;
 
 use OCA\ConsultasLegales\AppInfo\Application;
+use OCA\ConsultasLegales\Db\AttachmentMapper;
 use OCP\App\IAppManager;
 use OCP\IGroupManager;
 use OCP\IUserManager;
 use OCP\IUserSession;
+use OCP\Util;
 
 class BootstrapService {
 	public function __construct(
@@ -23,6 +25,7 @@ class BootstrapService {
 		private readonly IGroupManager $groupManager,
 		private readonly IUserManager $userManager,
 		private readonly IAppManager $appManager,
+		private readonly AttachmentMapper $attachmentMapper,
 	) {
 	}
 
@@ -51,6 +54,7 @@ class BootstrapService {
 				'uid' => $uid,
 				'displayName' => $user?->getDisplayName() ?? '',
 			],
+			'appInfo' => $this->buildAppInfo(),
 			'roles' => $roles,
 			'navigation' => array_values(array_filter($navigation, static fn (array $item) => $item['visible'])),
 			'catalogs' => [
@@ -77,6 +81,7 @@ class BootstrapService {
 				'uid' => $uid,
 				'displayName' => $displayName,
 			],
+			'appInfo' => $this->buildAppInfo(),
 			'roles' => [],
 			'navigation' => [],
 			'catalogs' => [
@@ -94,6 +99,17 @@ class BootstrapService {
 				'groups' => [],
 			],
 			'tasksIntegration' => $this->taskSyncService->getIntegrationStatus(),
+		];
+	}
+
+	private function buildAppInfo(): array {
+		$storageBytes = $this->attachmentMapper->getTotalStoredBytes();
+
+		return [
+			'id' => Application::APP_ID,
+			'version' => $this->appManager->getAppVersion(Application::APP_ID),
+			'storageBytes' => $storageBytes,
+			'storageLabel' => Util::humanFileSize($storageBytes),
 		];
 	}
 

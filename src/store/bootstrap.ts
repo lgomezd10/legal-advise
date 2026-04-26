@@ -4,6 +4,7 @@ import { fetchBootstrap } from '@/services/bootstrap'
 import type { BootstrapData } from '@/types'
 
 const fallbackState: BootstrapData = {
+		appInfo: { id: 'legal_advice', version: '', storageBytes: 0, storageLabel: '0 B' },
 	currentUser: { uid: '', displayName: '' },
 	roles: [],
 	navigation: [],

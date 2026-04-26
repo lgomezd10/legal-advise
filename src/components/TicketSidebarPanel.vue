@@ -248,6 +248,11 @@ const historyEntries = computed(() => formatHistoryEntries(props.ticket?.history
 	groups: safeGroups.value,
 	urgencies: safeUrgencies.value,
 }))
+
+function resolveVisibilityLabel(value: 'interno' | 'publico') {
+	return value === 'interno' ? 'Interno' : 'Público'
+}
+
 const currentEditPayload = computed<Record<string, unknown>>(() => ({
 	title: editableTicket.title.trim(),
 	status: editableTicket.status,
@@ -726,7 +731,7 @@ function assignToCurrentUser() {
 						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.assignedGroupId" :options="groupOptions" placeholder="Sin grupo" clearable @update:modelValue="onAssignedGroupChange" />
 					</div>
 				</div>
-				<label v-if="requiresCloseReason" class="gi-field gi-field--wide">
+				<label v-if="requiresCloseReason" class="gi-field gi-field--wide gi-sidebar-panel__close-reason-field">
 					<span>Motivo del cierre</span>
 					<PlainTextEditor :input-id="getFieldId('close-reason')" v-model="closeReason" placeholder="Explica el motivo del cierre. Se publicará como un comentario." :min-height="120" />
 				</label>
@@ -818,7 +823,7 @@ function assignToCurrentUser() {
 					<button v-if="filteredComments.length" class="gi-secondary-button" type="button" @click="exportComments">
 						Exportar comentarios
 					</button>
-					<button class="gi-secondary-button gi-sidebar-panel__sort-button" type="button" @click="toggleCommentsSortDirection">
+					<button class="gi-secondary-button" type="button" @click="toggleCommentsSortDirection">
 						{{ commentsSortDirection === 'desc' ? 'Fecha: más recientes primero' : 'Fecha: más antiguas primero' }}
 					</button>
 					<button v-if="!fullscreen" class="gi-secondary-button" type="button" @click="emit('fullscreen')">Expandir comentarios</button>
@@ -855,7 +860,10 @@ function assignToCurrentUser() {
 				<article v-for="item in orderedComments" :key="item.id" class="gi-sidebar-panel__accordion-item">
 					<button class="gi-sidebar-panel__accordion-trigger" type="button" @click="toggleExpandedComment(item.id)">
 						<span class="gi-sidebar-panel__accordion-trigger-content">
-							<span class="gi-sidebar-panel__accordion-meta">{{ formatDateTime(item.createdAt) }} · {{ resolveUserLabel(item.authorUid) }}</span>
+							<span class="gi-sidebar-panel__accordion-meta">
+								<span>{{ formatDateTime(item.createdAt) }} · {{ resolveUserLabel(item.authorUid) }}</span>
+								<span class="gi-badge gi-badge--success">{{ resolveVisibilityLabel(item.visibility) }}</span>
+							</span>
 							<span class="gi-sidebar-panel__accordion-summary">{{ commentSummary(item) }}</span>
 						</span>
 						<span class="gi-sidebar-panel__accordion-icon" aria-hidden="true">{{ expandedCommentIds.includes(item.id) ? '▾' : '▸' }}</span>
@@ -1023,6 +1031,17 @@ function assignToCurrentUser() {
 	display: grid;
 	gap: .85rem;
 	padding: 1rem 0;
+}
+
+.gi-sidebar-panel__close-reason-field {
+	width: 100%;
+	min-width: 0;
+}
+
+.gi-sidebar-panel__close-reason-field :deep(.gi-plain-text-editor),
+.gi-sidebar-panel__close-reason-field :deep(.gi-plain-text-editor__surface) {
+	width: 100%;
+	max-width: none;
 }
 
 .gi-sidebar-panel__compact-select-grid {
@@ -1247,12 +1266,20 @@ function assignToCurrentUser() {
 }
 
 .gi-sidebar-panel__sort-button {
-	display: inline-flex;
+	display: flex;
 	align-items: center;
 	justify-content: center;
-	justify-self: flex-start;
+	justify-self: stretch;
+	width: 100%;
 	min-height: 2.364rem;
-	white-space: nowrap;
+	box-sizing: border-box;
+	text-align: center;
+}
+
+.gi-sidebar-panel__comments-mobile-actions > .gi-secondary-button {
+	width: 100%;
+	justify-content: center;
+	box-sizing: border-box;
 }
 
 .gi-sidebar-panel__selected-file {
@@ -1382,8 +1409,5 @@ function assignToCurrentUser() {
 		background: rgba(247, 250, 248, .95);
 	}
 
-	.gi-sidebar-panel__comments-mobile-actions > .gi-secondary-button {
-		width: 100%;
-	}
 }
 </style>

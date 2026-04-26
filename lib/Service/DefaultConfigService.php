@@ -243,8 +243,10 @@ class DefaultConfigService {
 
 		$defaults = [
 			['profile' => RoleService::USER, 'principalType' => 'group', 'principalId' => 'userLegal'],
+			['profile' => RoleService::USER, 'principalType' => 'group', 'principalId' => 'admin'],
 			['profile' => RoleService::SUPPORT, 'principalType' => 'group', 'principalId' => 'supportLegal'],
-			['profile' => RoleService::ADMIN, 'principalType' => 'group', 'principalId' => 'adminLegal'],
+			['profile' => RoleService::SUPPORT, 'principalType' => 'group', 'principalId' => 'admin'],
+			['profile' => RoleService::ADMIN, 'principalType' => 'group', 'principalId' => 'admin'],
 		];
 
 		foreach ($defaults as $row) {

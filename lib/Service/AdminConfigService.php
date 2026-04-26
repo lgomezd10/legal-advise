@@ -106,10 +106,11 @@ class AdminConfigService {
 		}
 
 		if (isset($payload['types']) && is_array($payload['types'])) {
-			$this->saveTypes($payload['types']);
+			$this->syncTypes($payload['types']);
 		}
 
 		if (isset($payload['rules']) && is_array($payload['rules'])) {
+			$persistedRuleIds = [];
 			foreach ($payload['rules'] as $row) {
 				$province = $this->provinceCatalogService->normalize(is_string($row['province'] ?? null) ? (string) $row['province'] : null);
 				if (($row['province'] ?? null) !== null && trim((string) $row['province']) !== '' && $province === null) {
@@ -125,8 +126,16 @@ class AdminConfigService {
 				if (isset($row['id'])) {
 					$entity->setId((int) $row['id']);
 					$this->ruleMapper->update($entity);
+					$persistedRuleIds[] = (int) $row['id'];
 				} else {
-					$this->ruleMapper->insert($entity);
+					$entity = $this->ruleMapper->insert($entity);
+					$persistedRuleIds[] = (int) $entity->getId();
+				}
+			}
+
+			foreach ($this->ruleMapper->findAllOrdered('id', 'ASC') as $existingRule) {
+				if (!in_array((int) $existingRule->getId(), $persistedRuleIds, true)) {
+					$this->ruleMapper->delete($existingRule);
 				}
 			}
 		}
@@ -154,6 +163,16 @@ class AdminConfigService {
 					'principalType' => $principalType,
 					'principalId' => $principalId,
 				];
+			}
+
+			$hasAdminGroup = array_reduce(
+				array_values($normalizedProfiles),
+				static fn (bool $carry, array $row): bool => $carry || ($row['profile'] === RoleService::ADMIN && $row['principalType'] === 'group'),
+				false,
+			);
+
+			if (!$hasAdminGroup) {
+				throw new \InvalidArgumentException('El perfil Administrador debe conservar al menos un grupo asignado.');
 			}
 
 			foreach ($this->profileMapper->findAllOrdered('id', 'ASC') as $existingProfile) {
@@ -205,7 +224,25 @@ class AdminConfigService {
 		return max(1, $normalized > 0 ? $normalized : 25);
 	}
 
-	private function saveTypes(array $rows, ?int $parentId = null, string $parentSlug = '', int $level = 0): void {
+	private function syncTypes(array $rows): void {
+		$persistedTypeIds = [];
+		$this->saveTypes($rows, null, '', 0, $persistedTypeIds);
+
+		$obsoleteTypes = array_values(array_filter(
+			$this->typeMapper->findAllOrdered('level', 'DESC'),
+			static fn (IncidentType $type): bool => !in_array((int) $type->getId(), $persistedTypeIds, true),
+		));
+
+		foreach ($obsoleteTypes as $type) {
+			$this->ruleMapper->deleteBy('type_id', (int) $type->getId());
+		}
+
+		foreach ($obsoleteTypes as $type) {
+			$this->typeMapper->delete($type);
+		}
+	}
+
+	private function saveTypes(array $rows, ?int $parentId = null, string $parentSlug = '', int $level = 0, array &$persistedTypeIds = []): void {
 		foreach ($rows as $index => $row) {
 			$name = trim((string) ($row['name'] ?? ''));
 			if ($name === '') {
@@ -242,8 +279,10 @@ class AdminConfigService {
 				$entity = $this->typeMapper->insert($entity);
 			}
 
+			$persistedTypeIds[] = (int) $entity->getId();
+
 			if (isset($row['children']) && is_array($row['children'])) {
-				$this->saveTypes($row['children'], (int) $entity->getId(), $slug, $level + 1);
+				$this->saveTypes($row['children'], (int) $entity->getId(), $slug, $level + 1, $persistedTypeIds);
 			}
 		}
 	}
