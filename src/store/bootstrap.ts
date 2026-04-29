@@ -9,6 +9,7 @@ const fallbackState: BootstrapData = {
 	roles: [],
 	navigation: [],
 	personalConfig: {},
+	personalConfigHasStoredValues: false,
 	catalogs: { statuses: [], urgencies: [], types: [], fields: [], provinces: [], attachmentConfig: { allowedExtensions: [], maxFileSizeMb: 25 } },
 	supportFilters: [],
 	assignables: { users: [], groups: [] },
@@ -48,10 +49,11 @@ export const useBootstrapStore = defineStore('bootstrap', {
 					},
 				}
 			},
-		setPersonalConfig(personalConfig: Record<string, string>) {
+		setPersonalConfig(personalConfig: Record<string, string>, hasStoredValues?: boolean) {
 			this.data = {
 				...this.data,
 				personalConfig: { ...personalConfig },
+				personalConfigHasStoredValues: hasStoredValues ?? this.data.personalConfigHasStoredValues,
 			}
 		},
 	},

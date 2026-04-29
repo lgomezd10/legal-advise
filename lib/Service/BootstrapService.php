@@ -67,6 +67,7 @@ class BootstrapService {
 			],
 			'supportFilters' => $uid === '' ? [] : $this->supportFilterService->listForConsole($uid),
 			'personalConfig' => $uid === '' ? [] : $this->personalConfigService->getForUser($uid),
+			'personalConfigHasStoredValues' => $uid !== '' && $this->personalConfigService->hasStoredValues($uid),
 			'assignables' => [
 				'users' => $assignableUsers,
 				'groups' => $assignableGroups,
@@ -94,6 +95,7 @@ class BootstrapService {
 			],
 			'supportFilters' => [],
 			'personalConfig' => [],
+			'personalConfigHasStoredValues' => false,
 			'assignables' => [
 				'users' => [],
 				'groups' => [],

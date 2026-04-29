@@ -22,7 +22,6 @@ export function createDefaultTicketDraft(personalConfig: Record<string, string>,
 		title: '',
 		userDescription: '',
 		urgencyId: getDefaultUrgencyId(urgencies),
-		communicationChannel: 'nextcloud_mail',
 		personalData: { ...personalConfig },
 		attachments: { files: [], links: [] },
 	}
@@ -103,7 +102,6 @@ export function createRepeatTicketDraft(ticket: Ticket, types: TypeNode[], perso
 		title: ticket.title,
 		userDescription: ticket.userDescription,
 		urgencyId: ticket.urgencyId ? String(ticket.urgencyId) : getDefaultUrgencyId(urgencies),
-		communicationChannel: String(ticket.metadata?.communicationChannel ?? 'nextcloud_mail'),
 		personalData: {
 			...personalConfig,
 			...ticketPersonalData,

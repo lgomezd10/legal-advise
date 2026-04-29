@@ -26,7 +26,6 @@ const form = reactive({
 	title: '',
 	userDescription: '',
 	urgencyId: '',
-	communicationChannel: 'nextcloud_mail',
 	personalData: {} as Record<string, string>,
 	attachments: { files: [] as File[], links: [] as TicketAttachmentLinkDraft[] },
 })
@@ -36,11 +35,6 @@ const urgencyOptions = computed<SearchableSelectOption[]>(() => props.urgencies.
 	value: String(urgency.id),
 	label: String(urgency.name),
 })))
-const channelOptions: SearchableSelectOption[] = [
-	{ value: 'nextcloud', label: 'Nextcloud' },
-	{ value: 'mail', label: 'Correo' },
-	{ value: 'nextcloud_mail', label: 'Nextcloud y correo' },
-]
 const visibleFields = computed(() => props.fields.filter((field: CatalogField) => field.fieldKey !== 'province'))
 
 function applyDraft(draft: TicketDraft | null | undefined) {
@@ -48,7 +42,6 @@ function applyDraft(draft: TicketDraft | null | undefined) {
 	form.title = draft?.title ?? ''
 	form.userDescription = draft?.userDescription ?? ''
 	form.urgencyId = draft?.urgencyId ?? ''
-	form.communicationChannel = draft?.communicationChannel ?? 'nextcloud_mail'
 	form.personalData = { ...(draft?.personalData ?? {}) }
 	form.attachments = {
 		files: [...(draft?.attachments?.files ?? [])],
@@ -72,7 +65,6 @@ function submit() {
 		title: form.title,
 		userDescription: form.userDescription,
 		urgencyId: form.urgencyId ? Number(form.urgencyId) : null,
-		communicationChannel: form.communicationChannel,
 		personalData: form.personalData,
 			attachments: {
 				files: [...form.attachments.files],
@@ -90,7 +82,6 @@ const canSubmit = computed(() => Boolean(selectedTypeId.value) && form.title.tri
 		<div class="gi-form-grid">
 			<label class="gi-field gi-field--wide"><span>Título</span><input id="ticket-form-title" v-model="form.title" name="ticket-form-title" class="gi-input" /></label>
 			<div class="gi-field"><span>Criticidad</span><SearchableSelect v-model="form.urgencyId" :options="urgencyOptions" placeholder="Selecciona" clearable /></div>
-			<div class="gi-field"><span>Canal de comunicación</span><SearchableSelect v-model="form.communicationChannel" :options="channelOptions" placeholder="Selecciona" /></div>
 			<div class="gi-field gi-field--wide">
 				<span>Descripción</span>
 				<RichTextEditor v-model="form.userDescription" placeholder="Describe el ticket" :min-height="220" />

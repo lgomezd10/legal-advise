@@ -71,6 +71,7 @@ const closeReason = ref('')
 const editableBaseSnapshot = ref('')
 const syncedTicketId = ref<number | null>(null)
 const waitingForSaveSync = ref(false)
+const statusEditedManually = ref(false)
 const instanceId = `gi-ticket-sidebar-${++ticketSidebarPanelIdSequence}`
 
 function getFieldId(suffix: string) {
@@ -261,6 +262,17 @@ const currentEditPayload = computed<Record<string, unknown>>(() => ({
 	assignedGroupId: editableTicket.assignedGroupId,
 	supportDescription: editableTicket.supportDescription,
 }))
+const baseEditPayload = computed<Record<string, unknown>>(() => editableBaseSnapshot.value !== ''
+	? JSON.parse(editableBaseSnapshot.value) as Record<string, unknown>
+	: {})
+const changedEditPayload = computed<Record<string, unknown>>(() => Object.entries(currentEditPayload.value).reduce<Record<string, unknown>>((changes, [key, value]) => {
+	if (baseEditPayload.value[key] !== value) {
+		changes[key] = value
+	}
+
+	return changes
+}, {}))
+
 const targetStatusOption = computed(() => safeStatuses.value.find((item: StatusOption) => item.id === editableTicket.status) ?? null)
 const requiresCloseReason = computed(() => {
 	if (!canEditTicket.value || !props.ticket) {
@@ -274,7 +286,7 @@ const requiresCloseReason = computed(() => {
 
 	return Boolean(nextStatus.closed) && !isClosedTicket.value
 })
-const dirty = computed(() => canEditTicket.value && (JSON.stringify(currentEditPayload.value) !== editableBaseSnapshot.value || closeReason.value.trim() !== ''))
+const dirty = computed(() => canEditTicket.value && (Object.keys(changedEditPayload.value).length > 0 || closeReason.value.trim() !== ''))
 const filteredComments = computed(() => (props.ticket?.comments ?? []).filter((item: TicketComment) => {
 	const term = commentsSearchText.value.trim().toLowerCase()
 	if (term) {
@@ -415,6 +427,7 @@ watch(() => props.ticket ? JSON.stringify({
 		editableTicket.assignedUserUid = nextPayload.assignedUserUid
 		editableTicket.assignedGroupId = nextPayload.assignedGroupId
 		editableTicket.supportDescription = nextPayload.supportDescription
+		statusEditedManually.value = false
 		closeReason.value = ''
 		editableBaseSnapshot.value = nextSnapshot
 		syncedTicketId.value = props.ticket.id
@@ -447,6 +460,7 @@ function onStatusChange(value: string | number | null) {
 		return
 	}
 
+	statusEditedManually.value = true
 	editableTicket.status = String(value)
 	if (!requiresCloseReason.value) {
 		closeReason.value = ''
@@ -455,6 +469,31 @@ function onStatusChange(value: string | number | null) {
 
 function onUrgencyChange(value: string | number | null) {
 	editableTicket.urgencyId = value ? Number(value) : null
+}
+
+function hasAssignment(assignedUserUid: string | null, assignedGroupId: string | null) {
+	return Boolean(assignedUserUid || assignedGroupId)
+}
+
+function syncDerivedStatusFromAssignment() {
+	if (statusEditedManually.value) {
+		return
+	}
+
+	const baseAssignedUserUid = typeof baseEditPayload.value.assignedUserUid === 'string' ? baseEditPayload.value.assignedUserUid : null
+	const baseAssignedGroupId = typeof baseEditPayload.value.assignedGroupId === 'string' ? baseEditPayload.value.assignedGroupId : null
+	const baseStatus = typeof baseEditPayload.value.status === 'string' ? baseEditPayload.value.status : ''
+	const assignmentChanged = editableTicket.assignedUserUid !== baseAssignedUserUid || editableTicket.assignedGroupId !== baseAssignedGroupId
+
+	if (!assignmentChanged) {
+		editableTicket.status = baseStatus
+	} else {
+		editableTicket.status = hasAssignment(editableTicket.assignedUserUid, editableTicket.assignedGroupId) ? 'asignado' : 'nuevo'
+	}
+
+	if (!requiresCloseReason.value) {
+		closeReason.value = ''
+	}
 }
 
 function onAssignedUserChange(value: string | number | null) {
@@ -467,6 +506,8 @@ function onAssignedUserChange(value: string | number | null) {
 			editableTicket.assignedGroupId = null
 		}
 	}
+
+	syncDerivedStatusFromAssignment()
 }
 
 function onAssignedGroupChange(value: string | number | null) {
@@ -479,6 +520,8 @@ function onAssignedGroupChange(value: string | number | null) {
 			editableTicket.assignedUserUid = null
 		}
 	}
+
+	syncDerivedStatusFromAssignment()
 }
 
 function commentSummary(item: TicketComment) {
@@ -651,8 +694,10 @@ function saveChanges() {
 
 	waitingForSaveSync.value = true
 	emit('save', {
-		...currentEditPayload.value,
-		supportDescription: sanitizeRichText(editableTicket.supportDescription),
+		...changedEditPayload.value,
+		...(Object.prototype.hasOwnProperty.call(changedEditPayload.value, 'supportDescription') ? {
+			supportDescription: sanitizeRichText(editableTicket.supportDescription),
+		} : {}),
 		closeReason: requiresCloseReason.value ? closeReason.value.trim() : undefined,
 	})
 }

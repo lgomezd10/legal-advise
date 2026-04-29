@@ -12,7 +12,7 @@ const openSections = reactive({
 	admin: false,
 })
 
-const showPersonal = computed(() => bootstrapStore.hasRole('usuario'))
+const showPersonal = computed(() => bootstrapStore.data.roles.length > 0)
 const showSupport = computed(() => bootstrapStore.hasRole('soporte'))
 const showAdmin = computed(() => bootstrapStore.hasRole('administrador'))
 </script>

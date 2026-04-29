@@ -6,8 +6,7 @@ import NotificationMatrix from '@/components/NotificationMatrix.vue'
 import SearchableSelect from '@/components/SearchableSelect.vue'
 import { useAdminConfigStore } from '@/store/adminConfig'
 import { useBootstrapStore } from '@/store/bootstrap'
-import { useNotificationsStore } from '@/store/notifications'
-import type { AdminStatusOption, AssignmentRule, CatalogField, EditableTypeNode, SavedFilter, SearchableSelectOption, TypeNode, UrgencyCatalogItem } from '@/types'
+import type { AdminStatusOption, AssignmentRule, CatalogField, EditableTypeNode, NotificationMatrixItem, SavedFilter, SearchableSelectOption, TypeNode, UrgencyCatalogItem } from '@/types'
 
 type AdminConfigData = {
 	statuses: AdminStatusOption[]
@@ -17,6 +16,7 @@ type AdminConfigData = {
 	filters: SavedFilter[]
 	rules: AssignmentRule[]
 	profiles: Array<{ id?: number, profile: string, principalType: string, principalId: string }>
+	notifications: NotificationMatrixItem[]
 	attachmentConfig: { allowedExtensions: string[], maxFileSizeMb: number }
 	tasksConfig: Record<string, unknown>
 }
@@ -46,7 +46,6 @@ type AdminSectionId = 'info' | 'statuses' | 'urgencies' | 'types' | 'fields' | '
 
 const adminConfigStore = useAdminConfigStore()
 const bootstrapStore = useBootstrapStore()
-const notificationsStore = useNotificationsStore()
 const taskConfig = reactive<{ enabled: boolean }>({ enabled: false })
 const attachmentConfig = reactive<{ allowedExtensionsText: string, maxFileSizeMb: number }>({ allowedExtensionsText: '', maxFileSizeMb: 25 })
 const statusDrafts = ref<StatusDraft[]>([])
@@ -56,6 +55,7 @@ const fieldDrafts = ref<FieldDraft[]>([])
 const filterDrafts = ref<FilterDraft[]>([])
 const ruleDrafts = ref<RuleDraft[]>([])
 const profileDrafts = ref<ProfileDraft[]>([])
+const notificationDrafts = ref<NotificationMatrixItem[]>([])
 const profileSelectionState = reactive<Record<FixedProfileId, string | number | null>>({
 	usuario: null,
 	soporte: null,
@@ -272,7 +272,6 @@ async function hydrateAdminView() {
 		await Promise.all([
 			bootstrapStore.refresh().catch(() => undefined),
 			adminConfigStore.load(),
-			notificationsStore.load(),
 		])
 		syncDrafts()
 	} catch (error) {
@@ -344,6 +343,7 @@ function syncDrafts() {
 		principalKey: buildPrincipalKey(item.principalType, item.principalId),
 		clientId: buildClientId('profile', item.id ?? `${item.profile}-${index}`),
 	}))
+	notificationDrafts.value = normalizeNotifications(adminData.value?.notifications)
 	saveState.statuses = ''
 	saveState.urgencies = ''
 	saveState.types = ''
@@ -353,6 +353,35 @@ function syncDrafts() {
 	saveState.profiles = ''
 	saveState.attachments = ''
 	saveState.tasks = ''
+}
+
+function normalizeNotifications(entries: unknown): NotificationMatrixItem[] {
+	if (!Array.isArray(entries)) {
+		return []
+	}
+
+	const profileOrder: Record<string, number> = { usuario: 0, soporte: 1, administrador: 2 }
+	const eventOrder: Record<string, number> = { ticket_created: 0, ticket_assigned: 1, ticket_waiting_for_creator: 2, ticket_group_assigned: 3, ticket_status_changed: 4, ticket_public_reply: 5, ticket_resolved: 6 }
+	const normalizeDeliveryMode = (value: unknown): NotificationMatrixItem['deliveryMode'] => value === 'none' || value === 'nextcloud' || value === 'both'
+		? value
+		: 'nextcloud'
+
+	return entries
+		.filter(isRecord)
+		.filter((entry) => typeof entry.scopeId === 'string' && typeof entry.eventName === 'string')
+		.map((entry): NotificationMatrixItem => ({
+			scopeId: String(entry.scopeId),
+			eventName: String(entry.eventName),
+			deliveryMode: normalizeDeliveryMode(entry.deliveryMode),
+		}))
+		.sort((left, right) => {
+			const profileDiff = (profileOrder[left.scopeId] ?? 99) - (profileOrder[right.scopeId] ?? 99)
+			if (profileDiff !== 0) {
+				return profileDiff
+			}
+
+			return (eventOrder[left.eventName] ?? 99) - (eventOrder[right.eventName] ?? 99)
+		})
 }
 
 function buildClientId(prefix: string, seed: number | string): string {
@@ -843,6 +872,12 @@ async function saveAttachmentConfig() {
 	syncDrafts()
 	saveState.attachments = 'Configuración de adjuntos guardada.'
 }
+
+async function saveNotifications(items: NotificationMatrixItem[]) {
+	notificationDrafts.value = [...items]
+	await adminConfigStore.save({ notifications: items })
+	syncDrafts()
+}
 </script>
 
 <template>
@@ -1186,7 +1221,17 @@ async function saveAttachmentConfig() {
 		<section v-if="activeSection === 'notifications'" class="gi-admin-panel">
 			<section class="gi-admin-card gi-admin-card--fullwidth">
 			<h2>Preferencias de notificacion</h2>
-			<NotificationMatrix :items="notificationsStore.items" @toggle="notificationsStore.save" />
+			<p>Esta configuración define la política base para cada perfil. Las preferencias del ticket y del usuario solo pueden limitar estos canales, no ampliarlos.</p>
+			<NotificationMatrix
+				:items="notificationDrafts"
+				:scope-labels="{ usuario: 'Usuario', soporte: 'Soporte', administrador: 'Administración' }"
+				:delivery-options="[
+					{ value: 'none', label: 'Ninguna' },
+					{ value: 'nextcloud', label: 'Nextcloud' },
+					{ value: 'both', label: 'Nextcloud y correo' },
+				]"
+				@toggle="saveNotifications"
+			/>
 			</section>
 		</section>
 		<div v-if="loadState.renderError" class="gi-admin-feedback gi-admin-feedback--error">

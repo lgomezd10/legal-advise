@@ -1,20 +1,16 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import NotificationMatrix from '@/components/NotificationMatrix.vue'
 import FilterCatalogEditor from '@/components/FilterCatalogEditor.vue'
 import { fetchSupportFilterSettings, restoreSupportFilterSettings, updateSupportFilterSettings } from '@/services/supportFilters'
 import { useBootstrapStore } from '@/store/bootstrap'
-import { useNotificationsStore } from '@/store/notifications'
 import type { SavedFilter } from '@/types'
 
 const bootstrapStore = useBootstrapStore()
-const notificationsStore = useNotificationsStore()
 const filterSettings = ref<SavedFilter[]>([])
 const statusMessage = ref('')
 
 onMounted(async() => {
 	filterSettings.value = (await fetchSupportFilterSettings()).items
-	await notificationsStore.load()
 })
 
 async function saveFilters(nextFilters: SavedFilter[]) {
@@ -46,16 +42,6 @@ async function restoreFilters() {
 			@secondary-action="restoreFilters"
 		/>
 		<p v-if="statusMessage" class="gi-admin-feedback">{{ statusMessage }}</p>
-
-		<section class="gi-admin-card gi-admin-card--fullwidth">
-			<div class="gi-admin-card__header">
-				<div>
-					<h2>Notificaciones personales</h2>
-					<p>Estas preferencias solo se aplican a tu usuario y complementan la política base del perfil.</p>
-				</div>
-			</div>
-			<NotificationMatrix :items="notificationsStore.items" @toggle="notificationsStore.save" />
-		</section>
 	</section>
 </template>
 

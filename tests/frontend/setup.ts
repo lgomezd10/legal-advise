@@ -10,6 +10,7 @@ import {
 	routerPushMock,
 	supportFiltersStoreMock,
 	ticketsStoreMock,
+	restorePersonalConfigMock,
 	updatePersonalConfigMock,
 } from './helpers/mockState'
 import { SupportSettingsPanelStub } from './helpers/stubs'
@@ -42,6 +43,7 @@ vi.mock('@/store/notifications', () => ({
 }))
 
 vi.mock('@/services/personalConfig', () => ({
+	restorePersonalConfig: restorePersonalConfigMock,
 	updatePersonalConfig: updatePersonalConfigMock,
 }))
 

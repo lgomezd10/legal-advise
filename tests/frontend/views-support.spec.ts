@@ -198,7 +198,6 @@ describe('Pantallas de soporte', () => {
 			title: 'Ticket soporte',
 			userDescription: '<p>Texto</p>',
 			urgencyId: 1,
-			communicationChannel: 'nextcloud_mail',
 			personalData: { email: 'soporte@example.com' },
 		})
 		await flushPromises()
@@ -229,6 +228,29 @@ describe('Pantallas de soporte', () => {
 		expect(wrapper.text()).toContain('Volver a consola')
 	})
 
+	it('guarda cambios de estado desde la pantalla completa de soporte', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
+		routeState.path = '/soporte/100/completo'
+		routeState.params = { ticketId: '100' }
+		ticketsStoreMock.selected = createTicket({ id: 100, canManage: true, status: 'nuevo' })
+
+		const wrapper = mount(SupportTicketFullView, {
+			global: {
+				stubs: {
+					TicketSidebarPanel: TicketSidebarPanelStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const panel = wrapper.getComponent(TicketSidebarPanelStub)
+		panel.vm.$emit('save', { status: 'en_espera_usuario' })
+		await flushPromises()
+
+		expect(ticketsStoreMock.update).toHaveBeenCalledWith(100, { status: 'en_espera_usuario' })
+	})
+
 	it('configura el panel lateral en modo soporte con edición habilitada', async() => {
 		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
 		routeState.path = '/soporte/100'
@@ -250,6 +272,29 @@ describe('Pantallas de soporte', () => {
 		expect(panel.props('showRepeat')).toBe(false)
 		expect(panel.props('showFullscreen')).toBe(true)
 		expect(panel.props('initialComposerVisible')).toBe(false)
+	})
+
+	it('guarda cambios de estado desde el panel lateral de soporte', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
+		routeState.path = '/soporte/100'
+		routeState.params = { ticketId: '100' }
+		ticketsStoreMock.selected = createTicket({ id: 100, canManage: true, status: 'nuevo' })
+
+		const wrapper = mount(TicketSidebarView, {
+			global: {
+				stubs: {
+					TicketSidebarPanel: TicketSidebarPanelStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const panel = wrapper.getComponent(TicketSidebarPanelStub)
+		panel.vm.$emit('save', { status: 'en_espera_usuario' })
+		await flushPromises()
+
+		expect(ticketsStoreMock.update).toHaveBeenCalledWith(100, { status: 'en_espera_usuario' })
 	})
 
 	it('configura el panel lateral en modo usuario con repetición y solo lectura', async() => {

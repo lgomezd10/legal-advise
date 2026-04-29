@@ -42,13 +42,24 @@ class Notifier implements INotifier {
 				$notification->setParsedMessage($l->t('Su consulta legal se ha registrado correctamente.'));
 				break;
 
+			case 'ticket_unassigned_created':
+				$notification->setParsedSubject($l->t('Consulta %1$s sin asignar: %2$s', [$number, $title]));
+				$notification->setParsedMessage($l->t('Se ha creado una nueva consulta legal sin asignación.'));
+				break;
+
 			case 'ticket_assigned':
 				$notification->setParsedSubject($l->t('Consulta %1$s asignada: %2$s', [$number, $title]));
-				$notification->setParsedMessage(
-					$recipientRole === 'assignee'
-						? $l->t('Se le ha asignado esta consulta legal.')
-						: $l->t('La consulta legal ha sido asignada para su gestion.')
-				);
+				$notification->setParsedMessage($l->t('Se le ha asignado esta consulta legal.'));
+				break;
+
+			case 'ticket_waiting_for_creator':
+				$notification->setParsedSubject($l->t('Consulta %1$s pendiente de su respuesta: %2$s', [$number, $title]));
+				$notification->setParsedMessage($l->t('Soporte espera su respuesta en esta consulta legal.'));
+				break;
+
+			case 'ticket_group_assigned':
+				$notification->setParsedSubject($l->t('Consulta %1$s asignada a su grupo: %2$s', [$number, $title]));
+				$notification->setParsedMessage($l->t('Se ha asignado una consulta legal a uno de sus grupos.'));
 				break;
 
 			case 'ticket_status_changed':

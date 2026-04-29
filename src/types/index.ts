@@ -144,8 +144,7 @@ export interface AssignmentRule {
 export interface NotificationMatrixItem {
 	scopeId: string
 	eventName: string
-	channel: string
-	enabled?: boolean
+	deliveryMode: 'none' | 'nextcloud' | 'both'
 	[key: string]: unknown
 }
 
@@ -189,6 +188,7 @@ export interface BootstrapData {
 	roles: string[]
 	navigation: NavigationItem[]
 	personalConfig: Record<string, string>
+	personalConfigHasStoredValues: boolean
 	catalogs: {
 		statuses: StatusOption[]
 		urgencies: UrgencyCatalogItem[]
@@ -218,7 +218,6 @@ export interface TicketDraft {
 	title?: string
 	userDescription?: string
 	urgencyId?: string | null
-	communicationChannel?: string
 	personalData?: Record<string, string>
 	attachments?: {
 		files: File[]

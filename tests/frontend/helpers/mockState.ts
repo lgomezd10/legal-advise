@@ -12,7 +12,8 @@ export const routeState = reactive({
 export const routerPushMock = vi.fn()
 export const onBeforeRouteLeaveMock = vi.fn()
 export const onBeforeRouteUpdateMock = vi.fn()
-export const updatePersonalConfigMock = vi.fn(async(payload: Record<string, string>) => payload)
+export const updatePersonalConfigMock = vi.fn(async(payload: Record<string, string>) => ({ values: payload, hasStoredValues: true }))
+export const restorePersonalConfigMock = vi.fn(async() => ({ values: { email: 'usuario@example.com', city: 'Madrid', province: 'Madrid' }, hasStoredValues: false }))
 
 export const bootstrapStoreMock = reactive({
 	data: createBootstrapData(),
@@ -35,10 +36,11 @@ export const bootstrapStoreMock = reactive({
 			},
 		}
 	}),
-	setPersonalConfig: vi.fn((personalConfig: Record<string, string>) => {
+	setPersonalConfig: vi.fn((personalConfig: Record<string, string>, hasStoredValues = bootstrapStoreMock.data.personalConfigHasStoredValues) => {
 		bootstrapStoreMock.data = {
 			...bootstrapStoreMock.data,
 			personalConfig: { ...personalConfig },
+			personalConfigHasStoredValues: hasStoredValues,
 		}
 	}),
 }) as {
@@ -94,7 +96,7 @@ export const adminConfigStoreMock = reactive({
 })
 
 export const notificationsStoreMock = reactive({
-	items: [{ scopeId: 'usuario', eventName: 'ticket_created', channel: 'nextcloud', enabled: true }] as NotificationMatrixItem[],
+	items: [{ scopeId: 'usuario', eventName: 'ticket_created', deliveryMode: 'both' }] as NotificationMatrixItem[],
 	load: vi.fn(async() => undefined),
 	save: vi.fn(async() => undefined),
 })
@@ -107,7 +109,9 @@ export function resetFrontendMocks() {
 	onBeforeRouteLeaveMock.mockReset()
 	onBeforeRouteUpdateMock.mockReset()
 	updatePersonalConfigMock.mockReset()
-	updatePersonalConfigMock.mockResolvedValue({ email: 'nuevo@example.com', city: 'Sevilla' })
+	updatePersonalConfigMock.mockResolvedValue({ values: { email: 'nuevo@example.com', city: 'Sevilla', province: 'Madrid' }, hasStoredValues: true })
+	restorePersonalConfigMock.mockReset()
+	restorePersonalConfigMock.mockResolvedValue({ values: { email: 'usuario@example.com', city: 'Madrid', province: 'Madrid' }, hasStoredValues: false })
 
 	bootstrapStoreMock.data = createBootstrapData()
 	bootstrapStoreMock.loading = false
@@ -155,7 +159,7 @@ export function resetFrontendMocks() {
 	adminConfigStoreMock.save.mockReset()
 	adminConfigStoreMock.save.mockResolvedValue(undefined)
 
-	notificationsStoreMock.items = [{ scopeId: 'usuario', eventName: 'ticket_created', channel: 'nextcloud', enabled: true }]
+	notificationsStoreMock.items = [{ scopeId: 'usuario', eventName: 'ticket_created', deliveryMode: 'both' }]
 	notificationsStoreMock.load.mockReset()
 	notificationsStoreMock.load.mockResolvedValue(undefined)
 	notificationsStoreMock.save.mockReset()
