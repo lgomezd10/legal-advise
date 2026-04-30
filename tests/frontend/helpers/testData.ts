@@ -39,6 +39,12 @@ export function createBootstrapData(overrides: Partial<BootstrapData> = {}): Boo
 			version: '0.1.5',
 			storageBytes: 1024,
 			storageLabel: '1 KB',
+			appDataBytes: 768,
+			appDataLabel: '768 B',
+			databaseBytes: 256,
+			databaseLabel: '256 B',
+			attachmentBytes: 512,
+			attachmentLabel: '512 B',
 		},
 		currentUser: {
 			uid: 'usuario1',

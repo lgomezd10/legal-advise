@@ -180,6 +180,12 @@ export interface BootstrapData {
 			version: string
 			storageBytes: number
 			storageLabel: string
+			appDataBytes: number
+			appDataLabel: string
+			databaseBytes: number
+			databaseLabel: string
+			attachmentBytes: number
+			attachmentLabel: string
 		}
 	currentUser: {
 		uid: string

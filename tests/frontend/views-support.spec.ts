@@ -159,7 +159,7 @@ describe('Pantallas de soporte', () => {
 		expect((provinceCheckbox.element as HTMLInputElement).checked).toBe(true)
 	})
 
-	it('muestra la pantalla de nuevo ticket de soporte con provincia y asignacion', () => {
+	it('muestra la pantalla de nuevo ticket de soporte con provincia y asignacion', async() => {
 		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
 
 		const wrapper = mount(SupportNewTicketView, {
@@ -170,6 +170,7 @@ describe('Pantallas de soporte', () => {
 				},
 			},
 		})
+		await flushPromises()
 
 		expect(wrapper.text()).toContain('Nuevo ticket')
 		expect(wrapper.text()).toContain('Alta rápida desde soporte')

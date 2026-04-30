@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import SupportFilterBuilder from '@/components/SupportFilterBuilder.vue'
-import SupportTicketTable from '@/components/SupportTicketTable.vue'
 import type { SupportColumnKey, Ticket } from '@/types'
 import { useBootstrapStore } from '@/store/bootstrap'
 import { useTicketsStore } from '@/store/tickets'
 import { useSupportFiltersStore } from '@/store/supportFilters'
 import { richTextToPlainText } from '@/utils/richText'
 import { DEFAULT_COLUMN_EDITOR_ORDER, DEFAULT_SUPPORT_COLUMNS, DEFAULT_SUPPORT_SORT, loadSupportConsoleState, normalizeSupportColumnOrder, normalizeSupportColumns, saveSupportConsoleState } from '@/utils/supportConsoleState'
+
+const SupportFilterBuilder = defineAsyncComponent(() => import('@/components/SupportFilterBuilder.vue'))
+const SupportTicketTable = defineAsyncComponent(() => import('@/components/SupportTicketTable.vue'))
 
 const router = useRouter()
 const route = useRoute()

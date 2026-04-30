@@ -4,7 +4,7 @@
     <name>Consultas Legales</name>
     <summary>Gestion integral de consultas legales con consola de usuario, soporte y administracion</summary>
     <description>Aplicacion nativa de Nextcloud para registrar, enrutar, gestionar y resolver consultas legales con integracion opcional con Tasks.</description>
-    <version>0.1.7</version>
+    <version>0.1.8</version>
     <licence>AGPL-3.0-or-later</licence>
     <author mail="">lgdproyectos</author>
     <namespace>ConsultasLegales</namespace>

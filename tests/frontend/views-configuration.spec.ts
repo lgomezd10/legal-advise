@@ -30,6 +30,7 @@ describe('Pantallas de configuración', () => {
 		await triggers[0].trigger('click')
 		await triggers[1].trigger('click')
 		await triggers[2].trigger('click')
+		await flushPromises()
 
 		expect(wrapper.find('.personal-config-view-stub').exists()).toBe(true)
 		expect(wrapper.find('.support-settings-panel-stub').exists()).toBe(true)

@@ -912,9 +912,11 @@ async function saveNotifications(items: NotificationMatrixItem[]) {
 				</div>
 				<div class="gi-admin-overview gi-admin-overview--info">
 					<article class="gi-stat-card gi-stat-card--stacked">
-						<span class="gi-stat-card__label">Espacio ocupado</span>
+						<span class="gi-stat-card__label">Espacio total ocupado</span>
 						<strong class="gi-stat-card__value">{{ appInfo.storageLabel }}</strong>
-						<p class="gi-stat-card__detail">{{ appInfo.storageBytes.toLocaleString('es-ES') }} bytes almacenados por la aplicación.</p>
+						<p class="gi-stat-card__detail">Incluye appdata y tablas propias de la aplicación en Nextcloud.</p>
+						<p class="gi-stat-card__detail">Appdata: {{ appInfo.appDataLabel }}. Base de datos: {{ appInfo.databaseLabel }}.</p>
+						<p class="gi-stat-card__detail">Adjuntos dentro de appdata: {{ appInfo.attachmentLabel }}.</p>
 					</article>
 					<article class="gi-stat-card gi-stat-card--stacked">
 						<span class="gi-stat-card__label">Versión de la aplicación</span>
