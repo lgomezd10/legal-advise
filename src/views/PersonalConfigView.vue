@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, watch } from 'vue'
 import NotificationMatrix from '@/components/NotificationMatrix.vue'
 import { restorePersonalConfig, updatePersonalConfig } from '@/services/personalConfig'
 import { useBootstrapStore } from '@/store/bootstrap'
@@ -15,9 +15,45 @@ const state = reactive({
 	restoring: false,
 	message: '',
 	notificationMessage: '',
+	readOnlyHintVisible: false,
 })
 
+let readOnlyHintTimer: ReturnType<typeof setTimeout> | null = null
+
+function isReadOnlyField(fieldKey: string) {
+	return fieldKey === 'email'
+}
+
+function clearReadOnlyHintTimer() {
+	if (readOnlyHintTimer !== null) {
+		clearTimeout(readOnlyHintTimer)
+		readOnlyHintTimer = null
+	}
+}
+
+function showReadOnlyHint(fieldKey: string) {
+	if (!isReadOnlyField(fieldKey)) {
+		return
+	}
+
+	clearReadOnlyHintTimer()
+	state.readOnlyHintVisible = true
+	readOnlyHintTimer = setTimeout(() => {
+		state.readOnlyHintVisible = false
+		readOnlyHintTimer = null
+	}, 2200)
+}
+
+function hideReadOnlyHint() {
+	clearReadOnlyHintTimer()
+	state.readOnlyHintVisible = false
+}
+
 const hasPersonalConfigChanges = computed(() => fields.value.some((field) => {
+	if (isReadOnlyField(field.fieldKey)) {
+		return false
+	}
+
 	const currentValue = form[field.fieldKey] ?? ''
 	const savedValue = bootstrapStore.data.personalConfig[field.fieldKey] ?? ''
 	return currentValue !== savedValue
@@ -43,6 +79,10 @@ onMounted(async() => {
 	await notificationsStore.load()
 })
 
+onBeforeUnmount(() => {
+	hideReadOnlyHint()
+})
+
 watch(() => [bootstrapStore.data.personalConfig, fields.value], () => {
 	for (const field of fields.value) {
 		form[field.fieldKey] = bootstrapStore.data.personalConfig[field.fieldKey] ?? ''
@@ -53,6 +93,10 @@ async function save() {
 	state.saving = true
 	state.message = ''
 	const payload = fields.value.reduce<Record<string, string>>((result, field) => {
+		if (isReadOnlyField(field.fieldKey)) {
+			return result
+		}
+
 		result[field.fieldKey] = form[field.fieldKey] ?? ''
 		return result
 	}, {})
@@ -88,7 +132,21 @@ async function saveNotifications(items: NotificationMatrixItem[]) {
 			<div class="gi-form-grid">
 				<label v-for="field in fields" :key="field.fieldKey" class="gi-field">
 					<span>{{ field.label }}</span>
-					<input :id="`personal-config-${field.fieldKey}`" v-model="form[field.fieldKey]" :name="`personal-config-${field.fieldKey}`" :type="field.fieldType" class="gi-input" :required="field.required" />
+					<input
+						:id="`personal-config-${field.fieldKey}`"
+						v-model="form[field.fieldKey]"
+						:name="`personal-config-${field.fieldKey}`"
+						:type="field.fieldType"
+						class="gi-input"
+						:class="{ 'gi-input--readonly': isReadOnlyField(field.fieldKey) }"
+						:required="field.required"
+						:readonly="isReadOnlyField(field.fieldKey)"
+						:aria-readonly="isReadOnlyField(field.fieldKey) ? 'true' : undefined"
+						@click="showReadOnlyHint(field.fieldKey)"
+						@focus="showReadOnlyHint(field.fieldKey)"
+						@blur="hideReadOnlyHint"
+					/>
+					<small v-if="isReadOnlyField(field.fieldKey) && state.readOnlyHintVisible" class="gi-field__hint">Se sincroniza desde tu perfil de Nextcloud y no se puede editar aquí.</small>
 				</label>
 			</div>
 			<footer class="gi-personal-config-card__footer">
@@ -144,5 +202,25 @@ async function saveNotifications(items: NotificationMatrixItem[]) {
 	align-items: center;
 	margin-left: auto;
 	flex-wrap: wrap;
+}
+
+.gi-input--readonly {
+	background: var(--gi-color-surface-subtle);
+	border-style: dashed;
+	color: var(--gi-color-text-muted);
+	cursor: not-allowed;
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .02);
+}
+
+.gi-input--readonly:focus {
+	outline: none;
+	border-color: var(--gi-color-border-strong);
+}
+
+.gi-field__hint {
+	margin: 0;
+	color: var(--gi-color-text-muted);
+	font-size: .78rem;
+	line-height: 1.3;
 }
 </style>

@@ -12,7 +12,7 @@ export const routeState = reactive({
 export const routerPushMock = vi.fn()
 export const onBeforeRouteLeaveMock = vi.fn()
 export const onBeforeRouteUpdateMock = vi.fn()
-export const updatePersonalConfigMock = vi.fn(async(payload: Record<string, string>) => ({ values: payload, hasStoredValues: true }))
+	export const updatePersonalConfigMock = vi.fn(async(payload: Record<string, string>) => ({ values: { email: 'usuario@example.com', province: 'Madrid', ...payload }, hasStoredValues: true }))
 export const restorePersonalConfigMock = vi.fn(async() => ({ values: { email: 'usuario@example.com', city: 'Madrid', province: 'Madrid' }, hasStoredValues: false }))
 
 export const bootstrapStoreMock = reactive({
@@ -109,7 +109,7 @@ export function resetFrontendMocks() {
 	onBeforeRouteLeaveMock.mockReset()
 	onBeforeRouteUpdateMock.mockReset()
 	updatePersonalConfigMock.mockReset()
-	updatePersonalConfigMock.mockResolvedValue({ values: { email: 'nuevo@example.com', city: 'Sevilla', province: 'Madrid' }, hasStoredValues: true })
+	updatePersonalConfigMock.mockResolvedValue({ values: { email: 'usuario@example.com', city: 'Sevilla', province: 'Madrid' }, hasStoredValues: true })
 	restorePersonalConfigMock.mockReset()
 	restorePersonalConfigMock.mockResolvedValue({ values: { email: 'usuario@example.com', city: 'Madrid', province: 'Madrid' }, hasStoredValues: false })
 

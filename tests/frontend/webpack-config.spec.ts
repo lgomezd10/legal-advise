@@ -12,8 +12,18 @@ describe('webpack config', () => {
 			chunkFilename: '[name].js',
 		})
 
+		expect(webpackConfig.optimization).toMatchObject({
+			runtimeChunk: false,
+		})
+
 		expect(webpackConfig.optimization?.splitChunks).toMatchObject({
 			chunks: 'async',
+		})
+
+		expect(webpackConfig.optimization?.splitChunks?.cacheGroups).toMatchObject({
+			vendors: expect.objectContaining({
+				enforce: true,
+			}),
 		})
 	})
 })

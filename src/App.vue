@@ -125,14 +125,6 @@ function startResize() {
 	window.addEventListener('mouseup', stopResize)
 }
 
-function openNavigation() {
-	if (!hasNavigation.value) {
-		return
-	}
-
-	navigationVisible.value = true
-}
-
 function closeNavigation() {
 	navigationVisible.value = false
 }

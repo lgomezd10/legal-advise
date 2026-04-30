@@ -56,17 +56,20 @@ describe('Pantallas de configuración', () => {
 		expect(wrapper.text()).toContain('Notificaciones personales')
 		expect(notificationsStoreMock.load).toHaveBeenCalled()
 
-		await wrapper.get('input[type="email"]').setValue('nuevo@example.com')
+		const emailInput = wrapper.get('input[type="email"]')
+		expect(emailInput.attributes('readonly')).toBeDefined()
+
+		await wrapper.get('input[name="personal-config-city"]').setValue('Sevilla')
 		expect((wrapper.get('button.gi-primary-button').element as HTMLButtonElement).disabled).toBe(false)
 		await wrapper.get('button.gi-primary-button').trigger('click')
 		await flushPromises()
 
-		expect(updatePersonalConfigMock).toHaveBeenCalledWith({ email: 'nuevo@example.com', city: 'Madrid', province: 'Madrid' })
-		expect(bootstrapStoreMock.setPersonalConfig).toHaveBeenCalledWith({ email: 'nuevo@example.com', city: 'Sevilla', province: 'Madrid' }, true)
+		expect(updatePersonalConfigMock).toHaveBeenCalledWith({ city: 'Sevilla', province: 'Madrid' })
+		expect(bootstrapStoreMock.setPersonalConfig).toHaveBeenCalledWith({ email: 'usuario@example.com', city: 'Sevilla', province: 'Madrid' }, true)
 		expect(wrapper.text()).toContain('Configuración personal guardada.')
 	})
 
-	it('mantiene guardar desactivado cuando el formulario coincide con lo cargado', async() => {
+	it('mantiene el correo en solo lectura y guardar desactivado cuando el formulario coincide con lo cargado', async() => {
 		bootstrapStoreMock.data = createBootstrapData({ roles: ['usuario'] })
 
 		const wrapper = mount(PersonalConfigView, {
@@ -78,13 +81,38 @@ describe('Pantallas de configuración', () => {
 		})
 
 		const saveButton = wrapper.get('button.gi-primary-button')
+		const emailInput = wrapper.get('input[type="email"]')
+		expect(emailInput.attributes('readonly')).toBeDefined()
 		expect((saveButton.element as HTMLButtonElement).disabled).toBe(true)
 
-		await wrapper.get('input[type="email"]').setValue('nuevo@example.com')
+		await wrapper.get('input[name="personal-config-city"]').setValue('Sevilla')
 		expect((saveButton.element as HTMLButtonElement).disabled).toBe(false)
 
-		await wrapper.get('input[type="email"]').setValue('usuario@example.com')
+		await wrapper.get('input[name="personal-config-city"]').setValue('Madrid')
 		expect((saveButton.element as HTMLButtonElement).disabled).toBe(true)
+	})
+
+	it('muestra un aviso temporal al intentar interactuar con el correo en solo lectura', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['usuario'] })
+
+		const wrapper = mount(PersonalConfigView, {
+			global: {
+				stubs: {
+					NotificationMatrix: NotificationMatrixStub,
+				},
+			},
+		})
+
+		expect(wrapper.find('.gi-field__hint').exists()).toBe(false)
+
+		await wrapper.get('input[type="email"]').trigger('focus')
+
+		expect(wrapper.find('.gi-field__hint').text()).toContain('Se sincroniza desde tu perfil de Nextcloud')
+
+		await wrapper.get('input[type="email"]').trigger('blur')
+		await flushPromises()
+
+		expect(wrapper.find('.gi-field__hint').exists()).toBe(false)
 	})
 
 	it('restaura los datos desde Nextcloud cuando existe una configuración guardada', async() => {

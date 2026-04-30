@@ -30,7 +30,6 @@ const initialCriteria = computed<Record<string, unknown>>(() => {
 	return normalizeSupportCriteria(defaultFilter?.criteria ?? {})
 })
 const columnEditorOpen = ref(false)
-const selectedColumnCount = computed(() => visibleColumns.value.length)
 const visibleColumns = ref<SupportColumnKey[]>([...DEFAULT_SUPPORT_COLUMNS])
 const columnEditorOrder = ref<SupportColumnKey[]>([...DEFAULT_COLUMN_EDITOR_ORDER])
 const draggedColumnKey = ref<SupportColumnKey | null>(null)

@@ -18,9 +18,36 @@ webpackConfig.cache = false
 
 webpackConfig.optimization = {
 	...(webpackConfig.optimization ?? {}),
+	runtimeChunk: false,
 	splitChunks: {
 		...(webpackConfig.optimization?.splitChunks ?? {}),
 		chunks: 'async',
+		cacheGroups: {
+			...(webpackConfig.optimization?.splitChunks?.cacheGroups ?? {}),
+				vue: {
+					test: /[\\/]node_modules[\\/](vue|vue-router|pinia)[\\/]/,
+					name: 'vendors-vue',
+					priority: 30,
+					enforce: true,
+				},
+			vendors: {
+				test: /[\\/]node_modules[\\/]/,
+					priority: 10,
+				name(module) {
+					const context = module.context ?? ''
+					if (context.includes(`${path.sep}@tiptap${path.sep}`)) {
+						return 'vendors-tiptap'
+					}
+
+					if (context.includes(`${path.sep}@nextcloud${path.sep}`)) {
+						return 'vendors-nextcloud'
+					}
+
+					return 'vendors'
+				},
+				enforce: true,
+			},
+		},
 	},
 }
 

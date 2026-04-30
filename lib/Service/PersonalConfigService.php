@@ -54,6 +54,7 @@ class PersonalConfigService {
 
 	public function saveForUser(string $uid, array $values): array {
 		$normalized = $this->normalizeValues($values);
+		$normalized = $this->applyReadOnlyValues($uid, $normalized);
 		$existing = $this->getStoredSetting($uid);
 
 		if (!$existing instanceof AppSetting) {
@@ -68,6 +69,18 @@ class PersonalConfigService {
 		$this->settingMapper->update($existing);
 
 		return $normalized;
+	}
+
+	private function applyReadOnlyValues(string $uid, array $values): array {
+		$user = $this->userManager->get($uid);
+		if ($user === null || !array_key_exists('email', $values)) {
+			return $values;
+		}
+
+		$account = $this->accountManager->getAccount($user);
+		$values['email'] = $this->resolveEmail($user, $account);
+
+		return $values;
 	}
 
 	public function restoreForUser(string $uid): array {

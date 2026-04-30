@@ -42,7 +42,7 @@ type AssignablesState = {
 	groups?: unknown[]
 }
 
-type AdminSectionId = 'info' | 'statuses' | 'urgencies' | 'types' | 'fields' | 'filters' | 'rules' | 'profiles' | 'attachments' | 'notifications'
+type AdminSectionId = 'info' | 'statuses' | 'urgencies' | 'types' | 'fields' | 'filters' | 'rules' | 'profiles' | 'attachments' | 'tasks' | 'notifications'
 
 const adminConfigStore = useAdminConfigStore()
 const bootstrapStore = useBootstrapStore()
@@ -97,7 +97,10 @@ const adminSections = [
 	{ id: 'profiles', label: 'Perfiles' },
 	{ id: 'attachments', label: 'Adjuntos' },
 	{ id: 'notifications', label: 'Notificaciones' },
+	{ id: 'tasks', label: 'Tasks' },
 ] as const
+
+const adminTopNavSections = adminSections.filter((section) => section.id !== 'info')
 
 const adminData = computed(() => adminConfigStore.data as AdminConfigData | null)
 const statusItems = computed(() => statusDrafts.value)
@@ -546,7 +549,7 @@ function addField() {
 async function saveFields() {
 	const payload = fieldDrafts.value
 		.filter((field) => field.fieldKey.trim() !== '' && field.label.trim() !== '')
-		.map(({ clientId, ...field }) => ({
+		.map(({ clientId: _clientId, ...field }) => ({
 			...field,
 			fieldKey: field.fieldKey.trim(),
 			label: field.label.trim(),
@@ -573,7 +576,7 @@ async function saveFilters(nextFilters: SavedFilter[]) {
 }
 
 async function saveStatuses() {
-	const payload = statusDrafts.value.map(({ clientId, ...status }) => ({
+	const payload = statusDrafts.value.map(({ clientId: _clientId, ...status }) => ({
 		id: status.id,
 		label: status.label.trim(),
 		active: status.toggleable ? Boolean(status.active) : true,
@@ -600,7 +603,7 @@ function addRule() {
 async function saveRules() {
 	const payload = ruleDrafts.value
 		.filter((rule) => (rule.typeId ?? 0) > 0)
-		.map(({ clientId, ...rule }) => ({
+		.map(({ clientId: _clientId, ...rule }) => ({
 			...rule,
 			typeId: Number(rule.typeId),
 			province: rule.province?.trim() ? rule.province.trim() : null,
@@ -661,19 +664,10 @@ function canRemoveProfileAssignment(profile: ProfileDraft) {
 	return adminGroupAssignmentsCount.value > 1
 }
 
-function updateProfilePrincipal(profile: ProfileDraft, principalKey: string | number | null) {
-	const key = typeof principalKey === 'string' ? principalKey : ''
-	const parsed = parsePrincipalKey(key)
-	profile.principalKey = key
-	profile.principalType = parsed.principalType
-	profile.principalId = parsed.principalId
-	saveState.profiles = 'Tienes cambios sin guardar.'
-}
-
 async function saveProfiles() {
 	const payload = profileDrafts.value
 		.filter((profile) => profile.principalId !== '')
-		.map(({ clientId, principalKey, ...profile }) => profile)
+		.map(({ clientId: _clientId, principalKey: _principalKey, ...profile }) => profile)
 
 	const hasAdminGroup = payload.some((profile) => profile.profile === 'administrador' && profile.principalType === 'group')
 	if (!hasAdminGroup) {
@@ -818,7 +812,7 @@ function createEmptyType(index: number, level: number): EditableTypeNode {
 
 async function saveUrgencies() {
 	const payload = urgencyDrafts.value
-		.map(({ clientId, ...item }) => item)
+		.map(({ clientId: _clientId, ...item }) => item)
 		.filter((item) => item.name.trim() !== '')
 
 	await adminConfigStore.save({ urgencies: payload })
@@ -898,7 +892,7 @@ async function saveNotifications(items: NotificationMatrixItem[]) {
 		</label>
 		<nav class="gi-admin-topnav" aria-label="Secciones de administracion">
 			<button
-				v-for="section in adminSections"
+				v-for="section in adminTopNavSections"
 				:key="section.id"
 				class="gi-admin-topnav__item"
 				:class="{ 'gi-admin-topnav__item--active': activeSection === section.id }"
@@ -1215,6 +1209,26 @@ async function saveNotifications(items: NotificationMatrixItem[]) {
 					</section>
 				</div>
 				<p v-if="saveState.profiles" class="gi-admin-feedback">{{ saveState.profiles }}</p>
+			</section>
+		</section>
+
+		<section v-if="activeSection === 'tasks'" class="gi-admin-panel">
+			<section class="gi-admin-card gi-admin-card--fullwidth">
+				<div class="gi-admin-card__header">
+					<div>
+						<h2>Integracion con Tasks</h2>
+						<p>Activa o desactiva la sincronización best-effort con Nextcloud Tasks sin bloquear el flujo principal de tickets.</p>
+					</div>
+					<div class="gi-admin-card__toolbar">
+						<button class="gi-primary-button" type="button" @click="saveTasksConfig">Guardar</button>
+					</div>
+				</div>
+				<label class="gi-field gi-admin-row__toggle gi-admin-row__toggle--status">
+					<span>Integración habilitada</span>
+					<input id="tasks-enabled" v-model="taskConfig.enabled" name="tasks-enabled" type="checkbox" />
+				</label>
+				<p class="gi-admin-feedback">Si Tasks no está disponible, la app seguirá funcionando y registrará el estado de sincronización cuando proceda.</p>
+				<p v-if="saveState.tasks" class="gi-admin-feedback">{{ saveState.tasks }}</p>
 			</section>
 		</section>
 
