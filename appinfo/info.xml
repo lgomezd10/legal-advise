@@ -1,12 +1,21 @@
 <?xml version="1.0"?>
-<info>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
     <id>legal_advice</id>
     <name>Consultas Legales</name>
     <summary>Gestion integral de consultas legales con consola de usuario, soporte y administracion</summary>
     <description>Aplicacion nativa de Nextcloud para registrar, enrutar, gestionar y resolver consultas legales con integracion opcional con Tasks.</description>
     <version>0.1.8</version>
     <licence>AGPL-3.0-or-later</licence>
-    <author mail="">lgdproyectos</author>
+    <author>lgdproyectos</author>
+    <documentation>
+        <user>https://github.com/lgomezd10/legal-advise/blob/main/README.md</user>
+        <admin>https://github.com/lgomezd10/legal-advise/blob/main/README.md</admin>
+    </documentation>
+    <website>https://github.com/lgomezd10/legal-advise</website>
+    <discussion>https://github.com/lgomezd10/legal-advise/discussions</discussion>
+    <bugs>https://github.com/lgomezd10/legal-advise/issues</bugs>
+    <repository>https://github.com/lgomezd10/legal-advise</repository>
     <namespace>ConsultasLegales</namespace>
     <category>organization</category>
     <category>social</category>

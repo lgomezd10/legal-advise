@@ -2,7 +2,7 @@
 
 Consultas Legales es una aplicacion nativa para Nextcloud que centraliza la recepcion, seguimiento y gestion interna de consultas o incidencias con un flujo claro para usuarios, equipos de soporte y administradores.
 
-La app esta pensada para organizaciones que necesitan recoger solicitudes desde Nextcloud, clasificarlas, asignarlas correctamente y mantener todo el historial en un unico lugar, sin depender de servicios externos para el flujo principal.
+La app esta pensada para organizaciones que necesitan recoger solicitudes desde Nextcloud, clasificarlas, asignarlas correctamente y mantener todo el historial en un unico lugar, sin depender de servicios externos para el flujo principal. Ademas, puede sincronizar el seguimiento operativo con la aplicacion Tasks de Nextcloud cuando esa integracion esta disponible y habilitada.
 
 ![alt text](screenshots/image.png)
 
@@ -13,6 +13,7 @@ La app esta pensada para organizaciones que necesitan recoger solicitudes desde 
 - Facilita el trabajo de soporte con filtros, asignacion, seguimiento y exportacion.
 - Centraliza la configuracion funcional en una consola de administracion integrada en Nextcloud.
 - Permite crear reglas para la asignación automática de tickets.
+- Puede reflejar tickets asignados en Tasks para apoyar el seguimiento operativo del equipo.
 
 ## Instalacion
 
@@ -45,6 +46,7 @@ La app puede instalarse desde el apartado `Apps` de Nextcloud. En el Store apare
 - Gestion de estado, criticidad, asignacion y descripcion interna de soporte.
 - Comentarios internos o visibles para el usuario segun el contexto.
 - Exportacion CSV del conjunto visible de resultados.
+- Integracion opcional con Tasks para crear o actualizar tareas asociadas al ticket asignado.
 
 ### Administracion
 
@@ -76,6 +78,7 @@ En una instalacion inicial, la app puede sembrar asignaciones base para grupos d
 - Usa usuarios y grupos reales de Nextcloud para permisos y asignacion.
 - Guarda archivos adjuntos en la infraestructura de archivos de Nextcloud.
 - Se integra con notificaciones nativas de Nextcloud y con correo segun configuracion.
+- Puede integrarse con Tasks para sincronizar tareas operativas vinculadas a tickets asignados.
 
 ## Pensada para un uso real desde el primer dia
 
