@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { defineAsyncComponent, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import TicketSidebarPanel from '@/components/TicketSidebarPanel.vue'
 import { createRepeatTicketDraft } from '@/services/ticketDraft'
 import { useBootstrapStore } from '@/store/bootstrap'
 import { useTicketsStore } from '@/store/tickets'
 import type { TicketAttachmentLinkDraft } from '@/types'
+
+const TicketSidebarPanel = defineAsyncComponent(() => import('@/components/TicketSidebarPanel.vue'))
 
 const route = useRoute()
 const router = useRouter()

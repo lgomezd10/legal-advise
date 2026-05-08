@@ -13,6 +13,9 @@ use OCP\Calendar\ICreateFromString;
 use OCP\Calendar\IManager as CalendarManager;
 
 class TaskSyncService {
+	private const TASK_LIST_URI = 'consultas-legales';
+	private const TASK_LIST_DISPLAY_NAME = 'Consultas Legales';
+
 	public function __construct(
 		private readonly TaskSyncMapper $taskSyncMapper,
 		private readonly CatalogService $catalogService,
@@ -40,38 +43,188 @@ class TaskSyncService {
 			return null;
 		}
 
+		$existing = $this->taskSyncMapper->findOneBy('ticket_id', $ticket->getId());
+
 		$assignedUserUid = $ticket->getAssignedUserUid();
 		if ($assignedUserUid === null || $assignedUserUid === '') {
+			if ($existing instanceof TaskSync) {
+				$this->deleteRemoteTask($existing);
+			}
 			$this->markDetached($ticket->getId());
 			return null;
 		}
 
-		$principal = 'principals/users/' . $assignedUserUid;
-		$calendar = null;
-		$calendarUri = null;
-		foreach ($this->calendarManager->getCalendarsForPrincipal($principal) as $candidate) {
-			if ($candidate instanceof ICreateFromString) {
-				$calendar = $candidate;
-				$calendarUri = method_exists($candidate, 'getUri') ? $candidate->getUri() : null;
-				break;
-			}
-		}
+		$calendarSelection = $this->resolveWritableCalendar($assignedUserUid);
+		$calendar = $calendarSelection['calendar'] ?? null;
+		$calendarUri = $calendarSelection['uri'] ?? null;
 
 		if (!$calendar instanceof ICreateFromString) {
 			$this->saveSyncRecord($ticket, $assignedUserUid, null, null, null, 'no_calendar', 'No writable VTODO calendar available');
 			return null;
 		}
 
-		$existing = $this->taskSyncMapper->findOneBy('ticket_id', $ticket->getId());
 		$objectUid = $existing?->getObjectUid() ?: sprintf('gi-%d-%s', $ticket->getId(), uniqid());
 		$objectUri = $existing?->getObjectUri() ?: $objectUid . '.ics';
+		$calendarData = $this->buildTodoIcs($ticket, $objectUid);
+		$backend = $this->extractCalendarBackend($calendar);
+		$calendarId = $this->resolveCalendarId($calendar);
 
 		try {
-			$calendar->createFromString($objectUri, $this->buildTodoIcs($ticket, $objectUid));
+			if ($existing instanceof TaskSync && $this->shouldReplaceRemoteTask($existing, $assignedUserUid, $calendarUri)) {
+				$this->deleteRemoteTask($existing);
+			}
+
+			if ($backend !== null && $calendarId !== null && $this->remoteTaskExists($backend, $calendarId, $objectUri)) {
+				$backend->updateCalendarObject($calendarId, $objectUri, $calendarData);
+			} else {
+				$calendar->createFromString($objectUri, $calendarData);
+			}
+
 			return $this->saveSyncRecord($ticket, $assignedUserUid, $calendarUri, $objectUri, $objectUid, 'synced', null);
 		} catch (\Throwable $e) {
 			return $this->saveSyncRecord($ticket, $assignedUserUid, $calendarUri, $objectUri, $objectUid, 'error', $e->getMessage());
 		}
+	}
+
+	private function shouldReplaceRemoteTask(TaskSync $existing, string $assignedUserUid, ?string $calendarUri): bool {
+		$existingAssigneeUid = $existing->getAssigneeUid();
+		if ($existingAssigneeUid !== null && $existingAssigneeUid !== '' && $existingAssigneeUid !== $assignedUserUid) {
+			return true;
+		}
+
+		$existingCalendarUri = $existing->getCalendarUri();
+		return $existingCalendarUri !== null && $existingCalendarUri !== '' && $calendarUri !== null && $existingCalendarUri !== $calendarUri;
+	}
+
+	/**
+	 * @return array{calendar: ICreateFromString|null, uri: string|null}
+	 */
+	private function resolveWritableCalendar(string $uid, ?string $preferredUri = null, bool $strictPreferred = false): array {
+		$principal = 'principals/users/' . $uid;
+		$targetUri = $this->resolveTargetCalendarUri($preferredUri, $strictPreferred);
+		$target = ['calendar' => null, 'uri' => null];
+		$fallback = ['calendar' => null, 'uri' => null];
+
+		foreach ($this->calendarManager->getCalendarsForPrincipal($principal) as $candidate) {
+			if (!$candidate instanceof ICreateFromString) {
+				continue;
+			}
+
+			$uri = method_exists($candidate, 'getUri') ? (string) $candidate->getUri() : null;
+			if ($uri === $targetUri) {
+				$target = ['calendar' => $candidate, 'uri' => $uri];
+			}
+
+			if (!$fallback['calendar'] instanceof ICreateFromString) {
+				$fallback = ['calendar' => $candidate, 'uri' => $uri];
+			}
+		}
+
+		if ($target['calendar'] instanceof ICreateFromString) {
+			return $target;
+		}
+
+		if ($targetUri === self::TASK_LIST_URI && $this->ensureDedicatedTaskList($principal, $fallback['calendar'])) {
+			foreach ($this->calendarManager->getCalendarsForPrincipal($principal, [self::TASK_LIST_URI]) as $candidate) {
+				if ($candidate instanceof ICreateFromString) {
+					$uri = method_exists($candidate, 'getUri') ? (string) $candidate->getUri() : self::TASK_LIST_URI;
+					return ['calendar' => $candidate, 'uri' => $uri];
+				}
+			}
+		}
+
+		return $fallback;
+	}
+
+	private function resolveTargetCalendarUri(?string $preferredUri, bool $strictPreferred): string {
+		if ($strictPreferred && $preferredUri !== null && $preferredUri !== '') {
+			return $preferredUri;
+		}
+
+		return self::TASK_LIST_URI;
+	}
+
+	private function ensureDedicatedTaskList(string $principalUri, mixed $calendar): bool {
+		if (!$calendar instanceof ICreateFromString) {
+			return false;
+		}
+
+		$backend = $this->extractCalendarBackend($calendar);
+		if ($backend === null || !method_exists($backend, 'createCalendar') || !method_exists($backend, 'getCalendarByUri')) {
+			return false;
+		}
+
+		if (is_array($backend->getCalendarByUri($principalUri, self::TASK_LIST_URI))) {
+			return true;
+		}
+
+		$backend->createCalendar($principalUri, self::TASK_LIST_URI, [
+			'components' => 'VTODO',
+			'{DAV:}displayname' => self::TASK_LIST_DISPLAY_NAME,
+		]);
+
+		return true;
+	}
+
+	private function deleteRemoteTask(TaskSync $sync): void {
+		$assigneeUid = $sync->getAssigneeUid();
+		$objectUri = $sync->getObjectUri();
+		if ($assigneeUid === null || $assigneeUid === '' || $objectUri === null || $objectUri === '') {
+			return;
+		}
+
+		$calendarSelection = $this->resolveWritableCalendar($assigneeUid, $sync->getCalendarUri(), true);
+		$calendar = $calendarSelection['calendar'] ?? null;
+		if (!$calendar instanceof ICreateFromString) {
+			return;
+		}
+
+		$backend = $this->extractCalendarBackend($calendar);
+		$calendarId = $this->resolveCalendarId($calendar);
+		if ($backend === null || $calendarId === null || !$this->remoteTaskExists($backend, $calendarId, $objectUri)) {
+			return;
+		}
+
+		$backend->deleteCalendarObject($calendarId, $objectUri);
+	}
+
+	private function remoteTaskExists(object $backend, int $calendarId, string $objectUri): bool {
+		if (!method_exists($backend, 'getCalendarObject')) {
+			return false;
+		}
+
+		return is_array($backend->getCalendarObject($calendarId, $objectUri));
+	}
+
+	private function resolveCalendarId(object $calendar): ?int {
+		if (!method_exists($calendar, 'getKey')) {
+			return null;
+		}
+
+		$calendarId = (int) $calendar->getKey();
+		return $calendarId > 0 ? $calendarId : null;
+	}
+
+	private function extractCalendarBackend(object $calendar): ?object {
+		$reflection = new \ReflectionObject($calendar);
+		while ($reflection !== false) {
+			if ($reflection->hasProperty('backend')) {
+				$property = $reflection->getProperty('backend');
+				$property->setAccessible(true);
+				$backend = $property->getValue($calendar);
+				if (is_object($backend)
+					&& method_exists($backend, 'getCalendarObject')
+					&& method_exists($backend, 'updateCalendarObject')
+					&& method_exists($backend, 'deleteCalendarObject')) {
+					return $backend;
+				}
+				return null;
+			}
+
+			$reflection = $reflection->getParentClass();
+		}
+
+		return null;
 	}
 
 	private function markDetached(int $ticketId): void {

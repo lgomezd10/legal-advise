@@ -52,7 +52,7 @@ function setDefault(clientId: string) {
 }
 
 function save() {
-	emit('save', drafts.value.map(({ clientId, ...filter }) => filter))
+	emit('save', drafts.value.map(({ clientId: _clientId, ...filter }) => filter))
 }
 </script>
 

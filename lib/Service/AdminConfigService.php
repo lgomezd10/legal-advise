@@ -9,6 +9,9 @@ use OCA\ConsultasLegales\Db\AssignmentRule;
 use OCA\ConsultasLegales\Db\AssignmentRuleMapper;
 use OCA\ConsultasLegales\Db\CustomField;
 use OCA\ConsultasLegales\Db\CustomFieldMapper;
+use OCA\ConsultasLegales\Db\NotificationPreference;
+use OCA\ConsultasLegales\Db\NotificationPreferenceMapper;
+use OCA\ConsultasLegales\Notification\NotificationPolicy;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCA\ConsultasLegales\Db\IncidentType;
 use OCA\ConsultasLegales\Db\IncidentTypeMapper;
@@ -30,6 +33,7 @@ class AdminConfigService {
 		private readonly CustomFieldMapper $fieldMapper,
 		private readonly AssignmentRuleMapper $ruleMapper,
 		private readonly ProfileAssignmentMapper $profileMapper,
+		private readonly NotificationPreferenceMapper $notificationPreferenceMapper,
 		private readonly AppSettingMapper $settingMapper,
 	) {
 	}
@@ -45,6 +49,7 @@ class AdminConfigService {
 			'filters' => $this->supportFilterService->listForAdmin(),
 			'rules' => array_map(static fn ($row) => $row->jsonSerialize(), $this->ruleMapper->findAllOrdered('priority', 'DESC')),
 			'profiles' => array_map(static fn ($row) => $row->jsonSerialize(), $this->profileMapper->findAllOrdered('profile', 'ASC')),
+			'notifications' => $this->getProfileNotificationPreferences(),
 			'attachmentConfig' => $this->catalogService->getAttachmentConfig(),
 			'tasksConfig' => $this->catalogService->getTaskConfig(),
 		];
@@ -106,10 +111,11 @@ class AdminConfigService {
 		}
 
 		if (isset($payload['types']) && is_array($payload['types'])) {
-			$this->saveTypes($payload['types']);
+			$this->syncTypes($payload['types']);
 		}
 
 		if (isset($payload['rules']) && is_array($payload['rules'])) {
+			$persistedRuleIds = [];
 			foreach ($payload['rules'] as $row) {
 				$province = $this->provinceCatalogService->normalize(is_string($row['province'] ?? null) ? (string) $row['province'] : null);
 				if (($row['province'] ?? null) !== null && trim((string) $row['province']) !== '' && $province === null) {
@@ -125,8 +131,16 @@ class AdminConfigService {
 				if (isset($row['id'])) {
 					$entity->setId((int) $row['id']);
 					$this->ruleMapper->update($entity);
+					$persistedRuleIds[] = (int) $row['id'];
 				} else {
-					$this->ruleMapper->insert($entity);
+					$entity = $this->ruleMapper->insert($entity);
+					$persistedRuleIds[] = (int) $entity->getId();
+				}
+			}
+
+			foreach ($this->ruleMapper->findAllOrdered('id', 'ASC') as $existingRule) {
+				if (!in_array((int) $existingRule->getId(), $persistedRuleIds, true)) {
+					$this->ruleMapper->delete($existingRule);
 				}
 			}
 		}
@@ -156,6 +170,16 @@ class AdminConfigService {
 				];
 			}
 
+			$hasAdminGroup = array_reduce(
+				array_values($normalizedProfiles),
+				static fn (bool $carry, array $row): bool => $carry || ($row['profile'] === RoleService::ADMIN && $row['principalType'] === 'group'),
+				false,
+			);
+
+			if (!$hasAdminGroup) {
+				throw new \InvalidArgumentException('El perfil Administrador debe conservar al menos un grupo asignado.');
+			}
+
 			foreach ($this->profileMapper->findAllOrdered('id', 'ASC') as $existingProfile) {
 				$this->profileMapper->delete($existingProfile);
 			}
@@ -167,6 +191,10 @@ class AdminConfigService {
 				$entity->setPrincipalId($row['principalId']);
 				$this->profileMapper->insert($entity);
 			}
+		}
+
+		if (isset($payload['notifications']) && is_array($payload['notifications'])) {
+			$this->saveProfileNotificationPreferences($payload['notifications']);
 		}
 
 		if (isset($payload['tasksConfig'])) {
@@ -187,6 +215,76 @@ class AdminConfigService {
 		return $this->getConfig();
 	}
 
+	private function getProfileNotificationPreferences(): array {
+		$itemsByProfileAndEvent = [];
+		foreach (self::ALLOWED_PROFILES as $profile) {
+			foreach (NotificationPolicy::getNotificationEventsForProfile($profile) as $eventName) {
+				$itemsByProfileAndEvent[$profile . ':' . $eventName] = [
+					'scopeId' => $profile,
+					'eventName' => $eventName,
+					'deliveryMode' => NotificationPolicy::defaultDeliveryModeForProfile($profile, $eventName),
+				];
+			}
+		}
+
+		foreach ($this->notificationPreferenceMapper->findAllOrdered('scope_id', 'ASC') as $row) {
+			if ($row->getScopeType() !== 'profile') {
+				continue;
+			}
+
+			$profile = (string) $row->getScopeId();
+			$eventName = (string) $row->getEventName();
+			if (!in_array($profile, self::ALLOWED_PROFILES, true) || !in_array($eventName, NotificationPolicy::getSupportedEvents(), true)) {
+				continue;
+			}
+
+			$key = $profile . ':' . $eventName;
+			$current = $itemsByProfileAndEvent[$key] ?? null;
+			if ($current === null) {
+				continue;
+			}
+
+			$nextcloudEnabled = $current['deliveryMode'] === 'nextcloud' || $current['deliveryMode'] === 'both';
+			$mailEnabled = $current['deliveryMode'] === 'mail' || $current['deliveryMode'] === 'both';
+			if ($row->getChannel() === 'nextcloud') {
+				$nextcloudEnabled = (bool) $row->getEnabled();
+			}
+			if ($row->getChannel() === 'mail') {
+				$mailEnabled = (bool) $row->getEnabled();
+			}
+
+			$itemsByProfileAndEvent[$key]['deliveryMode'] = NotificationPolicy::normalizeAdminDeliveryMode(NotificationPolicy::resolveDeliveryMode($nextcloudEnabled, $mailEnabled));
+		}
+
+		return array_values($itemsByProfileAndEvent);
+	}
+
+	private function saveProfileNotificationPreferences(array $items): void {
+		$this->notificationPreferenceMapper->deleteBy('scope_type', 'profile');
+
+		foreach ($items as $item) {
+			$profile = trim((string) ($item['scopeId'] ?? ''));
+			$eventName = trim((string) ($item['eventName'] ?? ''));
+			if (!in_array($profile, self::ALLOWED_PROFILES, true) || !in_array($eventName, NotificationPolicy::getNotificationEventsForProfile($profile), true)) {
+				continue;
+			}
+
+			$deliveryMode = NotificationPolicy::normalizeAdminDeliveryMode($item['deliveryMode'] ?? null);
+			$this->insertNotificationPreference($profile, $eventName, NotificationPolicy::CHANNEL_NEXTCLOUD, in_array($deliveryMode, [NotificationPolicy::DELIVERY_NEXTCLOUD, NotificationPolicy::DELIVERY_BOTH], true));
+			$this->insertNotificationPreference($profile, $eventName, NotificationPolicy::CHANNEL_MAIL, $deliveryMode === NotificationPolicy::DELIVERY_BOTH);
+		}
+	}
+
+	private function insertNotificationPreference(string $profile, string $eventName, string $channel, bool $enabled): void {
+		$entity = new NotificationPreference();
+		$entity->setScopeType('profile');
+		$entity->setScopeId($profile);
+		$entity->setEventName($eventName);
+		$entity->setChannel($channel);
+		$entity->setEnabled($enabled);
+		$this->notificationPreferenceMapper->insert($entity);
+	}
+
 	private function normalizeAllowedExtensions(mixed $extensions): array {
 		if (!is_array($extensions)) {
 			return [];
@@ -205,7 +303,25 @@ class AdminConfigService {
 		return max(1, $normalized > 0 ? $normalized : 25);
 	}
 
-	private function saveTypes(array $rows, ?int $parentId = null, string $parentSlug = '', int $level = 0): void {
+	private function syncTypes(array $rows): void {
+		$persistedTypeIds = [];
+		$this->saveTypes($rows, null, '', 0, $persistedTypeIds);
+
+		$obsoleteTypes = array_values(array_filter(
+			$this->typeMapper->findAllOrdered('level', 'DESC'),
+			static fn (IncidentType $type): bool => !in_array((int) $type->getId(), $persistedTypeIds, true),
+		));
+
+		foreach ($obsoleteTypes as $type) {
+			$this->ruleMapper->deleteBy('type_id', (int) $type->getId());
+		}
+
+		foreach ($obsoleteTypes as $type) {
+			$this->typeMapper->delete($type);
+		}
+	}
+
+	private function saveTypes(array $rows, ?int $parentId = null, string $parentSlug = '', int $level = 0, array &$persistedTypeIds = []): void {
 		foreach ($rows as $index => $row) {
 			$name = trim((string) ($row['name'] ?? ''));
 			if ($name === '') {
@@ -242,8 +358,10 @@ class AdminConfigService {
 				$entity = $this->typeMapper->insert($entity);
 			}
 
+			$persistedTypeIds[] = (int) $entity->getId();
+
 			if (isset($row['children']) && is_array($row['children'])) {
-				$this->saveTypes($row['children'], (int) $entity->getId(), $slug, $level + 1);
+				$this->saveTypes($row['children'], (int) $entity->getId(), $slug, $level + 1, $persistedTypeIds);
 			}
 		}
 	}

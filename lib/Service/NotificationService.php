@@ -7,6 +7,9 @@ namespace OCA\ConsultasLegales\Service;
 use OCA\ConsultasLegales\AppInfo\Application;
 use OCA\ConsultasLegales\Db\NotificationPreferenceMapper;
 use OCA\ConsultasLegales\Db\Ticket;
+use OCA\ConsultasLegales\Notification\NotificationMailBuilder;
+use OCA\ConsultasLegales\Notification\NotificationPolicy;
+use OCA\ConsultasLegales\Notification\NotificationRecipientResolver;
 use OCP\IURLGenerator;
 use OCP\IUserManager;
 use OCP\L10N\IFactory;
@@ -16,6 +19,8 @@ use OCP\Notification\IManager;
 class NotificationService {
 	public function __construct(
 		private readonly NotificationPreferenceMapper $preferenceMapper,
+		private readonly NotificationMailBuilder $notificationMailBuilder,
+		private readonly NotificationRecipientResolver $notificationRecipientResolver,
 		private readonly RoleService $roleService,
 		private readonly IUserManager $userManager,
 		private readonly IManager $notificationManager,
@@ -27,42 +32,89 @@ class NotificationService {
 
 	public function getPreferencesForUser(string $uid): array {
 		$roles = $this->roleService->getEffectiveRoles($uid);
-		$all = array_map(static fn ($row) => $row->jsonSerialize(), $this->preferenceMapper->findAllOrdered('scope_id', 'ASC'));
+		$basePreferences = $this->resolveBaseChannelPreferencesForUser($roles);
+		$preferences = $this->resolveChannelPreferencesForUser($uid, $roles, $basePreferences);
 
-		return array_values(array_filter($all, static function (array $row) use ($uid, $roles): bool {
-			return ($row['scopeType'] === 'user' && $row['scopeId'] === $uid)
-				|| ($row['scopeType'] === 'profile' && in_array($row['scopeId'], $roles, true));
-		}));
+		$items = [];
+		foreach (NotificationPolicy::getSupportedEventsForRoles($roles) as $eventName) {
+			$nextcloudEnabled = $basePreferences[$eventName][NotificationPolicy::CHANNEL_NEXTCLOUD] ?? false;
+			$mailEnabled = $basePreferences[$eventName][NotificationPolicy::CHANNEL_MAIL] ?? false;
+			if (!NotificationPolicy::isUserConfigurable($nextcloudEnabled, $mailEnabled)) {
+				continue;
+			}
+
+			$items[] = [
+				'scopeId' => $uid,
+				'eventName' => $eventName,
+				'deliveryMode' => NotificationPolicy::resolvePersonalDeliveryModeForRoles(
+					$roles,
+					$preferences[$eventName][NotificationPolicy::CHANNEL_NEXTCLOUD] ?? false,
+					$preferences[$eventName][NotificationPolicy::CHANNEL_MAIL] ?? false,
+				),
+			];
+		}
+
+		return $items;
 	}
 
 	public function updateUserPreferences(string $uid, array $rows): array {
+		$roles = $this->roleService->getEffectiveRoles($uid);
+		$basePreferences = $this->resolveBaseChannelPreferencesForUser($roles);
+		$supportedEvents = array_values(array_filter(
+			NotificationPolicy::getSupportedEventsForRoles($roles),
+			fn (string $eventName): bool => NotificationPolicy::isUserConfigurable(
+				$basePreferences[$eventName][NotificationPolicy::CHANNEL_NEXTCLOUD] ?? false,
+				$basePreferences[$eventName][NotificationPolicy::CHANNEL_MAIL] ?? false,
+			),
+		));
 		foreach ($this->preferenceMapper->findByMany(['scope_type' => 'user', 'scope_id' => $uid]) as $existing) {
 			$this->preferenceMapper->delete($existing);
 		}
 
 		foreach ($rows as $row) {
+			$eventName = trim((string) ($row['eventName'] ?? ''));
+			if (!in_array($eventName, $supportedEvents, true)) {
+				continue;
+			}
+
+			$deliveryMode = NotificationPolicy::normalizePersonalDeliveryModeForRoles($roles, $row['deliveryMode'] ?? null);
 			$pref = new \OCA\ConsultasLegales\Db\NotificationPreference();
 			$pref->setScopeType('user');
 			$pref->setScopeId($uid);
-			$pref->setEventName((string) $row['eventName']);
-			$pref->setChannel((string) $row['channel']);
-			$pref->setEnabled((bool) $row['enabled']);
+			$pref->setEventName($eventName);
+			$pref->setChannel(NotificationPolicy::CHANNEL_NEXTCLOUD);
+			$pref->setEnabled(in_array($deliveryMode, [NotificationPolicy::DELIVERY_NEXTCLOUD, NotificationPolicy::DELIVERY_BOTH], true));
 			$this->preferenceMapper->insert($pref);
+
+			$mailPref = new \OCA\ConsultasLegales\Db\NotificationPreference();
+			$mailPref->setScopeType('user');
+			$mailPref->setScopeId($uid);
+			$mailPref->setEventName($eventName);
+			$mailPref->setChannel(NotificationPolicy::CHANNEL_MAIL);
+			$mailPref->setEnabled($deliveryMode === NotificationPolicy::DELIVERY_BOTH);
+			$this->preferenceMapper->insert($mailPref);
 		}
 
 		return $this->getPreferencesForUser($uid);
 	}
 
-	public function emit(string $eventName, Ticket $ticket, array $extraRecipients = [], array $context = []): void {
-		$recipients = array_unique(array_filter(array_merge([$ticket->getCreatorUid(), $ticket->getAssignedUserUid()], $extraRecipients)));
+	public function emit(string $eventName, Ticket $ticket, array $extraRecipients = [], array $context = [], bool $includeDefaultRecipients = true): void {
+		$defaultRecipients = $includeDefaultRecipients ? $this->notificationRecipientResolver->resolveDefaultRecipients($eventName, $ticket, $context) : [];
+		$recipients = array_unique(array_filter(array_merge($defaultRecipients, $extraRecipients)));
 		foreach ($recipients as $uid) {
-			$this->sendNextcloud($uid, $eventName, $ticket, $context);
-			$this->sendMail($uid, $eventName, $ticket, $context);
+			$preferences = $this->resolveChannelPreferencesForUser($uid);
+			if (($preferences[$eventName][NotificationPolicy::CHANNEL_NEXTCLOUD] ?? false) === true) {
+				$this->sendNextcloud($uid, $eventName, $ticket, $context);
+			}
+
+			if (($preferences[$eventName][NotificationPolicy::CHANNEL_MAIL] ?? false) === true) {
+				$this->sendMail($uid, $eventName, $ticket, $context);
+			}
 		}
 	}
 
 	private function sendNextcloud(string $uid, string $eventName, Ticket $ticket, array $context): void {
-		$recipientRole = $this->resolveRecipientRole($uid, $ticket);
+		$recipientRole = $this->notificationRecipientResolver->resolveRecipientRole($uid, $ticket);
 		$notification = $this->notificationManager->createNotification();
 		$notification->setApp(Application::APP_ID)
 			->setUser($uid)
@@ -91,24 +143,13 @@ class NotificationService {
 		}
 
 		$l = $this->l10nFactory->get(Application::APP_ID);
-		$recipientRole = $this->resolveRecipientRole($uid, $ticket);
+		$recipientRole = $this->notificationRecipientResolver->resolveRecipientRole($uid, $ticket);
+		$link = $this->buildNotificationLink($uid, $ticket, $recipientRole);
 		$message = $this->mailer->createMessage();
 		$message->setTo([$email]);
-		$message->setSubject($this->buildMailSubject($l, $eventName, $ticket, $recipientRole));
-		$message->setPlainBody($this->buildMailBody($l, $eventName, $ticket, $recipientRole, $context));
+		$message->setSubject($this->notificationMailBuilder->buildSubject($l, $eventName, $ticket, $recipientRole));
+		$message->setPlainBody($this->notificationMailBuilder->buildBody($l, $eventName, $ticket, $recipientRole, $link));
 		$this->mailer->send($message);
-	}
-
-	private function resolveRecipientRole(string $uid, Ticket $ticket): string {
-		if ($ticket->getCreatorUid() === $uid) {
-			return 'creator';
-		}
-
-		if ($ticket->getAssignedUserUid() === $uid) {
-			return 'assignee';
-		}
-
-		return 'watcher';
 	}
 
 	private function buildNotificationLink(string $uid, Ticket $ticket, string $recipientRole): string {
@@ -126,44 +167,97 @@ class NotificationService {
 		return $this->urlGenerator->linkToRouteAbsolute('legal_advice.page.index') . '#' . $baseRoute;
 	}
 
-	private function buildMailSubject($l, string $eventName, Ticket $ticket, string $recipientRole): string {
-		return match ($eventName) {
-			'ticket_created' => $recipientRole === 'assignee'
-				? $l->t('Nueva consulta asignada: %1$s', [$ticket->getNumber()])
-				: $l->t('Consulta %1$s creada: %2$s', [$ticket->getNumber(), $ticket->getTitle()]),
-			'ticket_assigned' => $l->t('Consulta %1$s asignada: %2$s', [$ticket->getNumber(), $ticket->getTitle()]),
-			'ticket_status_changed' => $l->t('Estado actualizado en la consulta %1$s: %2$s', [$ticket->getNumber(), $ticket->getTitle()]),
-			'ticket_resolved' => $l->t('Consulta %1$s resuelta: %2$s', [$ticket->getNumber(), $ticket->getTitle()]),
-			'ticket_public_reply' => $l->t('Nueva respuesta en la consulta %1$s: %2$s', [$ticket->getNumber(), $ticket->getTitle()]),
-			default => $l->t('Consulta %1$s actualizada: %2$s', [$ticket->getNumber(), $ticket->getTitle()]),
-		};
+	private function resolveChannelPreferencesForUser(string $uid, ?array $roles = null, ?array $resolved = null): array {
+		$roles ??= $this->roleService->getEffectiveRoles($uid);
+		$resolved ??= $this->resolveBaseChannelPreferencesForUser($roles);
+		$all = array_map(static fn ($row) => $row->jsonSerialize(), $this->preferenceMapper->findAllOrdered('scope_id', 'ASC'));
+
+		$userRows = array_values(array_filter($all, static function (array $row) use ($uid): bool {
+			return ($row['scopeType'] ?? '') === 'user'
+				&& ($row['scopeId'] ?? '') === $uid
+				&& in_array((string) ($row['eventName'] ?? ''), NotificationPolicy::getSupportedEvents(), true);
+		}));
+
+		$userRowsByEvent = [];
+		foreach ($userRows as $row) {
+			$userRowsByEvent[(string) $row['eventName']][] = $row;
+		}
+
+		foreach (NotificationPolicy::getSupportedEvents() as $eventName) {
+			$eventRows = $userRowsByEvent[$eventName] ?? [];
+			if ($eventRows === []) {
+				$resolved[$eventName] = $this->applyDefaultUserDeliveryMode($roles, $eventName, $resolved[$eventName]);
+				continue;
+			}
+
+			foreach ($eventRows as $row) {
+				$channel = (string) ($row['channel'] ?? '');
+				if (!isset($resolved[$eventName][$channel])) {
+					continue;
+				}
+
+				$resolved[$eventName][$channel] = $resolved[$eventName][$channel] && (bool) ($row['enabled'] ?? false);
+			}
+		}
+
+		return $resolved;
 	}
 
-	private function buildMailBody($l, string $eventName, Ticket $ticket, string $recipientRole, array $context): string {
-		$statusLabel = $this->getStatusLabel((string) $ticket->getStatus());
+	private function applyDefaultUserDeliveryMode(array $roles, string $eventName, array $channels): array {
+		$deliveryMode = NotificationPolicy::resolveDefaultUserDeliveryModeForRoles(
+			$roles,
+			$eventName,
+			(bool) ($channels[NotificationPolicy::CHANNEL_NEXTCLOUD] ?? false),
+			(bool) ($channels[NotificationPolicy::CHANNEL_MAIL] ?? false),
+		);
 
-		return match ($eventName) {
-			'ticket_created' => $recipientRole === 'assignee'
-				? $l->t('Se le ha asignado una nueva consulta legal. Estado actual: %1$s.', [$statusLabel])
-				: $l->t('Su consulta legal se ha registrado correctamente. Estado actual: %1$s.', [$statusLabel]),
-			'ticket_assigned' => $recipientRole === 'assignee'
-				? $l->t('Se le ha asignado esta consulta legal. Estado actual: %1$s.', [$statusLabel])
-				: $l->t('La consulta legal ha sido asignada para su gestion. Estado actual: %1$s.', [$statusLabel]),
-			'ticket_status_changed' => $l->t('La consulta legal ha cambiado de estado a %1$s.', [$statusLabel]),
-			'ticket_resolved' => $l->t('La consulta legal ha quedado resuelta. Estado actual: %1$s.', [$statusLabel]),
-			'ticket_public_reply' => $l->t('Hay un nuevo comentario en la consulta legal. Estado actual: %1$s.', [$statusLabel]),
-			default => $l->t('Se ha actualizado la consulta legal. Estado actual: %1$s.', [$statusLabel]),
-		};
+		if ($deliveryMode === null) {
+			return $channels;
+		}
+
+		return [
+			NotificationPolicy::CHANNEL_NEXTCLOUD => in_array($deliveryMode, [NotificationPolicy::DELIVERY_NEXTCLOUD, NotificationPolicy::DELIVERY_BOTH], true)
+				&& (bool) ($channels[NotificationPolicy::CHANNEL_NEXTCLOUD] ?? false),
+			NotificationPolicy::CHANNEL_MAIL => $deliveryMode === NotificationPolicy::DELIVERY_BOTH
+				&& (bool) ($channels[NotificationPolicy::CHANNEL_MAIL] ?? false),
+		];
 	}
 
-	private function getStatusLabel(string $status): string {
-		return match ($status) {
-			'nuevo' => 'Nuevo',
-			'asignado' => 'Asignado',
-			'en_progreso' => 'En progreso',
-			'resuelto' => 'Resuelto',
-			'cerrado' => 'Cerrado',
-			default => $status,
-		};
+	private function resolveBaseChannelPreferencesForUser(array $roles): array {
+		$resolved = [];
+		$all = array_map(static fn ($row) => $row->jsonSerialize(), $this->preferenceMapper->findAllOrdered('scope_id', 'ASC'));
+
+		foreach (NotificationPolicy::getSupportedEvents() as $eventName) {
+			$resolved[$eventName] = [
+				NotificationPolicy::CHANNEL_NEXTCLOUD => false,
+				NotificationPolicy::CHANNEL_MAIL => false,
+			];
+
+			foreach ($roles as $role) {
+				$resolved[$eventName][NotificationPolicy::CHANNEL_NEXTCLOUD] = $resolved[$eventName][NotificationPolicy::CHANNEL_NEXTCLOUD]
+					|| $this->getBaseChannelEnabledForProfile($all, $role, $eventName, NotificationPolicy::CHANNEL_NEXTCLOUD);
+				$resolved[$eventName][NotificationPolicy::CHANNEL_MAIL] = $resolved[$eventName][NotificationPolicy::CHANNEL_MAIL]
+					|| $this->getBaseChannelEnabledForProfile($all, $role, $eventName, NotificationPolicy::CHANNEL_MAIL);
+			}
+		}
+
+		return $resolved;
 	}
+
+	private function getBaseChannelEnabledForProfile(array $allRows, string $profile, string $eventName, string $channel): bool {
+		foreach ($allRows as $row) {
+			if (($row['scopeType'] ?? '') !== 'profile') {
+				continue;
+			}
+
+			if (($row['scopeId'] ?? '') !== $profile || ($row['eventName'] ?? '') !== $eventName || ($row['channel'] ?? '') !== $channel) {
+				continue;
+			}
+
+			return (bool) ($row['enabled'] ?? false);
+		}
+
+		return NotificationPolicy::getDefaultChannelEnabledForProfile($profile, $eventName, $channel);
+	}
+
 }

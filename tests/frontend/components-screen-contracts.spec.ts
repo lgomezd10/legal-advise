@@ -10,7 +10,7 @@ import { AttachmentPickerStub, RichTextContentStub, RichTextEditorStub, Searchab
 import { createBootstrapData, createComment, createTicket } from './helpers/testData'
 
 describe('Contratos visibles de componentes de pantalla', () => {
-	it('TicketForm muestra los canales definidos y el botón de crear ticket', async() => {
+	it('TicketForm muestra los campos principales y el botón de crear ticket', async() => {
 		const bootstrap = createBootstrapData()
 		const wrapper = mount(TicketForm, {
 			props: {
@@ -22,7 +22,6 @@ describe('Contratos visibles de componentes de pantalla', () => {
 					title: '',
 					userDescription: '',
 					urgencyId: '1',
-					communicationChannel: 'nextcloud_mail',
 					personalData: { email: 'usuario@example.com', city: 'Madrid' },
 					attachments: { files: [], links: [] },
 				},
@@ -42,10 +41,6 @@ describe('Contratos visibles de componentes de pantalla', () => {
 
 		expect(wrapper.text()).toContain('Título')
 		expect(wrapper.text()).toContain('Criticidad')
-		expect(wrapper.text()).toContain('Canal de comunicación')
-		expect(wrapper.text()).toContain('Nextcloud')
-		expect(wrapper.text()).toContain('Correo')
-		expect(wrapper.text()).toContain('Nextcloud y correo')
 		expect(wrapper.text()).toContain('Adjuntos iniciales')
 
 		const submitButton = wrapper.get('button.gi-primary-button')
@@ -98,11 +93,205 @@ describe('Contratos visibles de componentes de pantalla', () => {
 		await nextTick()
 
 		expect(wrapper.text()).toContain('Motivo del cierre')
-		await wrapper.get('textarea.gi-textarea--plain').setValue('Cierre validado en prueba')
+		const closeReasonEditor = wrapper.get('.gi-textarea--plain')
+		;(closeReasonEditor.element as HTMLDivElement).innerText = 'Cierre validado en prueba'
+		await closeReasonEditor.trigger('input')
+		await nextTick()
 		await wrapper.get('button.gi-primary-button').trigger('click')
 
 		expect(wrapper.emitted('save')).toBeTruthy()
-		expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({ closeReason: 'Cierre validado en prueba' })
+		expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({ status: 'cerrado', closeReason: 'Cierre validado en prueba' })
+	})
+
+	it('TicketSidebarPanel emite el nuevo estado al guardar cambios de soporte', async() => {
+		const bootstrap = createBootstrapData({ roles: ['soporte'] })
+		const wrapper = mount(TicketSidebarPanel, {
+			props: {
+				ticket: createTicket({ status: 'nuevo', comments: [createComment()], canManage: true, canComment: true }),
+				roles: ['soporte'],
+				users: bootstrap.assignables.users,
+				groups: bootstrap.assignables.groups,
+				currentUserUid: 'usuario1',
+				statuses: bootstrap.catalogs.statuses,
+				urgencies: bootstrap.catalogs.urgencies,
+				readOnly: false,
+			},
+			global: {
+				stubs: {
+					SearchableSelect: SearchableSelectStub,
+					AttachmentPicker: AttachmentPickerStub,
+					RichTextEditor: RichTextEditorStub,
+					RichTextContent: RichTextContentStub,
+				},
+			},
+		})
+
+		const selects = wrapper.findAllComponents(SearchableSelectStub)
+		selects[0].vm.$emit('update:modelValue', 'en_espera_usuario')
+		await nextTick()
+		await wrapper.get('button.gi-primary-button').trigger('click')
+
+		expect(wrapper.emitted('save')).toBeTruthy()
+		expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({ status: 'en_espera_usuario' })
+	})
+
+	it('TicketSidebarPanel guarda cuando solo cambia el estado usando el selector real', async() => {
+		const bootstrap = createBootstrapData({ roles: ['soporte'] })
+		const wrapper = mount(TicketSidebarPanel, {
+			props: {
+				ticket: createTicket({ status: 'nuevo', comments: [createComment()], canManage: true, canComment: true }),
+				roles: ['soporte'],
+				users: bootstrap.assignables.users,
+				groups: bootstrap.assignables.groups,
+				currentUserUid: 'usuario1',
+				statuses: bootstrap.catalogs.statuses,
+				urgencies: bootstrap.catalogs.urgencies,
+				readOnly: false,
+			},
+			global: {
+				stubs: {
+					AttachmentPicker: AttachmentPickerStub,
+					RichTextEditor: RichTextEditorStub,
+					RichTextContent: RichTextContentStub,
+				},
+			},
+		})
+
+		const statusTrigger = wrapper.findAll('.gi-search-select__trigger')[0]
+		await statusTrigger.trigger('click')
+		await nextTick()
+
+		const waitStatusOption = wrapper.findAll('.gi-search-select__option').find((option) => option.text().includes('En espera usuario'))
+		expect(waitStatusOption).toBeTruthy()
+		await waitStatusOption!.trigger('click')
+		await nextTick()
+
+		await wrapper.get('button.gi-primary-button').trigger('click')
+
+		expect(wrapper.emitted('save')).toBeTruthy()
+		expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({ status: 'en_espera_usuario' })
+	})
+
+	it('TicketSidebarPanel asigna estado asignado en frontend cuando solo cambia la asignación', async() => {
+		const bootstrap = createBootstrapData({ roles: ['soporte'] })
+		const wrapper = mount(TicketSidebarPanel, {
+			props: {
+				ticket: createTicket({
+					status: 'en_progreso',
+					assignedUserUid: 'soporte1',
+					assignedGroupId: 'grupo-soporte',
+					comments: [createComment()],
+					canManage: true,
+					canComment: true,
+				}),
+				roles: ['soporte'],
+				users: bootstrap.assignables.users,
+				groups: bootstrap.assignables.groups,
+				currentUserUid: 'usuario1',
+				statuses: bootstrap.catalogs.statuses,
+				urgencies: bootstrap.catalogs.urgencies,
+				readOnly: false,
+			},
+			global: {
+				stubs: {
+					SearchableSelect: SearchableSelectStub,
+					AttachmentPicker: AttachmentPickerStub,
+					RichTextEditor: RichTextEditorStub,
+					RichTextContent: RichTextContentStub,
+				},
+			},
+		})
+
+		const selects = wrapper.findAllComponents(SearchableSelectStub)
+		selects[2].vm.$emit('update:modelValue', 'soporte2')
+		await nextTick()
+		await wrapper.get('button.gi-primary-button').trigger('click')
+
+		expect(wrapper.emitted('save')).toBeTruthy()
+		expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({ assignedUserUid: 'soporte2', status: 'asignado' })
+	})
+
+	it('TicketSidebarPanel envía status cuando cambia asignación y estado de forma explícita', async() => {
+		const bootstrap = createBootstrapData({ roles: ['soporte'] })
+		const wrapper = mount(TicketSidebarPanel, {
+			props: {
+				ticket: createTicket({
+					status: 'nuevo',
+					assignedUserUid: 'soporte1',
+					assignedGroupId: 'grupo-soporte',
+					comments: [createComment()],
+					canManage: true,
+					canComment: true,
+				}),
+				roles: ['soporte'],
+				users: bootstrap.assignables.users,
+				groups: bootstrap.assignables.groups,
+				currentUserUid: 'usuario1',
+				statuses: bootstrap.catalogs.statuses,
+				urgencies: bootstrap.catalogs.urgencies,
+				readOnly: false,
+			},
+			global: {
+				stubs: {
+					SearchableSelect: SearchableSelectStub,
+					AttachmentPicker: AttachmentPickerStub,
+					RichTextEditor: RichTextEditorStub,
+					RichTextContent: RichTextContentStub,
+				},
+			},
+		})
+
+		const selects = wrapper.findAllComponents(SearchableSelectStub)
+		selects[2].vm.$emit('update:modelValue', 'soporte2')
+		selects[0].vm.$emit('update:modelValue', 'en_espera_usuario')
+		await nextTick()
+		await wrapper.get('button.gi-primary-button').trigger('click')
+
+		expect(wrapper.emitted('save')).toBeTruthy()
+		expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({ assignedUserUid: 'soporte2', status: 'en_espera_usuario' })
+	})
+
+	it('TicketSidebarPanel revierte el estado y desactiva guardar al restaurar la asignación original', async() => {
+		const bootstrap = createBootstrapData({ roles: ['soporte'] })
+		const wrapper = mount(TicketSidebarPanel, {
+			props: {
+				ticket: createTicket({
+					status: 'en_progreso',
+					assignedUserUid: 'soporte1',
+					assignedGroupId: null,
+					comments: [createComment()],
+					canManage: true,
+					canComment: true,
+				}),
+				roles: ['soporte'],
+				users: bootstrap.assignables.users,
+				groups: bootstrap.assignables.groups,
+				currentUserUid: 'usuario1',
+				statuses: bootstrap.catalogs.statuses,
+				urgencies: bootstrap.catalogs.urgencies,
+				readOnly: false,
+			},
+			global: {
+				stubs: {
+					SearchableSelect: SearchableSelectStub,
+					AttachmentPicker: AttachmentPickerStub,
+					RichTextEditor: RichTextEditorStub,
+					RichTextContent: RichTextContentStub,
+				},
+			},
+		})
+
+		const selects = wrapper.findAllComponents(SearchableSelectStub)
+		selects[2].vm.$emit('update:modelValue', 'soporte2')
+		await nextTick()
+		expect(wrapper.findAllComponents(SearchableSelectStub)[0].props('modelValue')).toBe('asignado')
+		expect(wrapper.get('button.gi-primary-button').attributes('disabled')).toBeUndefined()
+
+		selects[2].vm.$emit('update:modelValue', 'soporte1')
+		await nextTick()
+
+		expect(wrapper.findAllComponents(SearchableSelectStub)[0].props('modelValue')).toBe('en_progreso')
+		expect(wrapper.get('button.gi-primary-button').attributes('disabled')).toBeDefined()
 	})
 
 	it('TicketSidebarPanel muestra reabrir cuando el ticket puede reabrirse', () => {

@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import SupportFilterBuilder from '@/components/SupportFilterBuilder.vue'
-import SupportTicketTable from '@/components/SupportTicketTable.vue'
 import type { SupportColumnKey, Ticket } from '@/types'
 import { useBootstrapStore } from '@/store/bootstrap'
 import { useTicketsStore } from '@/store/tickets'
 import { useSupportFiltersStore } from '@/store/supportFilters'
 import { richTextToPlainText } from '@/utils/richText'
 import { DEFAULT_COLUMN_EDITOR_ORDER, DEFAULT_SUPPORT_COLUMNS, DEFAULT_SUPPORT_SORT, loadSupportConsoleState, normalizeSupportColumnOrder, normalizeSupportColumns, saveSupportConsoleState } from '@/utils/supportConsoleState'
+
+const SupportFilterBuilder = defineAsyncComponent(() => import('@/components/SupportFilterBuilder.vue'))
+const SupportTicketTable = defineAsyncComponent(() => import('@/components/SupportTicketTable.vue'))
 
 const router = useRouter()
 const route = useRoute()
@@ -20,6 +21,7 @@ const selectedFilterId = ref<number | null>(null)
 const builderInitialFilterId = ref<number | null>(null)
 const builderInitialCriteria = ref<Record<string, unknown>>({})
 const statuses = computed(() => bootstrapStore.data.catalogs.statuses)
+const urgencies = computed(() => bootstrapStore.data.catalogs.urgencies)
 const types = computed(() => bootstrapStore.data.catalogs.types)
 const provinces = computed(() => bootstrapStore.data.catalogs.provinces)
 const users = computed(() => bootstrapStore.data.assignables.users)
@@ -29,9 +31,10 @@ const initialCriteria = computed<Record<string, unknown>>(() => {
 	return normalizeSupportCriteria(defaultFilter?.criteria ?? {})
 })
 const columnEditorOpen = ref(false)
-const selectedColumnCount = computed(() => visibleColumns.value.length)
 const visibleColumns = ref<SupportColumnKey[]>([...DEFAULT_SUPPORT_COLUMNS])
 const columnEditorOrder = ref<SupportColumnKey[]>([...DEFAULT_COLUMN_EDITOR_ORDER])
+const draggedColumnKey = ref<SupportColumnKey | null>(null)
+const dragOverColumnKey = ref<SupportColumnKey | null>(null)
 const sortKey = ref<SupportColumnKey | 'createdBy'>(DEFAULT_SUPPORT_SORT.sortKey)
 const sortDirection = ref<'asc' | 'desc'>(DEFAULT_SUPPORT_SORT.sortDirection)
 const consoleStateReady = ref(false)
@@ -241,29 +244,50 @@ function toggleColumn(columnKey: SupportColumnKey, checked: boolean) {
 	}
 }
 
-function moveColumn(columnKey: SupportColumnKey, direction: -1 | 1) {
-	const currentVisibleOrder = [...orderedVisibleColumns.value]
-	const index = currentVisibleOrder.indexOf(columnKey)
-	if (index === -1) {
+function reorderColumns(sourceColumnKey: SupportColumnKey, targetColumnKey: SupportColumnKey) {
+	if (sourceColumnKey === targetColumnKey) {
 		return
 	}
 
-	const nextIndex = index + direction
-	if (nextIndex < 0 || nextIndex >= currentVisibleOrder.length) {
-		return
-	}
-
-	const targetColumnKey = currentVisibleOrder[nextIndex]
 	const next = [...columnEditorOrder.value]
-	const sourceOrderIndex = next.indexOf(columnKey)
-	const targetOrderIndex = next.indexOf(targetColumnKey)
-	if (sourceOrderIndex === -1 || targetOrderIndex === -1) {
+	const sourceIndex = next.indexOf(sourceColumnKey)
+	const targetIndex = next.indexOf(targetColumnKey)
+	if (sourceIndex === -1 || targetIndex === -1) {
 		return
 	}
 
-	;[next[sourceOrderIndex], next[targetOrderIndex]] = [next[targetOrderIndex], next[sourceOrderIndex]]
+	const [movedColumn] = next.splice(sourceIndex, 1)
+	next.splice(targetIndex, 0, movedColumn)
 	columnEditorOrder.value = next
 	visibleColumns.value = next.filter((column) => visibleColumns.value.includes(column))
+}
+
+function handleColumnDragStart(columnKey: SupportColumnKey) {
+	draggedColumnKey.value = columnKey
+	dragOverColumnKey.value = columnKey
+}
+
+function handleColumnDragOver(columnKey: SupportColumnKey) {
+	if (!draggedColumnKey.value || draggedColumnKey.value === columnKey) {
+		return
+	}
+
+	dragOverColumnKey.value = columnKey
+}
+
+function handleColumnDrop(columnKey: SupportColumnKey) {
+	if (!draggedColumnKey.value) {
+		return
+	}
+
+	reorderColumns(draggedColumnKey.value, columnKey)
+	draggedColumnKey.value = null
+	dragOverColumnKey.value = null
+}
+
+function resetColumnDragState() {
+	draggedColumnKey.value = null
+	dragOverColumnKey.value = null
 }
 
 function restoreDefaultColumns() {
@@ -278,6 +302,7 @@ function onSortChange(payload: { key: SupportColumnKey | 'createdBy', direction:
 
 function closeColumnEditor() {
 	columnEditorOpen.value = false
+	resetColumnDragState()
 }
 </script>
 
@@ -305,6 +330,7 @@ function closeColumnEditor() {
 			@delete="supportFiltersStore.remove" />
 		<SupportTicketTable
 			:tickets="sortedTickets"
+			:urgencies="urgencies"
 			:types="types"
 			:visible-columns="orderedVisibleColumns"
 			:sort-key="sortKey"
@@ -321,20 +347,23 @@ function closeColumnEditor() {
 					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeColumnEditor">x</button>
 				</header>
 				<div class="gi-support-column-editor-modal__grid">
-					<div v-for="column in orderedColumns" :key="column.key" class="gi-switch-row gi-support-column-editor__item">
+					<div
+						v-for="column in orderedColumns"
+						:key="column.key"
+						class="gi-switch-row gi-support-column-editor__item"
+						:class="{
+							'gi-support-column-editor__item--dragging': draggedColumnKey === column.key,
+							'gi-support-column-editor__item--drop-target': dragOverColumnKey === column.key && draggedColumnKey !== column.key,
+						}"
+						draggable="true"
+						@dragstart="handleColumnDragStart(column.key)"
+						@dragover.prevent="handleColumnDragOver(column.key)"
+						@drop.prevent="handleColumnDrop(column.key)"
+						@dragend="resetColumnDragState">
 						<input :id="`support-column-visible-${column.key}`" :name="`support-column-visible-${column.key}`" :checked="visibleColumns.includes(column.key)" type="checkbox" @change="toggleColumn(column.key, ($event.target as HTMLInputElement).checked)" />
 						<span>{{ column.label }}</span>
 						<div class="gi-support-column-editor__order-actions">
-							<button class="gi-round-icon-button gi-support-column-editor__move-button" type="button" aria-label="Subir columna" title="Subir columna" :disabled="!visibleColumns.includes(column.key) || orderedVisibleColumns.indexOf(column.key) === 0" @click="moveColumn(column.key, -1)">
-								<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-									<path d="M8 3.5 3.5 8h2.25v4.5h4.5V8H12.5L8 3.5Z" />
-								</svg>
-							</button>
-							<button class="gi-round-icon-button gi-support-column-editor__move-button" type="button" aria-label="Bajar columna" title="Bajar columna" :disabled="!visibleColumns.includes(column.key) || orderedVisibleColumns.indexOf(column.key) === orderedVisibleColumns.length - 1" @click="moveColumn(column.key, 1)">
-								<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-									<path d="M5.75 3.5v4.5H3.5L8 12.5 12.5 8h-2.25V3.5h-4.5Z" />
-								</svg>
-							</button>
+							<span class="gi-support-column-editor__drag-handle" aria-hidden="true" title="Arrastra para mover">⋮⋮</span>
 						</div>
 					</div>
 				</div>
@@ -367,6 +396,18 @@ function closeColumnEditor() {
 	align-items: center;
 	gap: .75rem;
 	padding: .55rem .65rem;
+	cursor: grab;
+	transition: border-color .18s ease, background .18s ease, opacity .18s ease;
+}
+
+.gi-support-column-editor__item--dragging {
+	opacity: .55;
+	cursor: grabbing;
+}
+
+.gi-support-column-editor__item--drop-target {
+	background: var(--gi-color-primary-soft);
+	outline: 1px solid var(--gi-color-primary);
 }
 
 .gi-support-column-editor__order-actions {
@@ -375,9 +416,16 @@ function closeColumnEditor() {
 	margin-left: auto;
 }
 
-.gi-support-column-editor__move-button {
-	width: 1.9rem;
+.gi-support-column-editor__drag-handle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 1.9rem;
 	height: 1.9rem;
+	border-radius: 999px;
+	color: var(--gi-color-text-muted);
+	font-size: 1rem;
+	line-height: 1;
 }
 
 .gi-support-column-editor-modal__grid {

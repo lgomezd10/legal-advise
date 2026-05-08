@@ -23,6 +23,7 @@ class BootstrapService {
 		private readonly IGroupManager $groupManager,
 		private readonly IUserManager $userManager,
 		private readonly IAppManager $appManager,
+		private readonly AppStorageUsageService $appStorageUsageService,
 	) {
 	}
 
@@ -51,6 +52,7 @@ class BootstrapService {
 				'uid' => $uid,
 				'displayName' => $user?->getDisplayName() ?? '',
 			],
+			'appInfo' => $this->buildAppInfo(),
 			'roles' => $roles,
 			'navigation' => array_values(array_filter($navigation, static fn (array $item) => $item['visible'])),
 			'catalogs' => [
@@ -63,6 +65,7 @@ class BootstrapService {
 			],
 			'supportFilters' => $uid === '' ? [] : $this->supportFilterService->listForConsole($uid),
 			'personalConfig' => $uid === '' ? [] : $this->personalConfigService->getForUser($uid),
+			'personalConfigHasStoredValues' => $uid !== '' && $this->personalConfigService->hasStoredValues($uid),
 			'assignables' => [
 				'users' => $assignableUsers,
 				'groups' => $assignableGroups,
@@ -77,6 +80,7 @@ class BootstrapService {
 				'uid' => $uid,
 				'displayName' => $displayName,
 			],
+			'appInfo' => $this->buildAppInfo(),
 			'roles' => [],
 			'navigation' => [],
 			'catalogs' => [
@@ -89,11 +93,29 @@ class BootstrapService {
 			],
 			'supportFilters' => [],
 			'personalConfig' => [],
+			'personalConfigHasStoredValues' => false,
 			'assignables' => [
 				'users' => [],
 				'groups' => [],
 			],
 			'tasksIntegration' => $this->taskSyncService->getIntegrationStatus(),
+		];
+	}
+
+	private function buildAppInfo(): array {
+		$storage = $this->appStorageUsageService->summarize();
+
+		return [
+			'id' => Application::APP_ID,
+			'version' => $this->appManager->getAppVersion(Application::APP_ID),
+			'storageBytes' => $storage['totalBytes'],
+			'storageLabel' => $storage['totalLabel'],
+			'appDataBytes' => $storage['appDataBytes'],
+			'appDataLabel' => $storage['appDataLabel'],
+			'databaseBytes' => $storage['databaseBytes'],
+			'databaseLabel' => $storage['databaseLabel'],
+			'attachmentBytes' => $storage['attachmentBytes'],
+			'attachmentLabel' => $storage['attachmentLabel'],
 		];
 	}
 

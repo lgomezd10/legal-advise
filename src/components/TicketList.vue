@@ -9,7 +9,7 @@ import { excerptRichText } from '@/utils/richText'
 const props = defineProps<{
 	tickets: Ticket[]
 	emptyLabel: string
- 	statuses?: StatusOption[]
+	statuses?: StatusOption[]
 	types?: TypeNode[]
 	users?: AssignableOption[]
 	groups?: AssignableOption[]

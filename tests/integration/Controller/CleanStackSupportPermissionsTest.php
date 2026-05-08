@@ -14,6 +14,7 @@ class CleanStackSupportPermissionsTest extends TestCase {
 	private const SUPPORT_PASSWORD = 'TickSupp1!2025';
 	private const RRHH_USER = 'rrhh1';
 	private const RRHH_PASSWORD = 'TickRrhh1!2025';
+	private const RRHH_GROUP = 'rrhhLegal';
 
 	public function testSupportUserCannotManageForeignGroupTicketInCleanStack(): void {
 		if (!$this->isCleanStackAvailable()) {
@@ -36,7 +37,7 @@ class CleanStackSupportPermissionsTest extends TestCase {
 			$forbiddenAssignment = $this->requestJson(
 				'PUT',
 				'/ocs/v2.php/apps/legal_advice/api/v1/tickets/' . $ticketId . '?format=json',
-				['assignedGroupId' => 'rrhh'],
+				['assignedGroupId' => self::RRHH_GROUP],
 				self::SUPPORT_USER,
 				self::SUPPORT_PASSWORD,
 			);
@@ -48,13 +49,13 @@ class CleanStackSupportPermissionsTest extends TestCase {
 			$assigned = $this->requestJson(
 				'PUT',
 				'/ocs/v2.php/apps/legal_advice/api/v1/tickets/' . $ticketId . '?format=json',
-				['assignedGroupId' => 'rrhh'],
+				['assignedGroupId' => self::RRHH_GROUP],
 				self::ADMIN_USER,
 				self::ADMIN_PASSWORD,
 			);
 
 			self::assertSame(200, $assigned['statusCode']);
-			self::assertSame('rrhh', $assigned['body']['ocs']['data']['assignedGroupId'] ?? null);
+			self::assertSame(self::RRHH_GROUP, $assigned['body']['ocs']['data']['assignedGroupId'] ?? null);
 			$wasAssignedToRrhh = true;
 
 			$supportAfter = $this->requestJson('GET', '/ocs/v2.php/apps/legal_advice/api/v1/tickets/' . $ticketId . '?format=json', null, self::SUPPORT_USER, self::SUPPORT_PASSWORD);

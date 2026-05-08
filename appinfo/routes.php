@@ -30,6 +30,7 @@ return [
 		['name' => 'notification_api#updatePreferences', 'url' => '/api/v1/notifications/preferences', 'verb' => 'PUT'],
 		['name' => 'personal_config_api#show', 'url' => '/api/v1/personal-config', 'verb' => 'GET'],
 		['name' => 'personal_config_api#update', 'url' => '/api/v1/personal-config', 'verb' => 'PUT'],
+		['name' => 'personal_config_api#restore', 'url' => '/api/v1/personal-config', 'verb' => 'DELETE'],
 		['name' => 'task_api#status', 'url' => '/api/v1/tasks/status', 'verb' => 'GET'],
 	],
 ];

@@ -8,6 +8,8 @@ use OCA\ConsultasLegales\Db\Comment;
 use OCA\ConsultasLegales\Db\CommentMapper;
 use OCA\ConsultasLegales\Db\HistoryEntry;
 use OCA\ConsultasLegales\Db\HistoryEntryMapper;
+use OCA\ConsultasLegales\Notification\TicketNotificationPublisher;
+use OCA\ConsultasLegales\Ticket\TicketStatusPolicy;
 use OCA\ConsultasLegales\Db\Ticket;
 use OCA\ConsultasLegales\Db\TicketData;
 use OCA\ConsultasLegales\Db\TicketDataMapper;
@@ -35,7 +37,8 @@ class TicketService {
 		private readonly AssignmentService $assignmentService,
 		private readonly PersonalConfigService $personalConfigService,
 		private readonly PermissionService $permissionService,
-		private readonly NotificationService $notificationService,
+		private readonly TicketStatusPolicy $ticketStatusPolicy,
+		private readonly TicketNotificationPublisher $ticketNotificationPublisher,
 		private readonly TaskSyncService $taskSyncService,
 		private readonly RichTextSanitizer $richTextSanitizer,
 		private readonly RoleService $roleService,
@@ -82,7 +85,7 @@ class TicketService {
 			$this->assertAssignmentPayloadAllowed($uid, ['assignedGroupId' => $assignment['assignedGroupId']], null);
 		}
 		$this->assertAssignmentConsistency($assignment['assignedUserUid'], $assignment['assignedGroupId']);
-		$initialStatus = $this->resolveAssignmentAwareStatus('nuevo', $assignment['assignedUserUid'], $assignment['assignedGroupId']);
+		$initialStatus = $this->ticketStatusPolicy->resolveCreationStatus($assignment['assignedUserUid'], $assignment['assignedGroupId']);
 
 		$ticket = new Ticket();
 		$ticket->setNumber($this->ticketNumberService->nextNumber($now));
@@ -100,14 +103,14 @@ class TicketService {
 		$ticket->setAssignedGroupId($assignment['assignedGroupId']);
 		$ticket->setProvince($province);
 		$ticket->setCity((string) (($payload['personalData']['city'] ?? '') ?: ''));
-		$ticket->setMetadata(['communicationChannel' => $payload['communicationChannel'] ?? 'nextcloud_mail']);
+		$ticket->setMetadata([]);
 
 		$ticket = $this->ticketMapper->insert($ticket);
 		$this->savePersonalData($ticket->getId(), $payload['personalData'] ?? []);
 		$this->rememberProvinceForUser($uid, $province);
 		$this->addHistory($ticket->getId(), $uid, $isSupportActor ? RoleService::SUPPORT : RoleService::USER, 'ticket_created', 'publico', ['status' => $initialStatus]);
 		$this->taskSyncService->syncTicket($ticket);
-		$this->notificationService->emit('ticket_created', $ticket);
+		$this->ticketNotificationPublisher->publishCreatedTicket($ticket);
 
 		return $this->serializeTicket($uid, $ticket, true);
 	}
@@ -159,7 +162,13 @@ class TicketService {
 		}
 
 		$this->assertAssignmentConsistency($ticket->getAssignedUserUid(), $ticket->getAssignedGroupId());
-		$normalizedStatus = $this->resolveAssignmentAwareStatus((string) $ticket->getStatus(), $ticket->getAssignedUserUid(), $ticket->getAssignedGroupId());
+		$normalizedStatus = $this->ticketStatusPolicy->resolveUpdatedStatus(
+			(string) $ticket->getStatus(),
+			$ticket->getAssignedUserUid(),
+			$ticket->getAssignedGroupId(),
+			$assignmentChanged,
+			array_key_exists('status', $payload),
+		);
 		if ($normalizedStatus !== (string) $ticket->getStatus()) {
 			$ticket->setStatus($normalizedStatus);
 			$ticket->setStatusUpdatedAt(time());
@@ -178,21 +187,14 @@ class TicketService {
 			$this->addClosureReasonComment($ticket, $uid, $closeReason);
 		}
 		$this->taskSyncService->syncTicket($ticket);
-
-		$eventName = 'ticket_updated';
-		if ($assignmentChanged) {
-			$eventName = 'ticket_assigned';
-		} elseif ($statusChanged) {
-			$eventName = in_array((string) $ticket->getStatus(), ['resuelto', 'cerrado'], true)
-				? 'ticket_resolved'
-				: 'ticket_status_changed';
-		}
-
-		$this->notificationService->emit($eventName, $ticket, [], [
-			'previousStatus' => $previousStatus,
-			'previousAssignedUserUid' => $previousAssignedUserUid,
-			'previousAssignedGroupId' => $previousAssignedGroupId,
-		]);
+		$this->ticketNotificationPublisher->publishUpdatedTicket(
+			$ticket,
+			$previousStatus,
+			$previousAssignedUserUid,
+			$previousAssignedGroupId,
+			$statusChanged,
+			$assignmentChanged,
+		);
 
 		return $this->serializeTicket($uid, $ticket, true);
 	}
@@ -254,7 +256,7 @@ class TicketService {
 		$ticket = $this->ticketMapper->update($ticket);
 		$this->taskSyncService->syncTicket($ticket);
 		$this->addHistory($ticketId, $uid, $comment->getAuthorRole(), 'comment_added', $visibility, $historyPayload);
-		$this->notificationService->emit('ticket_public_reply', $ticket);
+		$this->ticketNotificationPublisher->publishPublicReply($ticket);
 
 		return $comment->jsonSerialize();
 	}
@@ -270,7 +272,7 @@ class TicketService {
 		}
 
 		$previousStatus = (string) $ticket->getStatus();
-		$ticket->setStatus($this->resolveAssignmentAwareStatus('nuevo', $ticket->getAssignedUserUid(), $ticket->getAssignedGroupId()));
+		$ticket->setStatus($this->ticketStatusPolicy->resolveReopenedStatus($ticket->getAssignedUserUid(), $ticket->getAssignedGroupId()));
 		$ticket->setStatusUpdatedAt(time());
 		$ticket->setUpdatedAt(time());
 		$ticket = $this->ticketMapper->update($ticket);
@@ -279,7 +281,7 @@ class TicketService {
 			'nextStatus' => (string) $ticket->getStatus(),
 		]);
 		$this->taskSyncService->syncTicket($ticket);
-		$this->notificationService->emit('ticket_status_changed', $ticket, [], ['previousStatus' => $previousStatus]);
+		$this->ticketNotificationPublisher->publishReopenedTicket($ticket, $previousStatus);
 
 		return $this->serializeTicket($uid, $ticket, true);
 	}
@@ -553,19 +555,6 @@ class TicketService {
 		}
 
 		return array_map(static fn ($group) => $group->getGID(), $this->groupManager->getUserGroups($user));
-	}
-
-	private function resolveAssignmentAwareStatus(string $currentStatus, ?string $assignedUserUid, ?string $assignedGroupId): string {
-		$hasAssignment = ($assignedUserUid !== null && $assignedUserUid !== '') || ($assignedGroupId !== null && $assignedGroupId !== '');
-		if ($hasAssignment && $currentStatus === 'nuevo') {
-			return 'asignado';
-		}
-
-		if (!$hasAssignment && $currentStatus === 'asignado') {
-			return 'nuevo';
-		}
-
-		return $currentStatus;
 	}
 
 	private function parseDateBoundary(string $value, bool $endOfDay): ?int {

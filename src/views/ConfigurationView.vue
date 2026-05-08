@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, defineAsyncComponent, reactive } from 'vue'
 import PersonalConfigView from '@/views/PersonalConfigView.vue'
-import AdminConsoleView from '@/views/AdminConsoleView.vue'
-import SupportSettingsPanel from '@/components/SupportSettingsPanel.vue'
 import { useBootstrapStore } from '@/store/bootstrap'
+
+const SupportSettingsPanel = defineAsyncComponent(() => import('@/components/SupportSettingsPanel.vue'))
+const AdminConsoleView = defineAsyncComponent(() => import('@/views/AdminConsoleView.vue'))
 
 const bootstrapStore = useBootstrapStore()
 const openSections = reactive({
@@ -12,7 +13,7 @@ const openSections = reactive({
 	admin: false,
 })
 
-const showPersonal = computed(() => bootstrapStore.hasRole('usuario'))
+const showPersonal = computed(() => bootstrapStore.data.roles.length > 0)
 const showSupport = computed(() => bootstrapStore.hasRole('soporte'))
 const showAdmin = computed(() => bootstrapStore.hasRole('administrador'))
 </script>

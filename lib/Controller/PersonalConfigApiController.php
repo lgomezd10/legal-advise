@@ -26,7 +26,10 @@ class PersonalConfigApiController extends BaseApiController {
 	public function show(): DataResponse {
 		return $this->respond(function (): array {
 			$uid = $this->assertAppAccess();
-			return ['values' => $this->personalConfigService->getForUser($uid)];
+			return [
+				'values' => $this->personalConfigService->getForUser($uid),
+				'hasStoredValues' => $this->personalConfigService->hasStoredValues($uid),
+			];
 		});
 	}
 
@@ -35,7 +38,21 @@ class PersonalConfigApiController extends BaseApiController {
 		return $this->respond(function (): array {
 			$uid = $this->assertAppAccess();
 			$values = $this->request->getParam('values') ?? [];
-			return ['values' => $this->personalConfigService->saveForUser($uid, is_array($values) ? $values : [])];
+			return [
+				'values' => $this->personalConfigService->saveForUser($uid, is_array($values) ? $values : []),
+				'hasStoredValues' => true,
+			];
+		});
+	}
+
+	#[NoAdminRequired]
+	public function restore(): DataResponse {
+		return $this->respond(function (): array {
+			$uid = $this->assertAppAccess();
+			return [
+				'values' => $this->personalConfigService->restoreForUser($uid),
+				'hasStoredValues' => false,
+			];
 		});
 	}
 }

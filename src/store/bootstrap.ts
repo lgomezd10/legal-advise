@@ -4,10 +4,23 @@ import { fetchBootstrap } from '@/services/bootstrap'
 import type { BootstrapData } from '@/types'
 
 const fallbackState: BootstrapData = {
+		appInfo: {
+			id: 'legal_advice',
+			version: '',
+			storageBytes: 0,
+			storageLabel: '0 B',
+			appDataBytes: 0,
+			appDataLabel: '0 B',
+			databaseBytes: 0,
+			databaseLabel: '0 B',
+			attachmentBytes: 0,
+			attachmentLabel: '0 B',
+		},
 	currentUser: { uid: '', displayName: '' },
 	roles: [],
 	navigation: [],
 	personalConfig: {},
+	personalConfigHasStoredValues: false,
 	catalogs: { statuses: [], urgencies: [], types: [], fields: [], provinces: [], attachmentConfig: { allowedExtensions: [], maxFileSizeMb: 25 } },
 	supportFilters: [],
 	assignables: { users: [], groups: [] },
@@ -47,10 +60,11 @@ export const useBootstrapStore = defineStore('bootstrap', {
 					},
 				}
 			},
-		setPersonalConfig(personalConfig: Record<string, string>) {
+		setPersonalConfig(personalConfig: Record<string, string>, hasStoredValues?: boolean) {
 			this.data = {
 				...this.data,
 				personalConfig: { ...personalConfig },
+				personalConfigHasStoredValues: hasStoredValues ?? this.data.personalConfigHasStoredValues,
 			}
 		},
 	},

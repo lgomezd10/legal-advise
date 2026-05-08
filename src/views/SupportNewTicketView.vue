@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import SearchableSelect from '@/components/SearchableSelect.vue'
-import TicketForm from '@/components/TicketForm.vue'
 import { createDefaultTicketDraft } from '@/services/ticketDraft'
 import { useBootstrapStore } from '@/store/bootstrap'
 import { useTicketsStore } from '@/store/tickets'
 import type { AssignableOption, SearchableSelectOption } from '@/types'
+
+const TicketForm = defineAsyncComponent(() => import('@/components/TicketForm.vue'))
 
 const router = useRouter()
 const bootstrapStore = useBootstrapStore()

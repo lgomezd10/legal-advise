@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
 	(e: 'add-child', parent: EditableTypeNode): void
+	(e: 'request-remove', clientId: string): void
 }>()
 
 function buildPath(node: EditableTypeNode): string {
@@ -36,6 +37,9 @@ function buildPath(node: EditableTypeNode): string {
 				</label>
 				<div class="gi-admin-tree__actions">
 					<span class="gi-meta-pill">{{ buildPath(node) }}</span>
+					<button class="gi-round-icon-button gi-admin-tree__remove-button" type="button" :aria-label="`Eliminar ${buildPath(node)}`" :title="`Eliminar ${buildPath(node)}`" @click="emit('request-remove', node.clientId)">
+						×
+					</button>
 					<button class="gi-secondary-button" type="button" @click="emit('add-child', node)">
 						Añadir subtipo
 					</button>
@@ -46,6 +50,7 @@ function buildPath(node: EditableTypeNode): string {
 				:nodes="node.children"
 				:path-prefix="buildPath(node)"
 				@add-child="emit('add-child', $event)"
+				@request-remove="emit('request-remove', $event)"
 			/>
 		</li>
 	</ul>
@@ -94,6 +99,14 @@ function buildPath(node: EditableTypeNode): string {
 	justify-content: flex-end;
 	align-items: center;
 	flex-wrap: wrap;
+}
+
+.gi-admin-tree__remove-button {
+	width: 2rem;
+	height: 2rem;
+	color: var(--gi-color-danger, #b42318);
+	font-size: 1.15rem;
+	line-height: 1;
 }
 
 @media (max-width: 900px) {

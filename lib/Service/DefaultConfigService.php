@@ -14,6 +14,7 @@ use OCA\ConsultasLegales\Db\IncidentType;
 use OCA\ConsultasLegales\Db\IncidentTypeMapper;
 use OCA\ConsultasLegales\Db\NotificationPreference;
 use OCA\ConsultasLegales\Db\NotificationPreferenceMapper;
+use OCA\ConsultasLegales\Notification\NotificationPolicy;
 use OCA\ConsultasLegales\Db\ProfileAssignment;
 use OCA\ConsultasLegales\Db\ProfileAssignmentMapper;
 use OCA\ConsultasLegales\Db\Urgency;
@@ -208,9 +209,9 @@ class DefaultConfigService {
 
 	private function ensureNotificationPreferences(): void {
 		foreach (['usuario', 'soporte', 'administrador'] as $profile) {
-			foreach (['ticket_created', 'ticket_assigned', 'ticket_public_reply', 'ticket_resolved'] as $eventName) {
-				$this->ensureNotificationPreference($profile, $eventName, 'nextcloud', true);
-				$this->ensureNotificationPreference($profile, $eventName, 'mail', $profile !== 'soporte');
+			foreach (NotificationPolicy::getNotificationEventsForProfile($profile) as $eventName) {
+				$this->ensureNotificationPreference($profile, $eventName, NotificationPolicy::CHANNEL_NEXTCLOUD, NotificationPolicy::getDefaultChannelEnabledForProfile($profile, $eventName, NotificationPolicy::CHANNEL_NEXTCLOUD));
+				$this->ensureNotificationPreference($profile, $eventName, NotificationPolicy::CHANNEL_MAIL, NotificationPolicy::getDefaultChannelEnabledForProfile($profile, $eventName, NotificationPolicy::CHANNEL_MAIL));
 			}
 		}
 	}
@@ -243,8 +244,10 @@ class DefaultConfigService {
 
 		$defaults = [
 			['profile' => RoleService::USER, 'principalType' => 'group', 'principalId' => 'userLegal'],
+			['profile' => RoleService::USER, 'principalType' => 'group', 'principalId' => 'admin'],
 			['profile' => RoleService::SUPPORT, 'principalType' => 'group', 'principalId' => 'supportLegal'],
-			['profile' => RoleService::ADMIN, 'principalType' => 'group', 'principalId' => 'adminLegal'],
+			['profile' => RoleService::SUPPORT, 'principalType' => 'group', 'principalId' => 'admin'],
+			['profile' => RoleService::ADMIN, 'principalType' => 'group', 'principalId' => 'admin'],
 		];
 
 		foreach ($defaults as $row) {

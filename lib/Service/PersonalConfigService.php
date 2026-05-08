@@ -28,7 +28,7 @@ class PersonalConfigService {
 			return [];
 		}
 
-		$existing = $this->settingMapper->findOneBy('config_key', $this->buildSettingKey($uid));
+		$existing = $this->getStoredSetting($uid);
 		if ($existing instanceof AppSetting) {
 			$configValue = $existing->getConfigValue();
 			if (is_array($configValue)) {
@@ -44,9 +44,18 @@ class PersonalConfigService {
 		return $this->loadDefaultsFromNextcloud($user);
 	}
 
+	public function hasStoredValues(string $uid): bool {
+		if ($uid === '') {
+			return false;
+		}
+
+		return $this->getStoredSetting($uid) instanceof AppSetting;
+	}
+
 	public function saveForUser(string $uid, array $values): array {
 		$normalized = $this->normalizeValues($values);
-		$existing = $this->settingMapper->findOneBy('config_key', $this->buildSettingKey($uid));
+		$normalized = $this->applyReadOnlyValues($uid, $normalized);
+		$existing = $this->getStoredSetting($uid);
 
 		if (!$existing instanceof AppSetting) {
 			$existing = new AppSetting();
@@ -62,8 +71,43 @@ class PersonalConfigService {
 		return $normalized;
 	}
 
+	private function applyReadOnlyValues(string $uid, array $values): array {
+		$user = $this->userManager->get($uid);
+		if ($user === null || !array_key_exists('email', $values)) {
+			return $values;
+		}
+
+		$account = $this->accountManager->getAccount($user);
+		$values['email'] = $this->resolveEmail($user, $account);
+
+		return $values;
+	}
+
+	public function restoreForUser(string $uid): array {
+		if ($uid === '') {
+			return [];
+		}
+
+		$existing = $this->getStoredSetting($uid);
+		if ($existing instanceof AppSetting) {
+			$this->settingMapper->delete($existing);
+		}
+
+		$user = $this->userManager->get($uid);
+		if ($user === null) {
+			return [];
+		}
+
+		return $this->loadDefaultsFromNextcloud($user);
+	}
+
 	private function buildSettingKey(string $uid): string {
 		return self::SETTING_PREFIX . $uid;
+	}
+
+	private function getStoredSetting(string $uid): ?AppSetting {
+		$setting = $this->settingMapper->findOneBy('config_key', $this->buildSettingKey($uid));
+		return $setting instanceof AppSetting ? $setting : null;
 	}
 
 	private function normalizeValues(array $values): array {

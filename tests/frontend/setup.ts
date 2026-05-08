@@ -10,9 +10,9 @@ import {
 	routerPushMock,
 	supportFiltersStoreMock,
 	ticketsStoreMock,
+	restorePersonalConfigMock,
 	updatePersonalConfigMock,
 } from './helpers/mockState'
-import { SupportSettingsPanelStub } from './helpers/stubs'
 
 vi.mock('vue-router', () => ({
 	useRoute: () => routeState,
@@ -42,11 +42,8 @@ vi.mock('@/store/notifications', () => ({
 }))
 
 vi.mock('@/services/personalConfig', () => ({
+	restorePersonalConfig: restorePersonalConfigMock,
 	updatePersonalConfig: updatePersonalConfigMock,
-}))
-
-vi.mock('@/components/SupportSettingsPanel.vue', () => ({
-	default: SupportSettingsPanelStub,
 }))
 
 beforeEach(() => {

@@ -178,8 +178,6 @@ const safeProvinces = computed<string[]>(() => normalizeCollection<string>(props
 const safeUsers = computed<AssignableOption[]>(() => normalizeCollection<AssignableOption>(props.users))
 const safeGroups = computed<AssignableOption[]>(() => normalizeCollection<AssignableOption>(props.groups))
 const typeOptions = computed(() => flattenTypes(safeTypes.value))
-const predefinedFilters = computed(() => safeFilters.value.filter((filter: SavedFilter) => filter.isPredefined))
-const customFilters = computed(() => safeFilters.value.filter((filter: SavedFilter) => !filter.isPredefined))
 const statusLabelMap = computed(() => new Map(safeStatuses.value.map((status: StatusOption) => [status.id, status.label])))
 const userLabelMap = computed(() => new Map(safeUsers.value.map((user: AssignableOption) => [user.id, user.displayName])))
 const groupLabelMap = computed(() => new Map(safeGroups.value.map((group: AssignableOption) => [group.id, group.displayName])))

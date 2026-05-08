@@ -159,7 +159,6 @@ describe('Pantallas de usuario', () => {
 			title: 'Borrador',
 			userDescription: '<p>Texto</p>',
 			urgencyId: '1',
-			communicationChannel: 'nextcloud_mail',
 			personalData: { city: 'Madrid', province: 'Madrid' },
 			attachments: { files: [], links: [] },
 		}
@@ -178,7 +177,6 @@ describe('Pantallas de usuario', () => {
 			title: 'Nuevo ticket',
 			userDescription: '<p>Texto</p>',
 			urgencyId: 1,
-			communicationChannel: 'nextcloud_mail',
 			personalData: { email: 'usuario@example.com', city: 'Madrid' },
 		})
 		await flushPromises()
@@ -190,7 +188,7 @@ describe('Pantallas de usuario', () => {
 		expect(bootstrapStoreMock.setPersonalConfig).toHaveBeenCalledWith(expect.objectContaining({ province: 'Sevilla' }))
 	})
 
-	it('muestra el formulario de detalle cuando ya existe borrador con tipo y provincia', () => {
+	it('muestra el formulario de detalle cuando ya existe borrador con tipo y provincia', async() => {
 		bootstrapStoreMock.data = createBootstrapData({ roles: ['usuario'] })
 		ticketsStoreMock.draft = {
 			selectedPath: [1, 11],
@@ -198,7 +196,6 @@ describe('Pantallas de usuario', () => {
 			title: 'Borrador',
 			userDescription: '<p>Texto</p>',
 			urgencyId: '1',
-			communicationChannel: 'nextcloud_mail',
 			personalData: { city: 'Madrid' },
 			attachments: { files: [], links: [] },
 		}
@@ -212,6 +209,7 @@ describe('Pantallas de usuario', () => {
 				},
 			},
 		})
+		await flushPromises()
 
 		expect(wrapper.text()).toContain('Tipo seleccionado')
 		expect(wrapper.text()).toContain('Solo Territorial')

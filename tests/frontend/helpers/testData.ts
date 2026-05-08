@@ -34,6 +34,18 @@ export function createBootstrapData(overrides: Partial<BootstrapData> = {}): Boo
 	]
 
 	const base: BootstrapData = {
+		appInfo: {
+			id: 'legal_advice',
+			version: '0.1.5',
+			storageBytes: 1024,
+			storageLabel: '1 KB',
+			appDataBytes: 768,
+			appDataLabel: '768 B',
+			databaseBytes: 256,
+			databaseLabel: '256 B',
+			attachmentBytes: 512,
+			attachmentLabel: '512 B',
+		},
 		currentUser: {
 			uid: 'usuario1',
 			displayName: 'Usuario Uno',
@@ -48,6 +60,7 @@ export function createBootstrapData(overrides: Partial<BootstrapData> = {}): Boo
 			city: 'Madrid',
 			province: 'Madrid',
 		},
+		personalConfigHasStoredValues: false,
 		catalogs: {
 			statuses,
 			urgencies: [
@@ -185,6 +198,11 @@ export function createAdminConfigData() {
 		fields,
 		filters,
 		rules,
+		notifications: [
+			{ scopeId: 'usuario', eventName: 'ticket_created', deliveryMode: 'both' },
+			{ scopeId: 'usuario', eventName: 'ticket_waiting_for_creator', deliveryMode: 'both' },
+			{ scopeId: 'soporte', eventName: 'ticket_group_assigned', deliveryMode: 'both' },
+		],
 		profiles: [
 			{ profile: 'usuario', principalType: 'user', principalId: 'usuario1' },
 			{ profile: 'soporte', principalType: 'group', principalId: 'grupo-soporte' },

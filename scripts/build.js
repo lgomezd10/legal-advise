@@ -1,5 +1,5 @@
 process.env.npm_package_name = process.env.npm_package_name || 'legal_advice'
-process.env.npm_package_version = process.env.npm_package_version || '0.1.2'
+process.env.npm_package_version = process.env.npm_package_version || '0.1.6'
 process.env.NODE_ENV = 'production'
 
 const fs = require('fs')

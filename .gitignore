@@ -12,4 +12,7 @@ build.log
 build-run.txt
 build-exit.txt
 AGENTS.md
+/.github/instructions/notifications.instructions.md
 /.deploy
+.github/instructions/tickets.instructions.md
+/build

@@ -27,7 +27,7 @@ export const useTicketsStore = defineStore('tickets', {
 		},
 		async create(payload: Record<string, unknown>) {
 			const attachments = isAttachmentDraft(payload.attachments) ? payload.attachments : { files: [], links: [] }
-			const { attachments: ignoredAttachments, ...ticketPayload } = payload
+			const { attachments: _ignoredAttachments, ...ticketPayload } = payload
 			this.selected = await createTicket(ticketPayload)
 			if (this.selected && (attachments.files.length > 0 || attachments.links.length > 0)) {
 				await this.comment(this.selected.id, { body: '', visibility: 'publico', files: attachments.files, links: attachments.links })
@@ -55,6 +55,7 @@ export const useTicketsStore = defineStore('tickets', {
 			}
 
 			await this.select(ticketId)
+			this.items = this.items.map((item) => item.id === ticketId && this.selected ? this.selected : item)
 		},
 		async reopen(ticketId: number) {
 			this.selected = await reopenTicket(ticketId)

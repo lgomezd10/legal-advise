@@ -46,7 +46,7 @@ class TicketApiController extends BaseApiController {
 	public function create(): DataResponse {
 		return $this->respond(function (): array {
 			$uid = $this->assertAppAccess();
-			return $this->ticketService->create($uid, $this->request->getParams());
+			return $this->ticketService->create($uid, $this->getRequestPayload());
 		}, 201);
 	}
 
@@ -54,7 +54,7 @@ class TicketApiController extends BaseApiController {
 	public function update(int $id): DataResponse {
 		return $this->respond(function () use ($id): array {
 			$uid = $this->assertAppAccess();
-			return $this->ticketService->update($uid, $id, $this->request->getParams());
+			return $this->ticketService->update($uid, $id, $this->getRequestPayload());
 		});
 	}
 
@@ -70,8 +70,45 @@ class TicketApiController extends BaseApiController {
 	public function comment(int $id): DataResponse {
 		return $this->respond(function () use ($id): array {
 			$uid = $this->assertAppAccess();
-			return $this->ticketService->addComment($uid, $id, $this->request->getParams());
+			return $this->ticketService->addComment($uid, $id, $this->getRequestPayload());
 		}, 201);
+	}
+
+	private function getRequestPayload(): array {
+		$params = $this->request->getParams();
+		$rawJsonPayload = $this->getJsonRequestPayload();
+
+		if ($rawJsonPayload === []) {
+			return $params;
+		}
+
+		return array_merge($params, $rawJsonPayload);
+	}
+
+	private function getJsonRequestPayload(): array {
+		$contentType = trim($this->request->getHeader('Content-Type'));
+		if ($contentType === '' || preg_match(IRequest::JSON_CONTENT_TYPE_REGEX, $contentType) !== 1) {
+			return [];
+		}
+
+		$method = strtoupper($this->request->getMethod());
+		if (!in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
+			return [];
+		}
+
+		$rawBody = null;
+		if ($method === 'PUT' && isset($this->request->put)) {
+			$rawBody = is_resource($this->request->put)
+				? stream_get_contents($this->request->put)
+				: $this->request->put;
+		}
+
+		if (!is_string($rawBody) || trim($rawBody) === '') {
+			return [];
+		}
+
+		$decoded = json_decode($rawBody, true);
+		return is_array($decoded) ? $decoded : [];
 	}
 
 	#[NoAdminRequired]

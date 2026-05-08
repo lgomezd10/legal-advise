@@ -71,6 +71,7 @@ const closeReason = ref('')
 const editableBaseSnapshot = ref('')
 const syncedTicketId = ref<number | null>(null)
 const waitingForSaveSync = ref(false)
+const statusEditedManually = ref(false)
 const instanceId = `gi-ticket-sidebar-${++ticketSidebarPanelIdSequence}`
 
 function getFieldId(suffix: string) {
@@ -248,6 +249,11 @@ const historyEntries = computed(() => formatHistoryEntries(props.ticket?.history
 	groups: safeGroups.value,
 	urgencies: safeUrgencies.value,
 }))
+
+function resolveVisibilityLabel(value: 'interno' | 'publico') {
+	return value === 'interno' ? 'Interno' : 'Público'
+}
+
 const currentEditPayload = computed<Record<string, unknown>>(() => ({
 	title: editableTicket.title.trim(),
 	status: editableTicket.status,
@@ -256,6 +262,17 @@ const currentEditPayload = computed<Record<string, unknown>>(() => ({
 	assignedGroupId: editableTicket.assignedGroupId,
 	supportDescription: editableTicket.supportDescription,
 }))
+const baseEditPayload = computed<Record<string, unknown>>(() => editableBaseSnapshot.value !== ''
+	? JSON.parse(editableBaseSnapshot.value) as Record<string, unknown>
+	: {})
+const changedEditPayload = computed<Record<string, unknown>>(() => Object.entries(currentEditPayload.value).reduce<Record<string, unknown>>((changes, [key, value]) => {
+	if (baseEditPayload.value[key] !== value) {
+		changes[key] = value
+	}
+
+	return changes
+}, {}))
+
 const targetStatusOption = computed(() => safeStatuses.value.find((item: StatusOption) => item.id === editableTicket.status) ?? null)
 const requiresCloseReason = computed(() => {
 	if (!canEditTicket.value || !props.ticket) {
@@ -269,7 +286,7 @@ const requiresCloseReason = computed(() => {
 
 	return Boolean(nextStatus.closed) && !isClosedTicket.value
 })
-const dirty = computed(() => canEditTicket.value && (JSON.stringify(currentEditPayload.value) !== editableBaseSnapshot.value || closeReason.value.trim() !== ''))
+const dirty = computed(() => canEditTicket.value && (Object.keys(changedEditPayload.value).length > 0 || closeReason.value.trim() !== ''))
 const filteredComments = computed(() => (props.ticket?.comments ?? []).filter((item: TicketComment) => {
 	const term = commentsSearchText.value.trim().toLowerCase()
 	if (term) {
@@ -410,6 +427,7 @@ watch(() => props.ticket ? JSON.stringify({
 		editableTicket.assignedUserUid = nextPayload.assignedUserUid
 		editableTicket.assignedGroupId = nextPayload.assignedGroupId
 		editableTicket.supportDescription = nextPayload.supportDescription
+		statusEditedManually.value = false
 		closeReason.value = ''
 		editableBaseSnapshot.value = nextSnapshot
 		syncedTicketId.value = props.ticket.id
@@ -442,6 +460,7 @@ function onStatusChange(value: string | number | null) {
 		return
 	}
 
+	statusEditedManually.value = true
 	editableTicket.status = String(value)
 	if (!requiresCloseReason.value) {
 		closeReason.value = ''
@@ -450,6 +469,31 @@ function onStatusChange(value: string | number | null) {
 
 function onUrgencyChange(value: string | number | null) {
 	editableTicket.urgencyId = value ? Number(value) : null
+}
+
+function hasAssignment(assignedUserUid: string | null, assignedGroupId: string | null) {
+	return Boolean(assignedUserUid || assignedGroupId)
+}
+
+function syncDerivedStatusFromAssignment() {
+	if (statusEditedManually.value) {
+		return
+	}
+
+	const baseAssignedUserUid = typeof baseEditPayload.value.assignedUserUid === 'string' ? baseEditPayload.value.assignedUserUid : null
+	const baseAssignedGroupId = typeof baseEditPayload.value.assignedGroupId === 'string' ? baseEditPayload.value.assignedGroupId : null
+	const baseStatus = typeof baseEditPayload.value.status === 'string' ? baseEditPayload.value.status : ''
+	const assignmentChanged = editableTicket.assignedUserUid !== baseAssignedUserUid || editableTicket.assignedGroupId !== baseAssignedGroupId
+
+	if (!assignmentChanged) {
+		editableTicket.status = baseStatus
+	} else {
+		editableTicket.status = hasAssignment(editableTicket.assignedUserUid, editableTicket.assignedGroupId) ? 'asignado' : 'nuevo'
+	}
+
+	if (!requiresCloseReason.value) {
+		closeReason.value = ''
+	}
 }
 
 function onAssignedUserChange(value: string | number | null) {
@@ -462,6 +506,8 @@ function onAssignedUserChange(value: string | number | null) {
 			editableTicket.assignedGroupId = null
 		}
 	}
+
+	syncDerivedStatusFromAssignment()
 }
 
 function onAssignedGroupChange(value: string | number | null) {
@@ -474,6 +520,8 @@ function onAssignedGroupChange(value: string | number | null) {
 			editableTicket.assignedUserUid = null
 		}
 	}
+
+	syncDerivedStatusFromAssignment()
 }
 
 function commentSummary(item: TicketComment) {
@@ -528,15 +576,6 @@ function openRequesterTab() {
 
 function showComposer() {
 	composerVisible.value = true
-}
-
-function escapeHtml(value: string) {
-	return value
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&#39;')
 }
 
 function commentExportText(item: TicketComment) {
@@ -646,8 +685,10 @@ function saveChanges() {
 
 	waitingForSaveSync.value = true
 	emit('save', {
-		...currentEditPayload.value,
-		supportDescription: sanitizeRichText(editableTicket.supportDescription),
+		...changedEditPayload.value,
+		...(Object.prototype.hasOwnProperty.call(changedEditPayload.value, 'supportDescription') ? {
+			supportDescription: sanitizeRichText(editableTicket.supportDescription),
+		} : {}),
 		closeReason: requiresCloseReason.value ? closeReason.value.trim() : undefined,
 	})
 }
@@ -726,7 +767,7 @@ function assignToCurrentUser() {
 						<SearchableSelect class="gi-search-select--compact" :model-value="editableTicket.assignedGroupId" :options="groupOptions" placeholder="Sin grupo" clearable @update:modelValue="onAssignedGroupChange" />
 					</div>
 				</div>
-				<label v-if="requiresCloseReason" class="gi-field gi-field--wide">
+				<label v-if="requiresCloseReason" class="gi-field gi-field--wide gi-sidebar-panel__close-reason-field">
 					<span>Motivo del cierre</span>
 					<PlainTextEditor :input-id="getFieldId('close-reason')" v-model="closeReason" placeholder="Explica el motivo del cierre. Se publicará como un comentario." :min-height="120" />
 				</label>
@@ -818,7 +859,7 @@ function assignToCurrentUser() {
 					<button v-if="filteredComments.length" class="gi-secondary-button" type="button" @click="exportComments">
 						Exportar comentarios
 					</button>
-					<button class="gi-secondary-button gi-sidebar-panel__sort-button" type="button" @click="toggleCommentsSortDirection">
+					<button class="gi-secondary-button" type="button" @click="toggleCommentsSortDirection">
 						{{ commentsSortDirection === 'desc' ? 'Fecha: más recientes primero' : 'Fecha: más antiguas primero' }}
 					</button>
 					<button v-if="!fullscreen" class="gi-secondary-button" type="button" @click="emit('fullscreen')">Expandir comentarios</button>
@@ -855,7 +896,10 @@ function assignToCurrentUser() {
 				<article v-for="item in orderedComments" :key="item.id" class="gi-sidebar-panel__accordion-item">
 					<button class="gi-sidebar-panel__accordion-trigger" type="button" @click="toggleExpandedComment(item.id)">
 						<span class="gi-sidebar-panel__accordion-trigger-content">
-							<span class="gi-sidebar-panel__accordion-meta">{{ formatDateTime(item.createdAt) }} · {{ resolveUserLabel(item.authorUid) }}</span>
+							<span class="gi-sidebar-panel__accordion-meta">
+								<span>{{ formatDateTime(item.createdAt) }} · {{ resolveUserLabel(item.authorUid) }}</span>
+								<span class="gi-badge gi-badge--success">{{ resolveVisibilityLabel(item.visibility) }}</span>
+							</span>
 							<span class="gi-sidebar-panel__accordion-summary">{{ commentSummary(item) }}</span>
 						</span>
 						<span class="gi-sidebar-panel__accordion-icon" aria-hidden="true">{{ expandedCommentIds.includes(item.id) ? '▾' : '▸' }}</span>
@@ -1023,6 +1067,17 @@ function assignToCurrentUser() {
 	display: grid;
 	gap: .85rem;
 	padding: 1rem 0;
+}
+
+.gi-sidebar-panel__close-reason-field {
+	width: 100%;
+	min-width: 0;
+}
+
+.gi-sidebar-panel__close-reason-field :deep(.gi-plain-text-editor),
+.gi-sidebar-panel__close-reason-field :deep(.gi-plain-text-editor__surface) {
+	width: 100%;
+	max-width: none;
 }
 
 .gi-sidebar-panel__compact-select-grid {
@@ -1247,12 +1302,20 @@ function assignToCurrentUser() {
 }
 
 .gi-sidebar-panel__sort-button {
-	display: inline-flex;
+	display: flex;
 	align-items: center;
 	justify-content: center;
-	justify-self: flex-start;
+	justify-self: stretch;
+	width: 100%;
 	min-height: 2.364rem;
-	white-space: nowrap;
+	box-sizing: border-box;
+	text-align: center;
+}
+
+.gi-sidebar-panel__comments-mobile-actions > .gi-secondary-button {
+	width: 100%;
+	justify-content: center;
+	box-sizing: border-box;
 }
 
 .gi-sidebar-panel__selected-file {
@@ -1382,8 +1445,5 @@ function assignToCurrentUser() {
 		background: rgba(247, 250, 248, .95);
 	}
 
-	.gi-sidebar-panel__comments-mobile-actions > .gi-secondary-button {
-		width: 100%;
-	}
 }
 </style>

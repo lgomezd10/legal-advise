@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\ConsultasLegales\Migration;
 
 use Closure;
+use OCA\ConsultasLegales\Notification\NotificationPolicy;
 use OCP\DB\ISchemaWrapper;
 use OCP\DB\Types;
 use OCP\IDBConnection;
@@ -398,9 +399,9 @@ class Version000001Date20260310090000 extends SimpleMigrationStep {
 	private function seedNotificationPreferences(): void {
 		$rows = [];
 		foreach (['usuario', 'soporte', 'administrador'] as $profile) {
-			foreach (['ticket_created', 'ticket_assigned', 'ticket_public_reply', 'ticket_resolved'] as $eventName) {
-				$rows[] = ['scope_type' => 'profile', 'scope_id' => $profile, 'event_name' => $eventName, 'channel' => 'nextcloud', 'enabled' => true];
-				$rows[] = ['scope_type' => 'profile', 'scope_id' => $profile, 'event_name' => $eventName, 'channel' => 'mail', 'enabled' => $profile !== 'soporte'];
+			foreach (NotificationPolicy::getNotificationEventsForProfile($profile) as $eventName) {
+				$rows[] = ['scope_type' => 'profile', 'scope_id' => $profile, 'event_name' => $eventName, 'channel' => NotificationPolicy::CHANNEL_NEXTCLOUD, 'enabled' => NotificationPolicy::getDefaultChannelEnabledForProfile($profile, $eventName, NotificationPolicy::CHANNEL_NEXTCLOUD)];
+				$rows[] = ['scope_type' => 'profile', 'scope_id' => $profile, 'event_name' => $eventName, 'channel' => NotificationPolicy::CHANNEL_MAIL, 'enabled' => NotificationPolicy::getDefaultChannelEnabledForProfile($profile, $eventName, NotificationPolicy::CHANNEL_MAIL)];
 			}
 		}
 
