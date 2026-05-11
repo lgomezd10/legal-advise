@@ -11,6 +11,7 @@ use OCA\ConsultasLegales\Db\Ticket;
 use OCP\App\IAppManager;
 use OCP\Calendar\ICreateFromString;
 use OCP\Calendar\IManager as CalendarManager;
+use OCP\IURLGenerator;
 
 class TaskSyncService {
 	private const TASK_LIST_URI = 'consultas-legales';
@@ -21,20 +22,33 @@ class TaskSyncService {
 		private readonly CatalogService $catalogService,
 		private readonly IAppManager $appManager,
 		private readonly CalendarManager $calendarManager,
+		private readonly IURLGenerator $urlGenerator,
 	) {
 	}
 
 	public function getIntegrationStatus(): array {
-		$config = $this->catalogService->getTaskConfig();
-		return [
-			'available' => $this->appManager->isInstalled('tasks'),
-			'config' => $config,
-		];
+		try {
+			$config = $this->catalogService->getTaskConfig();
+			return [
+				'available' => $this->appManager->isInstalled('tasks'),
+				'config' => $config,
+			];
+		} catch (\Throwable) {
+			return [
+				'available' => false,
+				'config' => [],
+				'degraded' => true,
+			];
+		}
 	}
 
 	public function getSyncForTicket(int $ticketId): ?array {
-		$sync = $this->taskSyncMapper->findOneBy('ticket_id', $ticketId);
-		return $sync?->jsonSerialize();
+		try {
+			$sync = $this->taskSyncMapper->findOneBy('ticket_id', $ticketId);
+			return $sync?->jsonSerialize();
+		} catch (\Throwable) {
+			return null;
+		}
 	}
 
 	public function syncTicket(Ticket $ticket): ?array {
@@ -251,7 +265,7 @@ class TaskSyncService {
 		$existing->setPayload([
 			'ticketNumber' => $ticket->getNumber(),
 			'ticketStatus' => $ticket->getStatus(),
-			'url' => '/apps/' . Application::APP_ID . '/#/tickets/' . $ticket->getId(),
+			'url' => $this->urlGenerator->linkToRoute(Application::APP_ID . '.page.index') . '#/soporte/' . $ticket->getId() . '/completo',
 		]);
 
 		if ($existing->getId() === null) {

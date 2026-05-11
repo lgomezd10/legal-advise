@@ -22,6 +22,10 @@ use OCA\ConsultasLegales\Db\UrgencyMapper;
 
 class AdminConfigService {
 	private const ALLOWED_PROFILES = [RoleService::USER, RoleService::SUPPORT, RoleService::ADMIN];
+	private const FALLBACK_ATTACHMENT_CONFIG = [
+		'allowedExtensions' => [],
+		'maxFileSizeMb' => 100,
+	];
 
 	public function __construct(
 		private readonly DefaultConfigService $defaultConfigService,
@@ -46,13 +50,45 @@ class AdminConfigService {
 			'types' => $this->catalogService->getTypeTree(),
 			'urgencies' => $this->catalogService->getUrgencies(),
 			'fields' => $this->catalogService->getFields(false),
-			'filters' => $this->supportFilterService->listForAdmin(),
+			'filters' => $this->safeAdminFilters(),
 			'rules' => array_map(static fn ($row) => $row->jsonSerialize(), $this->ruleMapper->findAllOrdered('priority', 'DESC')),
 			'profiles' => array_map(static fn ($row) => $row->jsonSerialize(), $this->profileMapper->findAllOrdered('profile', 'ASC')),
-			'notifications' => $this->getProfileNotificationPreferences(),
-			'attachmentConfig' => $this->catalogService->getAttachmentConfig(),
-			'tasksConfig' => $this->catalogService->getTaskConfig(),
+			'notifications' => $this->safeProfileNotificationPreferences(),
+			'attachmentConfig' => $this->safeAttachmentConfig(),
+			'tasksConfig' => $this->safeTasksConfig(),
 		];
+	}
+
+	private function safeAdminFilters(): array {
+		try {
+			return $this->supportFilterService->listForAdmin();
+		} catch (\Throwable) {
+			return [];
+		}
+	}
+
+	private function safeProfileNotificationPreferences(): array {
+		try {
+			return $this->getProfileNotificationPreferences();
+		} catch (\Throwable) {
+			return [];
+		}
+	}
+
+	private function safeAttachmentConfig(): array {
+		try {
+			return $this->catalogService->getAttachmentConfig();
+		} catch (\Throwable) {
+			return self::FALLBACK_ATTACHMENT_CONFIG;
+		}
+	}
+
+	private function safeTasksConfig(): array {
+		try {
+			return $this->catalogService->getTaskConfig();
+		} catch (\Throwable) {
+			return [];
+		}
 	}
 
 	public function update(array $payload): array {

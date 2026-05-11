@@ -104,12 +104,23 @@ class NotificationService {
 		foreach ($recipients as $uid) {
 			$preferences = $this->resolveChannelPreferencesForUser($uid);
 			if (($preferences[$eventName][NotificationPolicy::CHANNEL_NEXTCLOUD] ?? false) === true) {
-				$this->sendNextcloud($uid, $eventName, $ticket, $context);
+				$this->safeDispatch(function () use ($uid, $eventName, $ticket, $context): void {
+					$this->sendNextcloud($uid, $eventName, $ticket, $context);
+				});
 			}
 
 			if (($preferences[$eventName][NotificationPolicy::CHANNEL_MAIL] ?? false) === true) {
-				$this->sendMail($uid, $eventName, $ticket, $context);
+				$this->safeDispatch(function () use ($uid, $eventName, $ticket, $context): void {
+					$this->sendMail($uid, $eventName, $ticket, $context);
+				});
 			}
+		}
+	}
+
+	private function safeDispatch(callable $dispatch): void {
+		try {
+			$dispatch();
+		} catch (\Throwable) {
 		}
 	}
 
@@ -126,7 +137,7 @@ class NotificationService {
 				'status' => $ticket->getStatus(),
 				'recipientRole' => $recipientRole,
 			], $context))
-			->setLink($this->buildNotificationLink($uid, $ticket, $recipientRole));
+			->setLink($this->buildNotificationLink($uid, $ticket, $recipientRole, false));
 
 		$this->notificationManager->notify($notification);
 	}
@@ -144,7 +155,7 @@ class NotificationService {
 
 		$l = $this->l10nFactory->get(Application::APP_ID);
 		$recipientRole = $this->notificationRecipientResolver->resolveRecipientRole($uid, $ticket);
-		$link = $this->buildNotificationLink($uid, $ticket, $recipientRole);
+		$link = $this->buildNotificationLink($uid, $ticket, $recipientRole, true);
 		$message = $this->mailer->createMessage();
 		$message->setTo([$email]);
 		$message->setSubject($this->notificationMailBuilder->buildSubject($l, $eventName, $ticket, $recipientRole));
@@ -152,7 +163,7 @@ class NotificationService {
 		$this->mailer->send($message);
 	}
 
-	private function buildNotificationLink(string $uid, Ticket $ticket, string $recipientRole): string {
+	private function buildNotificationLink(string $uid, Ticket $ticket, string $recipientRole, bool $absolute): string {
 		$baseRoute = '/mis-incidencias/' . $ticket->getId() . '/completo';
 
 		if ($recipientRole === 'assignee') {
@@ -164,7 +175,11 @@ class NotificationService {
 			}
 		}
 
-		return $this->urlGenerator->linkToRouteAbsolute('legal_advice.page.index') . '#' . $baseRoute;
+		$appRoute = $absolute
+			? $this->urlGenerator->linkToRouteAbsolute(Application::APP_ID . '.page.index')
+			: $this->urlGenerator->linkToRoute(Application::APP_ID . '.page.index');
+
+		return $appRoute . '#' . $baseRoute;
 	}
 
 	private function resolveChannelPreferencesForUser(string $uid, ?array $roles = null, ?array $resolved = null): array {

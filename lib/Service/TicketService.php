@@ -301,10 +301,44 @@ class TicketService {
 			: RoleService::USER;
 
 		$attachment = ($sourceUrl !== null && trim($sourceUrl) !== '')
-			? $this->attachmentService->createFromUrl($ticketId, $uid, $sourceUrl, $originalName, $commentId)
-			: $this->attachmentService->create($ticketId, $uid, $uploadedFile, $commentId);
+			? $this->safeCreateAttachmentFromUrl($ticketId, $uid, $sourceUrl, $originalName, $commentId)
+			: $this->safeCreateAttachment($ticketId, $uid, $uploadedFile, $commentId);
 		$this->addHistory($ticketId, $uid, $actorRole, 'attachment_added', (string) $comment->getVisibility(), ['attachmentId' => $attachment['id'], 'commentId' => $commentId]);
 		return $attachment;
+	}
+
+	private function safeCreateAttachment(int $ticketId, string $uid, array $uploadedFile, int $commentId): array {
+		try {
+			return $this->attachmentService->create($ticketId, $uid, $uploadedFile, $commentId);
+		} catch (\InvalidArgumentException $exception) {
+			throw $exception;
+		} catch (\RuntimeException $exception) {
+			$status = (int) $exception->getCode();
+			if ($status >= 400 && $status <= 599) {
+				throw $exception;
+			}
+
+			throw new \RuntimeException('No se pudo guardar el adjunto en este momento.', 503);
+		} catch (\Throwable) {
+			throw new \RuntimeException('No se pudo guardar el adjunto en este momento.', 503);
+		}
+	}
+
+	private function safeCreateAttachmentFromUrl(int $ticketId, string $uid, string $sourceUrl, ?string $originalName, int $commentId): array {
+		try {
+			return $this->attachmentService->createFromUrl($ticketId, $uid, $sourceUrl, $originalName, $commentId);
+		} catch (\InvalidArgumentException $exception) {
+			throw $exception;
+		} catch (\RuntimeException $exception) {
+			$status = (int) $exception->getCode();
+			if ($status >= 400 && $status <= 599) {
+				throw $exception;
+			}
+
+			throw new \RuntimeException('No se pudo guardar el adjunto en este momento.', 503);
+		} catch (\Throwable) {
+			throw new \RuntimeException('No se pudo guardar el adjunto en este momento.', 503);
+		}
 	}
 
 	private function savePersonalData(int $ticketId, array $rows): void {
@@ -388,7 +422,7 @@ class TicketService {
 		$data['canComment'] = !$isClosedStatus && $this->permissionService->canCommentOnTicket($uid, $ticket);
 		$data['canReopen'] = $isClosedStatus && $this->canReopenTicket($uid, $ticket);
 		$data['publicCommentSearchText'] = $this->buildCommentSearchText($uid, $ticket, $comments);
-		$attachments = $includeDetail ? $this->attachmentService->listForTicket($ticket->getId()) : [];
+		$attachments = $includeDetail ? $this->safeListAttachments($ticket->getId()) : [];
 		$attachmentsByCommentId = [];
 		foreach ($attachments as $attachment) {
 			$commentId = isset($attachment['commentId']) ? (int) $attachment['commentId'] : 0;
@@ -408,8 +442,24 @@ class TicketService {
 		}, $comments), fn (array $comment) => $this->permissionService->canSeeComment($uid, $ticket, (string) $comment['visibility']))) : [];
 		$data['history'] = $includeDetail ? array_values(array_filter(array_map(fn ($row) => $row->jsonSerialize(), $this->historyMapper->findBy('ticket_id', $ticket->getId(), 'created_at', 'ASC')), fn (array $entry) => $entry['visibility'] === 'publico' || $this->permissionService->canManageTicket($uid, $ticket))) : [];
 		$data['personalData'] = $includeDetail ? array_map(fn ($row) => $row->jsonSerialize(), $this->ticketDataMapper->findBy('ticket_id', $ticket->getId(), 'field_key', 'ASC')) : [];
-		$data['taskSync'] = $includeDetail ? $this->taskSyncService->getSyncForTicket($ticket->getId()) : null;
+		$data['taskSync'] = $includeDetail ? $this->safeGetTaskSync($ticket->getId()) : null;
 		return $data;
+	}
+
+	private function safeListAttachments(int $ticketId): array {
+		try {
+			return $this->attachmentService->listForTicket($ticketId);
+		} catch (\Throwable) {
+			return [];
+		}
+	}
+
+	private function safeGetTaskSync(int $ticketId): ?array {
+		try {
+			return $this->taskSyncService->getSyncForTicket($ticketId);
+		} catch (\Throwable) {
+			return null;
+		}
 	}
 
 	/**
