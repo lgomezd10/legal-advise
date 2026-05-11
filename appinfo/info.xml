@@ -5,7 +5,7 @@
     <name>Consultas Legales</name>
     <summary>Gestion integral de consultas legales con consola de usuario, soporte y administracion</summary>
     <description>Aplicacion nativa de Nextcloud para registrar, enrutar, gestionar y resolver consultas legales con integracion opcional con Tasks.</description>
-    <version>0.1.8</version>
+    <version>0.2.0</version>
     <licence>AGPL-3.0-or-later</licence>
     <author>lgdproyectos</author>
     <documentation>
@@ -16,6 +16,7 @@
     <discussion>https://github.com/lgomezd10/legal-advise/discussions</discussion>
     <bugs>https://github.com/lgomezd10/legal-advise/issues</bugs>
     <repository>https://github.com/lgomezd10/legal-advise</repository>
+    <screenshot small-thumbnail="https://raw.githubusercontent.com/lgomezd10/legal-advise/main/screenshots/image.png">https://raw.githubusercontent.com/lgomezd10/legal-advise/main/screenshots/image.png</screenshot>
     <namespace>ConsultasLegales</namespace>
     <category>organization</category>
     <category>social</category>

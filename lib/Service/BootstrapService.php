@@ -44,8 +44,8 @@ class BootstrapService {
 			['id' => 'configuracion', 'label' => 'Configuración', 'route' => '/configuracion', 'visible' => $roles !== []],
 		];
 
-		$assignableUsers = $this->loadAssignableUsers();
-		$assignableGroups = $this->loadAssignableGroups($assignableUsers);
+		$assignableUsers = $this->safeLoadAssignableUsers();
+		$assignableGroups = $this->safeLoadAssignableGroups($assignableUsers);
 
 		return [
 			'currentUser' => [
@@ -63,9 +63,9 @@ class BootstrapService {
 				'provinces' => $this->provinceCatalogService->list(),
 				'attachmentConfig' => $this->catalogService->getAttachmentConfig(),
 			],
-			'supportFilters' => $uid === '' ? [] : $this->supportFilterService->listForConsole($uid),
-			'personalConfig' => $uid === '' ? [] : $this->personalConfigService->getForUser($uid),
-			'personalConfigHasStoredValues' => $uid !== '' && $this->personalConfigService->hasStoredValues($uid),
+			'supportFilters' => $uid === '' ? [] : $this->safeSupportFilters($uid),
+			'personalConfig' => $uid === '' ? [] : $this->safePersonalConfig($uid),
+			'personalConfigHasStoredValues' => $uid !== '' && $this->safePersonalConfigHasStoredValues($uid),
 			'assignables' => [
 				'users' => $assignableUsers,
 				'groups' => $assignableGroups,
@@ -117,6 +117,46 @@ class BootstrapService {
 			'attachmentBytes' => $storage['attachmentBytes'],
 			'attachmentLabel' => $storage['attachmentLabel'],
 		];
+	}
+
+	private function safeSupportFilters(string $uid): array {
+		try {
+			return $this->supportFilterService->listForConsole($uid);
+		} catch (\Throwable) {
+			return [];
+		}
+	}
+
+	private function safePersonalConfig(string $uid): array {
+		try {
+			return $this->personalConfigService->getForUser($uid);
+		} catch (\Throwable) {
+			return [];
+		}
+	}
+
+	private function safePersonalConfigHasStoredValues(string $uid): bool {
+		try {
+			return $this->personalConfigService->hasStoredValues($uid);
+		} catch (\Throwable) {
+			return false;
+		}
+	}
+
+	private function safeLoadAssignableUsers(): array {
+		try {
+			return $this->loadAssignableUsers();
+		} catch (\Throwable) {
+			return [];
+		}
+	}
+
+	private function safeLoadAssignableGroups(array $assignableUsers): array {
+		try {
+			return $this->loadAssignableGroups($assignableUsers);
+		} catch (\Throwable) {
+			return [];
+		}
 	}
 
 	private function loadAssignableUsers(): array {

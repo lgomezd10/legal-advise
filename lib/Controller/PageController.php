@@ -52,7 +52,7 @@ class PageController extends Controller {
 			}
 		}
 
-		return new RedirectResponse($this->urlGenerator->linkToRouteAbsolute(Application::APP_ID . '.page.index') . '#' . $landingRoute);
+		return new RedirectResponse($this->urlGenerator->linkToRoute(Application::APP_ID . '.page.index') . '#' . $landingRoute);
 	}
 
 	#[NoAdminRequired]

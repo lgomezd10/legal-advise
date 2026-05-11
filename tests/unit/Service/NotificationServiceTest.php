@@ -12,9 +12,12 @@ use OCA\ConsultasLegales\Notification\NotificationPolicy;
 use OCA\ConsultasLegales\Notification\NotificationRecipientResolver;
 use OCA\ConsultasLegales\Service\NotificationService;
 use OCA\ConsultasLegales\Service\RoleService;
+use OCP\IL10N;
+use OCP\IUser;
 use OCP\IURLGenerator;
 use OCP\IUserManager;
 use OCP\L10N\IFactory;
+use OCP\Mail\IMessage;
 use OCP\Mail\IMailer;
 use OCP\Notification\INotification;
 use OCP\Notification\IManager;
@@ -309,17 +312,233 @@ class NotificationServiceTest extends TestCase {
 		self::assertSame(['adminqa'], $notifiedUsers);
 	}
 
-	private function createService(NotificationPreferenceMapper $mapper, RoleService $roleService, ?IManager $manager = null, ?IMailer $mailer = null): NotificationService {
+	public function testNextcloudNotificationsUseRelativeAppLinks(): void {
+		$mapper = $this->createMock(NotificationPreferenceMapper::class);
+		$mapper->method('findAllOrdered')->willReturn([
+			$this->createPreference('profile', RoleService::USER, 'ticket_waiting_for_creator', NotificationPolicy::CHANNEL_NEXTCLOUD, true),
+			$this->createPreference('profile', RoleService::USER, 'ticket_waiting_for_creator', NotificationPolicy::CHANNEL_MAIL, false),
+		]);
+
+		$roleService = $this->createMock(RoleService::class);
+		$roleService->method('getEffectiveRoles')->with('usuario1')->willReturn([RoleService::USER]);
+
+		$urlGenerator = $this->createMock(IURLGenerator::class);
+		$urlGenerator->expects(self::once())
+			->method('linkToRoute')
+			->with('legal_advice.page.index')
+			->willReturn('/index.php/apps/legal_advice');
+		$urlGenerator->expects(self::never())->method('linkToRouteAbsolute');
+
+		$link = null;
+		$manager = $this->createMock(IManager::class);
+		$manager->expects(self::once())
+			->method('createNotification')
+			->willReturnCallback(function () use (&$link) {
+				$notification = $this->createMock(INotification::class);
+				$notification->method('setApp')->willReturnSelf();
+				$notification->method('setDateTime')->willReturnSelf();
+				$notification->method('setObject')->willReturnSelf();
+				$notification->method('setSubject')->willReturnSelf();
+				$notification->method('setUser')->willReturnSelf();
+				$notification->method('setLink')->willReturnCallback(function (string $value) use (&$link, $notification) {
+					$link = $value;
+					return $notification;
+				});
+				return $notification;
+			});
+		$manager->expects(self::once())->method('notify');
+
+		$service = $this->createService($mapper, $roleService, $manager, null, null, $urlGenerator);
+		$ticket = $this->createTicket('en_espera_usuario', 'usuario1', 'soporte1');
+
+		$service->emit('ticket_waiting_for_creator', $ticket);
+
+		self::assertSame('/index.php/apps/legal_advice#/mis-incidencias/2/completo', $link);
+	}
+
+	public function testMailNotificationsUseAbsoluteAppLinks(): void {
+		$mapper = $this->createMock(NotificationPreferenceMapper::class);
+		$mapper->method('findAllOrdered')->willReturn([
+			$this->createPreference('profile', RoleService::SUPPORT, 'ticket_status_changed', NotificationPolicy::CHANNEL_NEXTCLOUD, false),
+			$this->createPreference('profile', RoleService::SUPPORT, 'ticket_status_changed', NotificationPolicy::CHANNEL_MAIL, true),
+		]);
+
+		$roleService = $this->createMock(RoleService::class);
+		$roleService->method('getEffectiveRoles')->with('soporte1')->willReturn([RoleService::SUPPORT]);
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getEMailAddress')->willReturn('soporte1@example.test');
+
+		$userManager = $this->createMock(IUserManager::class);
+		$userManager->method('get')->with('soporte1')->willReturn($user);
+
+		$urlGenerator = $this->createMock(IURLGenerator::class);
+		$urlGenerator->expects(self::once())
+			->method('linkToRouteAbsolute')
+			->with('legal_advice.page.index')
+			->willReturn('https://cloud.example.test/index.php/apps/legal_advice');
+		$urlGenerator->expects(self::never())->method('linkToRoute');
+
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnCallback(static function (string $text, $parameters = []): string {
+			if (!is_array($parameters) || $parameters === []) {
+				return $text;
+			}
+
+			return vsprintf(str_replace(['%1$s', '%2$s'], ['%s', '%s'], $text), array_values($parameters));
+		});
+
+		$l10nFactory = $this->createMock(IFactory::class);
+		$l10nFactory->method('get')->with('legal_advice')->willReturn($l10n);
+
+		$message = $this->createMock(IMessage::class);
+		$message->method('setTo')->willReturnSelf();
+		$message->method('setSubject')->willReturnSelf();
+		$plainBody = null;
+		$message->method('setPlainBody')->willReturnCallback(function (string $body) use (&$plainBody, $message) {
+			$plainBody = $body;
+			return $message;
+		});
+
+		$mailer = $this->createMock(IMailer::class);
+		$mailer->method('createMessage')->willReturn($message);
+		$mailer->expects(self::once())->method('send')->with($message);
+
+		$service = $this->createService($mapper, $roleService, null, $mailer, $userManager, $urlGenerator, $l10nFactory);
+		$ticket = $this->createTicket('asignado', 'usuario1', 'soporte1');
+
+		$service->emit('ticket_status_changed', $ticket, ['soporte1'], [], false);
+
+		self::assertIsString($plainBody);
+		self::assertStringContainsString('https://cloud.example.test/index.php/apps/legal_advice#/soporte/2/completo', $plainBody);
+	}
+
+	public function testNotificationDispatchIgnoresMailFailures(): void {
+		$mapper = $this->createMock(NotificationPreferenceMapper::class);
+		$mapper->method('findAllOrdered')->willReturn([
+			$this->createPreference('profile', RoleService::SUPPORT, 'ticket_status_changed', NotificationPolicy::CHANNEL_NEXTCLOUD, true),
+			$this->createPreference('profile', RoleService::SUPPORT, 'ticket_status_changed', NotificationPolicy::CHANNEL_MAIL, true),
+		]);
+
+		$roleService = $this->createMock(RoleService::class);
+		$roleService->method('getEffectiveRoles')->willReturn([RoleService::SUPPORT]);
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getEMailAddress')->willReturn('soporte1@example.test');
+
+		$userManager = $this->createMock(IUserManager::class);
+		$userManager->method('get')->willReturn($user);
+
+		$urlGenerator = $this->createMock(IURLGenerator::class);
+		$urlGenerator->method('linkToRoute')->willReturn('/index.php/apps/legal_advice');
+		$urlGenerator->method('linkToRouteAbsolute')->willReturn('https://cloud.example.test/index.php/apps/legal_advice');
+
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnCallback(static function (string $text, $parameters = []): string {
+			if (!is_array($parameters) || $parameters === []) {
+				return $text;
+			}
+
+			return vsprintf(str_replace(['%1$s', '%2$s'], ['%s', '%s'], $text), array_values($parameters));
+		});
+
+		$l10nFactory = $this->createMock(IFactory::class);
+		$l10nFactory->method('get')->willReturn($l10n);
+
+		$manager = $this->createMock(IManager::class);
+		$manager->expects(self::once())
+			->method('createNotification')
+			->willReturnCallback(function () {
+				$notification = $this->createMock(INotification::class);
+				$notification->method('setApp')->willReturnSelf();
+				$notification->method('setDateTime')->willReturnSelf();
+				$notification->method('setObject')->willReturnSelf();
+				$notification->method('setSubject')->willReturnSelf();
+				$notification->method('setLink')->willReturnSelf();
+				$notification->method('setUser')->willReturnSelf();
+				return $notification;
+			});
+		$manager->expects(self::once())->method('notify');
+
+		$message = $this->createMock(IMessage::class);
+		$message->method('setTo')->willReturnSelf();
+		$message->method('setSubject')->willReturnSelf();
+		$message->method('setPlainBody')->willReturnSelf();
+
+		$mailer = $this->createMock(IMailer::class);
+		$mailer->method('createMessage')->willReturn($message);
+		$mailer->expects(self::once())->method('send')->willThrowException(new \RuntimeException('smtp offline'));
+
+		$service = $this->createService($mapper, $roleService, $manager, $mailer, $userManager, $urlGenerator, $l10nFactory);
+		$ticket = $this->createTicket('asignado', 'usuario1', 'soporte1');
+
+		$service->emit('ticket_status_changed', $ticket, ['soporte1'], [], false);
+		self::addToAssertionCount(1);
+	}
+
+	public function testNotificationDispatchIgnoresNextcloudFailuresAndStillSendsMail(): void {
+		$mapper = $this->createMock(NotificationPreferenceMapper::class);
+		$mapper->method('findAllOrdered')->willReturn([
+			$this->createPreference('profile', RoleService::SUPPORT, 'ticket_status_changed', NotificationPolicy::CHANNEL_NEXTCLOUD, true),
+			$this->createPreference('profile', RoleService::SUPPORT, 'ticket_status_changed', NotificationPolicy::CHANNEL_MAIL, true),
+		]);
+
+		$roleService = $this->createMock(RoleService::class);
+		$roleService->method('getEffectiveRoles')->willReturn([RoleService::SUPPORT]);
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getEMailAddress')->willReturn('soporte1@example.test');
+
+		$userManager = $this->createMock(IUserManager::class);
+		$userManager->method('get')->willReturn($user);
+
+		$urlGenerator = $this->createMock(IURLGenerator::class);
+		$urlGenerator->method('linkToRoute')->willReturn('/index.php/apps/legal_advice');
+		$urlGenerator->method('linkToRouteAbsolute')->willReturn('https://cloud.example.test/index.php/apps/legal_advice');
+
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnCallback(static function (string $text, $parameters = []): string {
+			if (!is_array($parameters) || $parameters === []) {
+				return $text;
+			}
+
+			return vsprintf(str_replace(['%1$s', '%2$s'], ['%s', '%s'], $text), array_values($parameters));
+		});
+
+		$l10nFactory = $this->createMock(IFactory::class);
+		$l10nFactory->method('get')->willReturn($l10n);
+
+		$manager = $this->createMock(IManager::class);
+		$manager->expects(self::once())->method('createNotification')->willThrowException(new \RuntimeException('notify offline'));
+		$manager->expects(self::never())->method('notify');
+
+		$message = $this->createMock(IMessage::class);
+		$message->method('setTo')->willReturnSelf();
+		$message->method('setSubject')->willReturnSelf();
+		$message->method('setPlainBody')->willReturnSelf();
+
+		$mailer = $this->createMock(IMailer::class);
+		$mailer->method('createMessage')->willReturn($message);
+		$mailer->expects(self::once())->method('send')->with($message);
+
+		$service = $this->createService($mapper, $roleService, $manager, $mailer, $userManager, $urlGenerator, $l10nFactory);
+		$ticket = $this->createTicket('asignado', 'usuario1', 'soporte1');
+
+		$service->emit('ticket_status_changed', $ticket, ['soporte1'], [], false);
+		self::addToAssertionCount(1);
+	}
+
+	private function createService(NotificationPreferenceMapper $mapper, RoleService $roleService, ?IManager $manager = null, ?IMailer $mailer = null, ?IUserManager $userManager = null, ?IURLGenerator $urlGenerator = null, ?IFactory $l10nFactory = null): NotificationService {
 		return new NotificationService(
 			$mapper,
 			new NotificationMailBuilder(),
 			new NotificationRecipientResolver(),
 			$roleService,
-			$this->createMock(IUserManager::class),
+			$userManager ?? $this->createMock(IUserManager::class),
 			$manager ?? $this->createMock(IManager::class),
 			$mailer ?? $this->createMock(IMailer::class),
-			$this->createMock(IFactory::class),
-			$this->createMock(IURLGenerator::class),
+			$l10nFactory ?? $this->createMock(IFactory::class),
+			$urlGenerator ?? $this->createMock(IURLGenerator::class),
 		);
 	}
 
