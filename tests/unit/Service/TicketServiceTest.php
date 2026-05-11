@@ -300,6 +300,144 @@ class TicketServiceTest extends TestCase {
 		self::assertTrue($invoke($ticket, ['city' => 'Barcelona', 'negatedCriteria' => ['city']]));
 	}
 
+	public function testSerializeTicketKeepsDetailResponseWhenOptionalSlicesFail(): void {
+		$serviceReflection = new \ReflectionClass(TicketService::class);
+		$service = $serviceReflection->newInstanceWithoutConstructor();
+
+		$catalogService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\CatalogService::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['isClosedStatus'])
+			->getMock();
+		$catalogService->method('isClosedStatus')->willReturn(false);
+
+		$commentMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\CommentMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['findBy'])
+			->getMock();
+		$commentMapper->method('findBy')->willReturn([]);
+
+		$attachmentService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\AttachmentService::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['listForTicket'])
+			->getMock();
+		$attachmentService->method('listForTicket')->willThrowException(new \RuntimeException('storage offline'));
+
+		$historyMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\HistoryEntryMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['findBy'])
+			->getMock();
+		$historyMapper->method('findBy')->willReturn([]);
+
+		$ticketDataMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\TicketDataMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['findBy'])
+			->getMock();
+		$ticketDataMapper->method('findBy')->willReturn([]);
+
+		$permissionService = $this->createMock(\OCA\ConsultasLegales\Service\PermissionService::class);
+		$permissionService->method('canReadTicket')->willReturn(true);
+		$permissionService->method('canManageTicket')->willReturn(true);
+		$permissionService->method('canCommentOnTicket')->willReturn(true);
+		$permissionService->method('canSeeComment')->willReturn(true);
+
+		$taskSyncService = $this->createMock(\OCA\ConsultasLegales\Service\TaskSyncService::class);
+		$taskSyncService->method('getSyncForTicket')->willThrowException(new \RuntimeException('tasks offline'));
+
+		$richTextSanitizer = $this->createMock(RichTextSanitizer::class);
+
+		foreach ([
+			'catalogService' => $catalogService,
+			'commentMapper' => $commentMapper,
+			'attachmentService' => $attachmentService,
+			'historyMapper' => $historyMapper,
+			'ticketDataMapper' => $ticketDataMapper,
+			'permissionService' => $permissionService,
+			'taskSyncService' => $taskSyncService,
+			'richTextSanitizer' => $richTextSanitizer,
+		] as $property => $value) {
+			$serviceReflection->getProperty($property)->setValue($service, $value);
+		}
+
+		$ticket = new Ticket();
+		$ticket->setId(51);
+		$ticket->setNumber('2026-000051');
+		$ticket->setStatus('asignado');
+		$ticket->setTitle('Detalle resiliente');
+		$ticket->setCreatorUid('usuario1');
+
+		$invoke = \Closure::bind(
+			function (Ticket $ticket): array {
+				/** @var TicketService $this */
+				return $this->serializeTicket('usuario1', $ticket, true);
+			},
+			$service,
+			TicketService::class,
+		);
+
+		$result = $invoke($ticket);
+
+		self::assertSame([], $result['attachments']);
+		self::assertSame([], $result['comments']);
+		self::assertSame([], $result['history']);
+		self::assertSame([], $result['personalData']);
+		self::assertNull($result['taskSync']);
+		self::assertTrue($result['canRead']);
+	}
+
+	public function testAddAttachmentWrapsInfrastructureFailuresAs503(): void {
+		$serviceReflection = new \ReflectionClass(TicketService::class);
+		$service = $serviceReflection->newInstanceWithoutConstructor();
+
+		$ticket = new Ticket();
+		$ticket->setId(61);
+		$ticket->setCreatorUid('usuario1');
+
+		$comment = new Comment();
+		$comment->setId(7);
+		$comment->setTicketId(61);
+		$comment->setVisibility('publico');
+
+		$ticketMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\TicketMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['find'])
+			->getMock();
+		$ticketMapper->method('find')->with(61)->willReturn($ticket);
+
+		$commentMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\CommentMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['find'])
+			->getMock();
+		$commentMapper->method('find')->with(7)->willReturn($comment);
+
+		$attachmentService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\AttachmentService::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['create'])
+			->getMock();
+		$attachmentService->method('create')->willThrowException(new \RuntimeException('storage offline'));
+
+		$permissionService = $this->createMock(\OCA\ConsultasLegales\Service\PermissionService::class);
+		$permissionService->expects(self::once())->method('assertCanReadTicket')->with('usuario1', $ticket);
+
+		$roleService = $this->createMock(RoleService::class);
+		$roleService->method('getEffectiveRoles')->with('usuario1')->willReturn([RoleService::USER]);
+
+		foreach ([
+			'ticketMapper' => $ticketMapper,
+			'commentMapper' => $commentMapper,
+			'attachmentService' => $attachmentService,
+			'permissionService' => $permissionService,
+			'roleService' => $roleService,
+		] as $property => $value) {
+			$serviceReflection->getProperty($property)->setValue($service, $value);
+		}
+
+		$this->expectException(\RuntimeException::class);
+		$this->expectExceptionCode(503);
+		$this->expectExceptionMessage('No se pudo guardar el adjunto en este momento.');
+
+		$service->addAttachment('usuario1', 61, ['name' => 'x.pdf', 'tmp_name' => 'C:\\tmp\\x.pdf'], 7);
+	}
+
 	public function testCreateForAdminAppliesAutomaticAssignmentWhenNoManualAssigneeIsProvided(): void {
 		$groupManager = $this->createMock(IGroupManager::class);
 		$userManager = $this->createMock(IUserManager::class);

@@ -12,6 +12,7 @@ use OCA\ConsultasLegales\Service\TaskSyncService;
 use OCP\App\IAppManager;
 use OCP\Calendar\ICreateFromString;
 use OCP\Calendar\IManager;
+use OCP\IURLGenerator;
 use PHPUnit\Framework\TestCase;
 
 class TaskSyncServiceTest extends TestCase {
@@ -23,7 +24,8 @@ class TaskSyncServiceTest extends TestCase {
 		$appManager = $this->createMock(IAppManager::class);
 		$calendarManager = $this->createMock(IManager::class);
 
-		$service = new TaskSyncService($mapper, $catalogService, $appManager, $calendarManager);
+		$urlGenerator = $this->createMock(IURLGenerator::class);
+		$service = new TaskSyncService($mapper, $catalogService, $appManager, $calendarManager, $urlGenerator);
 
 		$ticket = new Ticket();
 		$ticket->setId(10);
@@ -34,6 +36,38 @@ class TaskSyncServiceTest extends TestCase {
 		$ticket->setAssignedUserUid('agent-1');
 
 		self::assertNull($service->syncTicket($ticket));
+	}
+
+	public function testIntegrationStatusFallsBackWhenIntegrationDependenciesThrow(): void {
+		$mapper = $this->createMock(TaskSyncMapper::class);
+		$catalogService = $this->createMock(CatalogService::class);
+		$catalogService->method('getTaskConfig')->willThrowException(new \RuntimeException('broken config'));
+
+		$appManager = $this->createMock(IAppManager::class);
+		$calendarManager = $this->createMock(IManager::class);
+		$urlGenerator = $this->createMock(IURLGenerator::class);
+
+		$service = new TaskSyncService($mapper, $catalogService, $appManager, $calendarManager, $urlGenerator);
+
+		self::assertSame([
+			'available' => false,
+			'config' => [],
+			'degraded' => true,
+		], $service->getIntegrationStatus());
+	}
+
+	public function testGetSyncForTicketReturnsNullWhenMapperFails(): void {
+		$mapper = $this->createMock(TaskSyncMapper::class);
+		$mapper->method('findOneBy')->willThrowException(new \RuntimeException('db unavailable'));
+
+		$catalogService = $this->createMock(CatalogService::class);
+		$appManager = $this->createMock(IAppManager::class);
+		$calendarManager = $this->createMock(IManager::class);
+		$urlGenerator = $this->createMock(IURLGenerator::class);
+
+		$service = new TaskSyncService($mapper, $catalogService, $appManager, $calendarManager, $urlGenerator);
+
+		self::assertNull($service->getSyncForTicket(99));
 	}
 
 	public function testUpdatesExistingRemoteTaskWhenSyncRecordAlreadyExists(): void {
@@ -117,7 +151,9 @@ class TaskSyncServiceTest extends TestCase {
 		$calendarManager = $this->createMock(IManager::class);
 		$calendarManager->method('getCalendarsForPrincipal')->with('principals/users/agent-1')->willReturn([$calendar]);
 
-		$service = new TaskSyncService($mapper, $catalogService, $appManager, $calendarManager);
+		$urlGenerator = $this->createMock(IURLGenerator::class);
+		$urlGenerator->method('linkToRoute')->with('legal_advice.page.index')->willReturn('/index.php/apps/legal_advice');
+		$service = new TaskSyncService($mapper, $catalogService, $appManager, $calendarManager, $urlGenerator);
 
 		$ticket = new Ticket();
 		$ticket->setId(10);
@@ -130,6 +166,7 @@ class TaskSyncServiceTest extends TestCase {
 		$result = $service->syncTicket($ticket);
 
 		self::assertSame('synced', $result['syncStatus'] ?? null);
+		self::assertSame('/index.php/apps/legal_advice#/soporte/10/completo', $result['payload']['url'] ?? null);
 		self::assertCount(1, $backend->updated);
 		self::assertSame('gi-10-existing.ics', $backend->updated[0]['objectUri']);
 	}
@@ -273,7 +310,9 @@ class TaskSyncServiceTest extends TestCase {
 				[$dedicatedCalendar],
 			);
 
-		$service = new TaskSyncService($mapper, $catalogService, $appManager, $calendarManager);
+		$urlGenerator = $this->createMock(IURLGenerator::class);
+		$urlGenerator->method('linkToRoute')->with('legal_advice.page.index')->willReturn('/index.php/apps/legal_advice');
+		$service = new TaskSyncService($mapper, $catalogService, $appManager, $calendarManager, $urlGenerator);
 
 		$ticket = new Ticket();
 		$ticket->setId(12);
@@ -286,6 +325,7 @@ class TaskSyncServiceTest extends TestCase {
 		$result = $service->syncTicket($ticket);
 
 		self::assertSame('consultas-legales', $result['calendarUri'] ?? null);
+		self::assertSame('/index.php/apps/legal_advice#/soporte/12/completo', $result['payload']['url'] ?? null);
 		self::assertCount(1, $backend->createdCalendars);
 		self::assertSame('Consultas Legales', $backend->createdCalendars[0]['properties']['{DAV:}displayname'] ?? null);
 		self::assertCount(1, $dedicatedCalendar->createdObjects);

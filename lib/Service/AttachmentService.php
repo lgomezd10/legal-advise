@@ -62,14 +62,25 @@ class AttachmentService {
 	}
 
 	public function download(int $attachmentId): array {
-		$attachment = $this->attachmentMapper->find($attachmentId);
-		$folder = $this->getOrCreateFolder('attachments')->getFolder((string) $attachment->getTicketId());
-		$file = $folder->getFile($attachment->getStoredName());
+		try {
+			$attachment = $this->attachmentMapper->find($attachmentId);
+			$folder = $this->getOrCreateFolder('attachments')->getFolder((string) $attachment->getTicketId());
+			$file = $folder->getFile($attachment->getStoredName());
 
-		return [
-			'meta' => $attachment->jsonSerialize(),
-			'content' => base64_encode($file->getContent()),
-		];
+			return [
+				'meta' => $attachment->jsonSerialize(),
+				'content' => base64_encode($file->getContent()),
+			];
+		} catch (\RuntimeException $exception) {
+			$status = (int) $exception->getCode();
+			if ($status >= 400 && $status <= 599) {
+				throw $exception;
+			}
+
+			throw new \RuntimeException('No se pudo descargar el adjunto en este momento.', 503);
+		} catch (\Throwable) {
+			throw new \RuntimeException('No se pudo descargar el adjunto en este momento.', 503);
+		}
 	}
 
 	public function listForTicket(int $ticketId): array {
