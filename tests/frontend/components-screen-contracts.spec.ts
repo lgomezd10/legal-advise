@@ -8,7 +8,7 @@ import TicketSidebarPanel from '@/components/TicketSidebarPanel.vue'
 import TicketCommentComposer from '@/components/TicketCommentComposer.vue'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import { AttachmentPickerStub, RichTextContentStub, RichTextEditorStub, SearchableSelectStub, TypeCascadeSelectorStub } from './helpers/stubs'
-import { createBootstrapData, createComment, createTicket } from './helpers/testData'
+import { createAttachment, createBootstrapData, createComment, createTicket } from './helpers/testData'
 
 describe('Contratos visibles de componentes de pantalla', () => {
 	it('TicketForm muestra los campos principales y el botón de crear ticket', async() => {
@@ -333,10 +333,30 @@ describe('Contratos visibles de componentes de pantalla', () => {
 		const createObjectUrlMock = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:comentarios')
 		const revokeObjectUrlMock = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
 		const clickMock = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+		const originalBlob = globalThis.Blob
+		let exportedCsv = ''
+		class BlobCapture {
+			public readonly parts: unknown[]
+
+			public constructor(parts: unknown[]) {
+				this.parts = parts
+				exportedCsv = parts.map((part) => typeof part === 'string' ? part : String(part)).join('')
+			}
+		}
+		vi.stubGlobal('Blob', BlobCapture as unknown as typeof Blob)
+		const exportedComment = createComment({
+			id: 201,
+			createdAt: 1_711_000_500,
+			body: '<p>Segundo comentario</p>',
+			attachments: [
+				createAttachment({ id: 901, originalName: 'informe.pdf' }),
+				createAttachment({ id: 902, originalName: 'captura.png' }),
+			],
+		})
 
 		const wrapper = mount(TicketSidebarPanel, {
 			props: {
-				ticket: createTicket({ comments: [createComment(), createComment({ id: 201, createdAt: 1_711_000_500, body: '<p>Segundo comentario</p>' })], canManage: true, canComment: true }),
+				ticket: createTicket({ comments: [createComment(), exportedComment], canManage: true, canComment: true }),
 				roles: ['soporte'],
 				users: bootstrap.assignables.users,
 				groups: bootstrap.assignables.groups,
@@ -365,7 +385,7 @@ describe('Contratos visibles de componentes de pantalla', () => {
 		expect(wrapper.findAll('button').some((button) => button.text() === 'Enviar')).toBe(true)
 		expect(wrapper.findAll('button').some((button) => button.text() === 'Adjuntar archivo')).toBe(true)
 
-		await wrapper.setProps({ ticket: createTicket({ id: 101, comments: [createComment({ id: 301 })], canManage: true, canComment: true }) })
+		await wrapper.setProps({ ticket: createTicket({ id: 101, comments: [createComment({ id: 301 }), exportedComment], canManage: true, canComment: true }) })
 		await nextTick()
 
 		expect(wrapper.find('.gi-sidebar-panel__reply-button').exists()).toBe(true)
@@ -375,12 +395,60 @@ describe('Contratos visibles de componentes de pantalla', () => {
 		await exportButton!.trigger('click')
 
 		expect(createObjectUrlMock).toHaveBeenCalled()
+		expect(exportedCsv).toContain('"Adjuntos"')
+		expect(exportedCsv).toContain('"informe.pdf|captura.png"')
 		expect(clickMock).toHaveBeenCalled()
 		expect(revokeObjectUrlMock).toHaveBeenCalledWith('blob:comentarios')
 
+		vi.stubGlobal('Blob', originalBlob)
 		createObjectUrlMock.mockRestore()
 		revokeObjectUrlMock.mockRestore()
 		clickMock.mockRestore()
+	})
+
+	it('TicketSidebarPanel confirma antes de abrir un adjunto por URL', async() => {
+		const bootstrap = createBootstrapData({ roles: ['usuario'] })
+		const openMock = vi.spyOn(window, 'open').mockImplementation(() => null)
+		const urlAttachment = createAttachment({
+			id: 950,
+			originalName: 'video externo',
+			sourceUrl: 'https://example.com/evidencia',
+		})
+		const wrapper = mount(TicketSidebarPanel, {
+			props: {
+				ticket: createTicket({
+					attachments: [urlAttachment],
+					canManage: false,
+					canComment: true,
+				}),
+				roles: ['usuario'],
+				users: bootstrap.assignables.users,
+				groups: bootstrap.assignables.groups,
+				currentUserUid: 'usuario1',
+				statuses: bootstrap.catalogs.statuses,
+				urgencies: bootstrap.catalogs.urgencies,
+				readOnly: true,
+				initialTab: 'attachments',
+			},
+			global: {
+				stubs: {
+					SearchableSelect: SearchableSelectStub,
+					AttachmentPicker: AttachmentPickerStub,
+					RichTextEditor: RichTextEditorStub,
+					RichTextContent: RichTextContentStub,
+				},
+			},
+		})
+
+		await wrapper.get('button.gi-attachment-link').trigger('click')
+		await nextTick()
+
+		expect(wrapper.text()).toContain('Abrir enlace externo')
+		expect(wrapper.text()).toContain('https://example.com/evidencia')
+		await wrapper.get('.gi-dialog__footer .gi-primary-button').trigger('click')
+		expect(openMock).toHaveBeenCalledWith('https://example.com/evidencia', '_blank', 'noopener,noreferrer')
+
+		openMock.mockRestore()
 	})
 
 	it('TicketSidebarPanel pregunta en soporte si quiere pasar el ticket a espera de usuario al enviar comentario', async() => {

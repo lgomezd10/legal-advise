@@ -63,6 +63,8 @@ const discardChangesDialogOpen = ref(false)
 const discardChangesResolver = ref<((confirmed: boolean) => void) | null>(null)
 const closeReasonDialogOpen = ref(false)
 const supportCommentDialogOpen = ref(false)
+const externalAttachmentUrlDialogOpen = ref(false)
+const pendingExternalAttachment = ref<TicketAttachment | null>(null)
 const pendingSupportCommentAction = ref<{ body: string, visibility: 'interno' | 'publico', files: File[], links: TicketAttachmentLinkDraft[] } | null>(null)
 const editableTicket = reactive({
 	title: '',
@@ -515,6 +517,21 @@ function confirmSupportComment(waitForUser: boolean) {
 	resetCommentComposerState()
 }
 
+function closeExternalAttachmentUrlDialog() {
+	externalAttachmentUrlDialogOpen.value = false
+	pendingExternalAttachment.value = null
+}
+
+function confirmExternalAttachmentUrl() {
+	if (!pendingExternalAttachment.value?.sourceUrl) {
+		closeExternalAttachmentUrlDialog()
+		return
+	}
+
+	window.open(pendingExternalAttachment.value.sourceUrl, '_blank', 'noopener,noreferrer')
+	closeExternalAttachmentUrlDialog()
+}
+
 function onStatusChange(value: string | number | null) {
 	if (!value) {
 		return
@@ -679,6 +696,10 @@ function commentExportText(item: TicketComment) {
 	return (item.attachments ?? []).map((attachment) => attachment.originalName).join(', ')
 }
 
+function commentAttachmentsExportText(item: TicketComment) {
+	return (item.attachments ?? []).map((attachment) => attachment.originalName).join('|')
+}
+
 function csvEscape(value: string) {
 	return `"${value.replace(/"/g, '""')}"`
 }
@@ -706,9 +727,10 @@ function exportComments() {
 			formatDateTime(item.createdAt),
 			resolveUserLabel(item.authorUid),
 			commentExportText(item),
+			commentAttachmentsExportText(item),
 		].map((column) => csvEscape(column)).join(';'))
 	const csv = [
-		['Fecha', 'Usuario', 'Comentario'].map((column) => csvEscape(column)).join(';'),
+		['Fecha', 'Usuario', 'Comentario', 'Adjuntos'].map((column) => csvEscape(column)).join(';'),
 		...rows,
 	].join('\r\n')
 	const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' })
@@ -721,7 +743,8 @@ function exportComments() {
 
 function openAttachment(attachment: TicketAttachment) {
 	if (attachment.sourceUrl) {
-		window.open(attachment.sourceUrl, '_blank', 'noopener,noreferrer')
+		pendingExternalAttachment.value = attachment
+		externalAttachmentUrlDialogOpen.value = true
 		return
 	}
 
@@ -1077,6 +1100,20 @@ function assignToCurrentUser() {
 				<p class="gi-dialog__message gi-dialog__message--neutral">Debes indicar el motivo del cierre antes de guardar.</p>
 				<footer class="gi-dialog__footer">
 					<button class="gi-primary-button" type="button" @click="closeReasonDialogOpen = false">Entendido</button>
+				</footer>
+			</section>
+		</div>
+		<div v-if="externalAttachmentUrlDialogOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="closeExternalAttachmentUrlDialog()">
+			<section class="gi-app-dialog gi-dialog gi-dialog--compact" aria-label="Confirmar apertura de enlace externo">
+				<header class="gi-dialog__header">
+					<h3 class="gi-dialog__title">Abrir enlace externo</h3>
+					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeExternalAttachmentUrlDialog()">x</button>
+				</header>
+				<p class="gi-dialog__message gi-dialog__message--neutral">Se va a abrir este adjunto en una página externa.</p>
+				<p class="gi-dialog__message gi-dialog__message--neutral">{{ pendingExternalAttachment?.sourceUrl }}</p>
+				<footer class="gi-dialog__footer">
+					<button class="gi-ghost-button" type="button" @click="closeExternalAttachmentUrlDialog()">Cancelar</button>
+					<button class="gi-primary-button" type="button" @click="confirmExternalAttachmentUrl()">Abrir enlace</button>
 				</footer>
 			</section>
 		</div>
