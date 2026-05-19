@@ -65,7 +65,7 @@ class BootstrapServiceTest extends TestCase {
 
 		$appManager = $this->createMock(IAppManager::class);
 		$appManager->method('isEnabledForUser')->with(Application::APP_ID, $user)->willReturn(true);
-		$appManager->method('getAppVersion')->with(Application::APP_ID)->willReturn('0.2.0');
+		$appManager->method('getAppVersion')->with(Application::APP_ID)->willReturn('0.3.0');
 
 		$appStorageUsageService = $this->createMock(AppStorageUsageService::class);
 		$appStorageUsageService->method('summarize')->willReturn([

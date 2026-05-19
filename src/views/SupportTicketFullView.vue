@@ -51,12 +51,15 @@ async function download(attachmentId: number) {
 	URL.revokeObjectURL(link.href)
 }
 
-async function commentOnTicket(payload: { body: string, visibility: 'interno' | 'publico', files: File[], links: TicketAttachmentLinkDraft[] }) {
+async function commentOnTicket(payload: { body: string, visibility: 'interno' | 'publico', files: File[], links: TicketAttachmentLinkDraft[], waitForUser?: boolean }) {
 	if (!ticketsStore.selected) {
 		return
 	}
 
 	await ticketsStore.comment(ticketsStore.selected.id, payload)
+	if (payload.waitForUser) {
+		await ticketsStore.update(ticketsStore.selected.id, { status: 'en_espera_usuario' })
+	}
 }
 
 async function saveTicket(payload: Record<string, unknown>) {

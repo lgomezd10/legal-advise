@@ -453,10 +453,27 @@ class TicketServiceTest extends TestCase {
 			->disableOriginalConstructor()
 			->onlyMethods(['insert'])
 			->getMock();
-		$commentMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\CommentMapper::class)
-			->disableOriginalConstructor()
-			->onlyMethods(['findBy'])
-			->getMock();
+		$insertedComments = [];
+		$commentMapper = new class($insertedComments) extends \OCA\ConsultasLegales\Db\CommentMapper {
+			private array $insertedComments;
+
+			public function __construct(array &$insertedComments) {
+				$this->insertedComments = &$insertedComments;
+			}
+
+			public function insert(\OCP\AppFramework\Db\Entity $entity): \OCP\AppFramework\Db\Entity {
+				if ($entity instanceof Comment) {
+					$entity->setId(4001 + count($this->insertedComments));
+					$this->insertedComments[] = $entity;
+				}
+
+				return $entity;
+			}
+
+			public function findBy(string $column, mixed $value, string $orderBy = 'id', string $direction = 'ASC'): array {
+				return $this->insertedComments;
+			}
+		};
 		$attachmentService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\AttachmentService::class)
 			->disableOriginalConstructor()
 			->onlyMethods(['listForTicket'])
@@ -511,14 +528,27 @@ class TicketServiceTest extends TestCase {
 			return $ticket;
 		});
 		$personalConfigService->method('getForUser')->willReturn([]);
-		$commentMapper->method('findBy')->willReturn([]);
 		$attachmentService->method('listForTicket')->willReturn([]);
+		$historyInsertions = [];
+		$historyMapper->expects(self::exactly(2))
+			->method('insert')
+			->willReturnCallback(static function (object $entry) use (&$historyInsertions): object {
+				$historyInsertions[] = [
+					'eventType' => $entry->getEventType(),
+					'visibility' => $entry->getVisibility(),
+					'payload' => $entry->getPayload(),
+					'actorRole' => $entry->getActorRole(),
+				];
+				return $entry;
+			});
 		$historyMapper->method('findBy')->willReturn([]);
 		$ticketDataMapper->method('findBy')->willReturn([]);
 		$permissionService->method('canReadTicket')->willReturn(true);
 		$permissionService->method('canManageTicket')->willReturn(true);
 		$permissionService->method('canCommentOnTicket')->willReturn(true);
+		$permissionService->method('canSeeComment')->willReturn(true);
 		$taskSyncService->method('getSyncForTicket')->willReturn(null);
+		$richTextSanitizer->method('isMeaningful')->willReturn(true);
 		$ticketNotificationPublisher->expects(self::once())
 			->method('publishCreatedTicket')
 			->with(self::isInstanceOf(Ticket::class));
@@ -562,6 +592,13 @@ class TicketServiceTest extends TestCase {
 		self::assertSame('soporte2', $result['assignedUserUid']);
 		self::assertNull($result['assignedGroupId']);
 		self::assertSame('asignado', $result['status']);
+		self::assertCount(1, $result['comments']);
+		self::assertSame('<p>Descripcion</p>', $result['comments'][0]['body']);
+		self::assertSame('publico', $result['comments'][0]['visibility']);
+		self::assertSame(['comment_added', 'ticket_created'], array_column($historyInsertions, 'eventType'));
+		self::assertSame('publico', $historyInsertions[0]['visibility']);
+		self::assertSame(RoleService::SUPPORT, $historyInsertions[0]['actorRole']);
+		self::assertSame(true, $historyInsertions[0]['payload']['isInitialDescription'] ?? false);
 	}
 
 	private function buildTicketServiceForUpdateScenario(Ticket $ticket, array $expectedPayload, array &$notificationCalls, ?object $group = null): TicketService {

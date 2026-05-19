@@ -106,6 +106,7 @@ class TicketService {
 		$ticket->setMetadata([]);
 
 		$ticket = $this->ticketMapper->insert($ticket);
+		$this->addInitialDescriptionComment($ticket, $uid, $isSupportActor, (string) $ticket->getUserDescription(), $now);
 		$this->savePersonalData($ticket->getId(), $payload['personalData'] ?? []);
 		$this->rememberProvinceForUser($uid, $province);
 		$this->addHistory($ticket->getId(), $uid, $isSupportActor ? RoleService::SUPPORT : RoleService::USER, 'ticket_created', 'publico', ['status' => $initialStatus]);
@@ -113,6 +114,23 @@ class TicketService {
 		$this->ticketNotificationPublisher->publishCreatedTicket($ticket);
 
 		return $this->serializeTicket($uid, $ticket, true);
+	}
+
+	private function addInitialDescriptionComment(Ticket $ticket, string $uid, bool $isSupportActor, string $body, int $createdAt): void {
+		if (!$this->richTextSanitizer->isMeaningful($body)) {
+			return;
+		}
+
+		$comment = new Comment();
+		$comment->setTicketId((int) $ticket->getId());
+		$comment->setAuthorUid($uid);
+		$comment->setAuthorRole($isSupportActor ? RoleService::SUPPORT : RoleService::USER);
+		$comment->setBody($body);
+		$comment->setVisibility('publico');
+		$comment->setCreatedAt($createdAt);
+
+		$comment = $this->commentMapper->insert($comment);
+		$this->addHistory((int) $ticket->getId(), $uid, $comment->getAuthorRole(), 'comment_added', 'publico', ['commentId' => $comment->getId(), 'isInitialDescription' => true]);
 	}
 
 	public function update(string $uid, int $id, array $payload): array {
