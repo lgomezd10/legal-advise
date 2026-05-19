@@ -227,6 +227,10 @@ watch(() => [open.value, query.value, filteredOptions.value.length], async ([isO
 	min-width: 0;
 }
 
+.gi-search-select--open {
+	z-index: 80;
+}
+
 .gi-search-select__trigger {
 	width: 100%;
 	min-height: 2.7rem;
@@ -292,7 +296,7 @@ watch(() => [open.value, query.value, filteredOptions.value.length], async ([isO
 	position: absolute;
 	left: 0;
 	top: calc(100% + .35rem);
-	z-index: 20;
+	z-index: 81;
 	display: grid;
 	gap: .55rem;
 	min-width: var(--gi-search-select-panel-min-width);

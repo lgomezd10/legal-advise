@@ -490,6 +490,51 @@ describe('Contratos visibles de componentes de pantalla', () => {
 		expect(wrapper.emitted('comment')?.[0]?.[0]).toMatchObject({ waitForUser: true })
 	})
 
+	it('TicketSidebarPanel no muestra el dialogo de espera de usuario para comentarios internos', async() => {
+		const bootstrap = createBootstrapData({ roles: ['soporte', 'usuario'] })
+		const wrapper = mount(TicketSidebarPanel, {
+			props: {
+				ticket: createTicket({
+					canManage: true,
+					canComment: true,
+					comments: [createComment({ id: 1, body: '<p>Comentario inicial</p>' })],
+				}),
+				roles: ['soporte'],
+				users: bootstrap.assignables.users,
+				groups: bootstrap.assignables.groups,
+				types: bootstrap.catalogs.types,
+				currentUserUid: 'usuario1',
+				statuses: bootstrap.catalogs.statuses,
+				urgencies: bootstrap.catalogs.urgencies,
+				readOnly: false,
+				initialTab: 'comments',
+			},
+			global: {
+				stubs: {
+					SearchableSelect: SearchableSelectStub,
+					AttachmentPicker: AttachmentPickerStub,
+					RichTextEditor: RichTextEditorStub,
+					RichTextContent: RichTextContentStub,
+				},
+			},
+		})
+
+		await wrapper.get('.gi-sidebar-panel__reply-button').trigger('click')
+		await wrapper.get('.rich-text-editor-stub').setValue('<p>Nota interna</p>')
+		await nextTick()
+		const visibilitySelect = wrapper.findAllComponents(SearchableSelectStub).find((component) => component.props('placeholder') === 'Visibilidad')
+		expect(visibilitySelect).toBeDefined()
+		await visibilitySelect!.vm.$emit('update:modelValue', 'interno')
+		await nextTick()
+		const sendButton = wrapper.findAll('button').find((button) => button.text() === 'Enviar')
+		expect(sendButton).toBeDefined()
+		await sendButton!.trigger('click')
+
+		expect(wrapper.text()).not.toContain('¿Quieres pasar el ticket a en espera de usuario al enviar este comentario?')
+		expect(wrapper.emitted('comment')?.[0]?.[0]).toMatchObject({ visibility: 'interno' })
+		expect(wrapper.emitted('comment')?.[0]?.[0]).not.toHaveProperty('waitForUser')
+	})
+
 	it('TicketSidebarPanel muestra el tipo seleccionado del ticket', () => {
 		const bootstrap = createBootstrapData({ roles: ['soporte', 'usuario'] })
 		const wrapper = mount(TicketSidebarPanel, {

@@ -78,12 +78,15 @@ async function reopenTicket() {
 	await ticketsStore.reopen(ticketsStore.selected.id)
 }
 
-async function assignToCurrentUser() {
+async function assignToCurrentUser(payload?: { assignedUserUid: string | null, assignedGroupId: string | null }) {
 	if (!ticketsStore.selected) {
 		return
 	}
 
-	await ticketsStore.update(ticketsStore.selected.id, { assignedUserUid: bootstrapStore.data.currentUser.uid })
+	await ticketsStore.update(ticketsStore.selected.id, payload ?? {
+		assignedUserUid: bootstrapStore.data.currentUser.uid,
+		assignedGroupId: null,
+	})
 }
 
 function backToIncident() {

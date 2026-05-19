@@ -42,7 +42,7 @@ const emit = defineEmits<{
 	(e: 'download', attachmentId: number): void
 	(e: 'fullscreen'): void
 	(e: 'reopen'): void
-	(e: 'assign-to-me'): void
+	(e: 'assign-to-me', payload: { assignedUserUid: string | null, assignedGroupId: string | null }): void
 	(e: 'repeat'): void
 }>()
 
@@ -483,7 +483,7 @@ function sendComment() {
 		files: [...attachmentsDraft.value.files],
 		links: [...attachmentsDraft.value.links],
 	}
-	if (showSupportTabs.value) {
+	if (showSupportTabs.value && nextPayload.visibility === 'publico') {
 		pendingSupportCommentAction.value = nextPayload
 		supportCommentDialogOpen.value = true
 		return
@@ -815,7 +815,10 @@ function assignToCurrentUser() {
 
 	onAssignedUserChange(props.currentUserUid)
 	waitingForSaveSync.value = true
-	emit('assign-to-me')
+	emit('assign-to-me', {
+		assignedUserUid: editableTicket.assignedUserUid,
+		assignedGroupId: editableTicket.assignedGroupId,
+	})
 }
 </script>
 
@@ -899,7 +902,7 @@ function assignToCurrentUser() {
 			</div>
 			<div v-if="canEditTicket" class="gi-form-grid gi-sidebar-panel__support-editor-grid">
 				<div class="gi-field gi-field--wide">
-					<span>Descripción de soporte</span>
+					<span>Notas de soporte</span>
 					<RichTextEditor v-model="editableTicket.supportDescription" placeholder="Añade contexto interno, pasos realizados o capturas" :min-height="220" />
 				</div>
 			</div>
@@ -912,7 +915,7 @@ function assignToCurrentUser() {
 					<div><span class="gi-sidebar-panel__summary-label">Asignado a grupo</span><strong>{{ resolveGroupLabel(ticket.assignedGroupId) }}</strong></div>
 				</div>
 				<div>
-					<h3>Descripción de soporte</h3>
+					<h3>Notas de soporte</h3>
 					<RichTextContent :value="ticket.supportDescription" surface />
 				</div>
 			</div>
@@ -1495,7 +1498,7 @@ function assignToCurrentUser() {
 .gi-sidebar-panel__accordion-item {
 	border: 1px solid rgba(49, 96, 91, .12);
 	border-radius: 16px;
-	overflow: hidden;
+	overflow: visible;
 	background: rgba(255, 255, 255, .9);
 }
 

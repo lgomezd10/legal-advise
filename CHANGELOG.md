@@ -1,4 +1,5 @@
-## 0.3.0
+## 0.3.1
+
 ### Changed
 - Refinado el flujo de comentarios en tickets para unificar la experiencia entre usuario y soporte.
 - Ajustada la composicion en movil y la presentacion del historial de comentarios.
@@ -8,6 +9,7 @@
 - La exportacion de comentarios añade la columna `Adjuntos` y la apertura de URLs externas pide confirmacion.
 
 ### Fixed
+- Corregidos varios fallos en comentarios y asignación.
 - Corregida la coherencia del comportamiento de comentarios y adjuntos entre las distintas vistas de ticket.
 
 ## 0.2.0
