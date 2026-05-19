@@ -12,6 +12,7 @@ const router = useRouter()
 const bootstrapStore = useBootstrapStore()
 const ticketsStore = useTicketsStore()
 const panelRef = ref<{ confirmDiscardChanges: () => boolean | Promise<boolean> } | null>(null)
+const ticketDeleteDialogOpen = ref(false)
 
 function canLeaveTicket() {
 	return panelRef.value?.confirmDiscardChanges() ?? true
@@ -62,6 +63,22 @@ async function commentOnTicket(payload: { body: string, visibility: 'interno' | 
 	}
 }
 
+async function deleteCommentOnTicket(payload: { commentId: number, restoreAssignedStatus: boolean }) {
+	if (!ticketsStore.selected) {
+		return
+	}
+
+	await ticketsStore.deleteComment(ticketsStore.selected.id, payload.commentId, payload.restoreAssignedStatus)
+}
+
+async function editCommentOnTicket(payload: { commentId: number, body: string, visibility: 'interno' | 'publico' }) {
+	if (!ticketsStore.selected) {
+		return
+	}
+
+	await ticketsStore.editComment(ticketsStore.selected.id, payload.commentId, payload)
+}
+
 async function saveTicket(payload: Record<string, unknown>) {
 	if (!ticketsStore.selected) {
 		return
@@ -100,6 +117,26 @@ function backToIncident() {
 function backToSupport() {
 	void router.push('/soporte')
 }
+
+function requestTicketDeletion() {
+	ticketDeleteDialogOpen.value = true
+}
+
+function closeTicketDeleteDialog() {
+	ticketDeleteDialogOpen.value = false
+}
+
+async function confirmTicketDeletion() {
+	if (!ticketsStore.selected) {
+		closeTicketDeleteDialog()
+		return
+	}
+
+	const ticketId = ticketsStore.selected.id
+	closeTicketDeleteDialog()
+	await ticketsStore.deleteTicket(ticketId)
+	void router.push('/soporte')
+}
 </script>
 
 <template>
@@ -123,16 +160,32 @@ function backToSupport() {
 			:read-only="!ticketsStore.selected?.canManage"
 			:show-fullscreen="false"
 			@comment="commentOnTicket"
+			@edit-comment="editCommentOnTicket"
+			@delete-comment="deleteCommentOnTicket"
 			@save="saveTicket"
 			@download="download"
 			@reopen="reopenTicket"
 			@assign-to-me="assignToCurrentUser"
 		>
 			<template #actions>
+				<button v-if="ticketsStore.selected?.canDelete" class="gi-ghost-button gi-dialog__danger" type="button" @click="requestTicketDeletion">Eliminar ticket</button>
 				<button class="gi-secondary-button" type="button" @click="backToIncident">Volver al ticket</button>
 				<button class="gi-secondary-button" type="button" @click="backToSupport">Volver a consola</button>
 			</template>
 		</TicketSidebarPanel>
+		<div v-if="ticketDeleteDialogOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="closeTicketDeleteDialog()">
+			<section class="gi-app-dialog gi-dialog gi-dialog--compact" aria-label="Confirmar borrado del ticket">
+				<header class="gi-dialog__header">
+					<h3 class="gi-dialog__title">Eliminar ticket</h3>
+					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeTicketDeleteDialog()">x</button>
+				</header>
+				<p class="gi-dialog__message gi-dialog__message--neutral">Este borrado no se podrá deshacer.</p>
+				<footer class="gi-dialog__footer">
+					<button class="gi-ghost-button" type="button" @click="closeTicketDeleteDialog()">Cancelar</button>
+					<button class="gi-secondary-button gi-dialog__danger" type="button" @click="confirmTicketDeletion">Eliminar ticket</button>
+				</footer>
+			</section>
+		</div>
 	</section>
 </template>
 

@@ -22,7 +22,9 @@ const props = withDefaults(defineProps<{
 	visibilityOptions?: SearchableSelectOption[]
 	showVisibility?: boolean
 	attachmentsVisible?: boolean
+	attachmentsEnabled?: boolean
 	dismissible?: boolean
+	submitLabel?: string
 }>(), {
 	modelValue: '',
 	attachmentsDraft: () => ({ files: [], links: [] }),
@@ -34,7 +36,9 @@ const props = withDefaults(defineProps<{
 	visibilityOptions: () => [],
 	showVisibility: false,
 	attachmentsVisible: false,
+	attachmentsEnabled: true,
 	dismissible: false,
+	submitLabel: 'Enviar',
 })
 
 const emit = defineEmits<{
@@ -90,12 +94,12 @@ defineExpose({
 			<span>Visibilidad</span>
 			<SearchableSelect :model-value="visibility" :options="visibilityOptions" placeholder="Visibilidad" @update:modelValue="emit('update:visibility', $event === 'interno' ? 'interno' : 'publico')" />
 		</div>
-		<AttachmentPicker v-if="attachmentsVisible" ref="attachmentPickerRef" :model-value="attachmentsDraft" :allowed-extensions="allowedExtensions" :max-file-size-mb="maxFileSizeMb" :show-toolbar="false" :show-url-action="false" :show-helper-info="false" @update:modelValue="emit('update:attachmentsDraft', $event)" />
+		<AttachmentPicker v-if="attachmentsEnabled && attachmentsVisible" ref="attachmentPickerRef" :model-value="attachmentsDraft" :allowed-extensions="allowedExtensions" :max-file-size-mb="maxFileSizeMb" :show-toolbar="false" :show-url-action="false" :show-helper-info="false" @update:modelValue="emit('update:attachmentsDraft', $event)" />
 		<p v-if="composerError" class="gi-form-error">{{ composerError }}</p>
 		<div class="gi-ticket-comment-composer__footer-actions">
-			<TicketAttachmentAction :allowed-extensions="allowedExtensions" :max-file-size-mb="maxFileSizeMb" @action="openFileAttachment" />
+			<TicketAttachmentAction v-if="attachmentsEnabled" :allowed-extensions="allowedExtensions" :max-file-size-mb="maxFileSizeMb" @action="openFileAttachment" />
 			<div class="gi-ticket-comment-composer__footer-spacer" />
-			<button class="gi-primary-button" type="button" @click="emit('submit')">Enviar</button>
+			<button class="gi-primary-button" type="button" @click="emit('submit')">{{ submitLabel }}</button>
 			<button v-if="dismissible" class="gi-round-icon-button gi-ticket-comment-composer__close-button" type="button" aria-label="Cerrar respuesta" title="Cerrar respuesta" @click="emit('close')">
 				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z" fill="currentColor" /></svg>
 			</button>

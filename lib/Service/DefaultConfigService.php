@@ -96,9 +96,9 @@ class DefaultConfigService {
 
 	private function ensureUrgencies(): void {
 		$defaults = [
-			['name' => 'Baja', 'weight' => 1, 'color' => '#7A8F62'],
+			['name' => 'Alta', 'weight' => 1, 'color' => '#D96C3F'],
 			['name' => 'Media', 'weight' => 2, 'color' => '#D9A441'],
-			['name' => 'Alta', 'weight' => 3, 'color' => '#D96C3F'],
+			['name' => 'Baja', 'weight' => 3, 'color' => '#7A8F62'],
 		];
 
 		foreach ($defaults as $row) {

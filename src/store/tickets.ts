@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import type { Ticket, TicketAttachmentLinkDraft, TicketComment, TicketDraft } from '@/types'
-import { addComment, createTicket, downloadAttachment, exportTickets, fetchTicket, fetchTickets, reopenTicket, updateTicket, uploadAttachment, uploadAttachmentUrl } from '@/services/tickets'
+import { addComment, createTicket, deleteTicket as deleteTicketRequest, deleteTicketComment, downloadAttachment, exportTickets, fetchTicket, fetchTickets, reopenTicket, updateTicket, updateTicketComment, uploadAttachment, uploadAttachmentUrl } from '@/services/tickets'
 
 type CommentPayload = {
 	body: string
@@ -76,6 +76,23 @@ export const useTicketsStore = defineStore('tickets', {
 			this.selected = await reopenTicket(ticketId)
 			this.items = this.items.map((item) => item.id === ticketId ? this.selected as Ticket : item)
 			return this.selected
+		},
+		async deleteComment(ticketId: number, commentId: number, restoreAssignedStatus = false) {
+			this.selected = await deleteTicketComment(ticketId, commentId, restoreAssignedStatus)
+			this.items = this.items.map((item) => item.id === ticketId ? this.selected as Ticket : item)
+			return this.selected
+		},
+		async editComment(ticketId: number, commentId: number, payload: { body: string, visibility: 'interno' | 'publico' }) {
+			this.selected = await updateTicketComment(ticketId, commentId, payload)
+			this.items = this.items.map((item) => item.id === ticketId ? this.selected as Ticket : item)
+			return this.selected
+		},
+		async deleteTicket(ticketId: number) {
+			await deleteTicketRequest(ticketId)
+			this.items = this.items.filter((item) => item.id !== ticketId)
+			if (this.selected?.id === ticketId) {
+				this.selected = null
+			}
 		},
 		async download(attachmentId: number) {
 			return downloadAttachment(attachmentId)

@@ -412,4 +412,26 @@ describe('Pantallas de soporte', () => {
 		expect(panel.props('readOnly')).toBe(true)
 		expect(panel.props('showRepeat')).toBe(true)
 	})
+
+	it('mantiene el panel lateral en modo usuario dentro de Mis tickets aunque la cuenta tenga roles de soporte o administración', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['administrador', 'soporte', 'usuario'] })
+		routeState.path = '/mis-incidencias/100'
+		routeState.params = { ticketId: '100' }
+		ticketsStoreMock.selected = createTicket({ id: 100, canManage: true })
+
+		const wrapper = mount(TicketSidebarView, {
+			global: {
+				stubs: {
+					TicketSidebarPanel: TicketSidebarPanelStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const panel = wrapper.getComponent(TicketSidebarPanelStub)
+		expect(panel.props('roles')).toEqual(['usuario'])
+		expect(panel.props('readOnly')).toBe(true)
+		expect(panel.props('showRepeat')).toBe(true)
+	})
 })

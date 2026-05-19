@@ -301,9 +301,9 @@ class Version000001Date20260310090000 extends SimpleMigrationStep {
 
 	private function seedUrgencies(): void {
 		$rows = [
-			['name' => 'Baja', 'weight' => 1, 'color' => '#7A8F62', 'restrictions' => null, 'active' => true],
+			['name' => 'Alta', 'weight' => 1, 'color' => '#D96C3F', 'restrictions' => null, 'active' => true],
 			['name' => 'Media', 'weight' => 2, 'color' => '#D9A441', 'restrictions' => null, 'active' => true],
-			['name' => 'Alta', 'weight' => 3, 'color' => '#D96C3F', 'restrictions' => null, 'active' => true],
+			['name' => 'Baja', 'weight' => 3, 'color' => '#7A8F62', 'restrictions' => null, 'active' => true],
 		];
 
 		foreach ($rows as $row) {

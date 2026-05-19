@@ -328,6 +328,43 @@ describe('Contratos visibles de componentes de pantalla', () => {
 		expect(wrapper.text()).toContain('Este ticket está cerrado. Reabre el ticket para volver a actuar sobre él.')
 	})
 
+	it('TicketSidebarPanel oculta editar y eliminar comentarios en Mis tickets aunque el backend mande capacidades de soporte', async() => {
+		const bootstrap = createBootstrapData({ roles: ['administrador', 'soporte', 'usuario'] })
+		const wrapper = mount(TicketSidebarPanel, {
+			props: {
+				ticket: createTicket({
+					canManage: true,
+					canComment: true,
+					comments: [createComment({ canEdit: true, canDelete: true })],
+				}),
+				roles: ['usuario'],
+				users: bootstrap.assignables.users,
+				groups: bootstrap.assignables.groups,
+				currentUserUid: 'usuario1',
+				statuses: bootstrap.catalogs.statuses,
+				urgencies: bootstrap.catalogs.urgencies,
+				readOnly: true,
+				initialTab: 'comments',
+			},
+			global: {
+				stubs: {
+					SearchableSelect: SearchableSelectStub,
+					AttachmentPicker: AttachmentPickerStub,
+					RichTextEditor: RichTextEditorStub,
+					RichTextContent: RichTextContentStub,
+				},
+			},
+		})
+
+		await nextTick()
+
+		expect(wrapper.text()).not.toContain('Editar comentario')
+		expect(wrapper.text()).not.toContain('Eliminar comentario')
+		expect(wrapper.findAll('.gi-sidebar-panel__comment-icon-button').length).toBe(1)
+		expect(wrapper.text()).not.toContain('Solicitante')
+		expect(wrapper.find('.gi-sidebar-panel__save-button').exists()).toBe(false)
+	})
+
 	it('TicketSidebarPanel muestra responder en soporte y permite exportar comentarios', async() => {
 		const bootstrap = createBootstrapData({ roles: ['soporte'] })
 		const createObjectUrlMock = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:comentarios')
@@ -389,6 +426,8 @@ describe('Contratos visibles de componentes de pantalla', () => {
 		await nextTick()
 
 		expect(wrapper.find('.gi-sidebar-panel__reply-button').exists()).toBe(true)
+		await wrapper.get('button.gi-sidebar-panel__comments-mobile-toggle').trigger('click')
+		await nextTick()
 
 		const exportButton = wrapper.findAll('button').find((button) => button.text() === 'Exportar comentarios')
 		expect(exportButton).toBeDefined()

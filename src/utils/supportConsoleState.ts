@@ -16,13 +16,13 @@ const STORAGE_KEY = 'legal_advice:support_console_state'
 const LEGACY_DEFAULT_SUPPORT_COLUMNS: SupportColumnKey[] = ['number', 'updatedAt', 'assignment', 'createdBy', 'title', 'userDescription']
 
 export const DEFAULT_SUPPORT_COLUMNS: SupportColumnKey[] = ['updatedAt', 'province', 'title', 'status', 'userDescription']
-export const DEFAULT_COLUMN_EDITOR_ORDER: SupportColumnKey[] = ['updatedAt', 'province', 'title', 'status', 'userDescription', 'number', 'assignment', 'createdBy', 'urgency', 'createdAt']
+export const DEFAULT_COLUMN_EDITOR_ORDER: SupportColumnKey[] = ['updatedAt', 'province', 'title', 'status', 'userDescription', 'number', 'assignment', 'createdBy', 'attachments', 'urgency', 'createdAt']
 export const DEFAULT_SUPPORT_SORT: Pick<SupportConsoleState, 'sortKey' | 'sortDirection'> = {
 	sortKey: 'updatedAt',
 	sortDirection: 'desc',
 }
 
-const KNOWN_COLUMN_KEYS: SupportColumnKey[] = ['number', 'createdBy', 'province', 'title', 'userDescription', 'assignment', 'status', 'urgency', 'createdAt', 'updatedAt']
+const KNOWN_COLUMN_KEYS: SupportColumnKey[] = ['number', 'createdBy', 'province', 'title', 'userDescription', 'assignment', 'attachments', 'status', 'urgency', 'createdAt', 'updatedAt']
 
 export function loadSupportConsoleState(): SupportConsoleState | null {
 	if (typeof window === 'undefined') {

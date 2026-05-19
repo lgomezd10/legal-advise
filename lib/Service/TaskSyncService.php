@@ -100,6 +100,23 @@ class TaskSyncService {
 		}
 	}
 
+	public function deleteForTicket(int $ticketId): void {
+		$existing = $this->taskSyncMapper->findOneBy('ticket_id', $ticketId);
+		if (!$existing instanceof TaskSync) {
+			return;
+		}
+
+		try {
+			$this->deleteRemoteTask($existing);
+		} catch (\Throwable) {
+		}
+
+		try {
+			$this->taskSyncMapper->delete($existing);
+		} catch (\Throwable) {
+		}
+	}
+
 	private function shouldReplaceRemoteTask(TaskSync $existing, string $assignedUserUid, ?string $calendarUri): bool {
 		$existingAssigneeUid = $existing->getAssigneeUid();
 		if ($existingAssigneeUid !== null && $existingAssigneeUid !== '' && $existingAssigneeUid !== $assignedUserUid) {

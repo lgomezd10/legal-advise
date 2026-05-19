@@ -41,11 +41,12 @@ export async function apiPut<T>(path: string, data?: Record<string, unknown>): P
 	return response.data.ocs.data as T
 }
 
-export async function apiDelete<T>(path: string): Promise<T> {
+export async function apiDelete<T>(path: string, params?: Record<string, unknown>): Promise<T> {
 	const response = await axios.delete(generateAppOcsUrl(path), {
 		headers: ocsHeaders,
 		params: {
 			format: 'json',
+			...params,
 		},
 	})
 	return response.data.ocs.data as T
