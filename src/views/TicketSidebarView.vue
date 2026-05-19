@@ -60,6 +60,22 @@ async function commentOnTicket(payload: { body: string, visibility: 'interno' | 
 	}
 }
 
+async function deleteCommentOnTicket(payload: { commentId: number, restoreAssignedStatus: boolean }) {
+	if (!ticketsStore.selected || !supportMode.value) {
+		return
+	}
+
+	await ticketsStore.deleteComment(ticketsStore.selected.id, payload.commentId, payload.restoreAssignedStatus)
+}
+
+async function editCommentOnTicket(payload: { commentId: number, body: string, visibility: 'interno' | 'publico' }) {
+	if (!ticketsStore.selected || !supportMode.value) {
+		return
+	}
+
+	await ticketsStore.editComment(ticketsStore.selected.id, payload.commentId, payload)
+}
+
 async function saveTicket(payload: Record<string, unknown>) {
 	if (!ticketsStore.selected) {
 		return
@@ -129,6 +145,8 @@ function repeatTicket() {
 		:show-fullscreen="true"
 		:show-repeat="!supportMode"
 		@comment="commentOnTicket"
+		@edit-comment="editCommentOnTicket"
+		@delete-comment="deleteCommentOnTicket"
 		@save="saveTicket"
 		@download="download"
 		@fullscreen="openFullscreen"

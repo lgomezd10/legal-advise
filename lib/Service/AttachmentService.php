@@ -91,6 +91,27 @@ class AttachmentService {
 		return $this->attachmentMapper->findBy('ticket_id', $ticketId, 'created_at', 'ASC') !== [];
 	}
 
+	public function deleteForComment(int $commentId): void {
+		foreach ($this->attachmentMapper->findBy('comment_id', $commentId, 'created_at', 'ASC') as $attachment) {
+			if ($attachment instanceof Attachment) {
+				$this->deleteAttachmentEntity($attachment);
+			}
+		}
+	}
+
+	public function deleteForTicket(int $ticketId): void {
+		foreach ($this->attachmentMapper->findBy('ticket_id', $ticketId, 'created_at', 'ASC') as $attachment) {
+			if ($attachment instanceof Attachment) {
+				$this->deleteAttachmentEntity($attachment);
+			}
+		}
+
+		try {
+			$this->getOrCreateFolder('attachments')->getFolder((string) $ticketId)->delete();
+		} catch (\Throwable) {
+		}
+	}
+
 	private function getTicketFolder(int $ticketId) {
 		$attachmentsFolder = $this->getOrCreateFolder('attachments');
 
@@ -129,5 +150,17 @@ class AttachmentService {
 		} catch (\Throwable) {
 			return $this->appData->newFolder($name);
 		}
+	}
+
+	private function deleteAttachmentEntity(Attachment $attachment): void {
+		$storedName = trim((string) $attachment->getStoredName());
+		if ($storedName !== '') {
+			try {
+				$this->getTicketFolder((int) $attachment->getTicketId())->getFile($storedName)->delete();
+			} catch (\Throwable) {
+			}
+		}
+
+		$this->attachmentMapper->delete($attachment);
 	}
 }

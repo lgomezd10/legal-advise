@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive } from 'vue'
-import type { SupportColumnKey, Ticket, TypeNode, UrgencyCatalogItem } from '@/types'
+import type { StatusOption, SupportColumnKey, Ticket, TypeNode, UrgencyCatalogItem } from '@/types'
 import { getTypeLabel } from '@/services/ticketDraft'
 import { formatDateTime } from '@/utils/formatting'
 import { excerptRichText, richTextToPlainText } from '@/utils/richText'
@@ -19,6 +19,7 @@ const props = defineProps<{
 	emptyLabel: string
 	visibleColumns: SupportColumnKey[]
 	types?: TypeNode[]
+	statuses?: StatusOption[]
 	urgencies?: UrgencyCatalogItem[]
 	sortKey?: SupportColumnKey | 'createdBy'
 	sortDirection?: 'asc' | 'desc'
@@ -36,6 +37,7 @@ const columnWidths = reactive<Record<SupportColumnKey, number>>({
 	title: 260,
 	userDescription: 380,
 	assignment: 240,
+	attachments: 260,
 	status: 150,
 	urgency: 150,
 	createdAt: 210,
@@ -57,6 +59,7 @@ const columns = computed<SupportColumn[]>(() => {
 		{ key: 'province', label: 'Provincia', defaultVisible: false, defaultWidth: 160 },
 		{ key: 'title', label: 'Título', defaultVisible: true, defaultWidth: 260 },
 		{ key: 'userDescription', label: 'Descripción', defaultVisible: true, defaultWidth: 380 },
+		{ key: 'attachments', label: 'Adjuntos', defaultVisible: false, defaultWidth: 260 },
 		{ key: 'status', label: 'Estado', defaultVisible: false, defaultWidth: 150 },
 		{ key: 'urgency', label: 'Criticidad', defaultVisible: false, defaultWidth: 150 },
 		{ key: 'createdAt', label: 'Fecha apertura', defaultVisible: false, defaultWidth: 210 },
@@ -70,6 +73,7 @@ const tableStyle = computed(() => ({
 	width: `${columns.value.reduce((total, column) => total + (columnWidths[column.key] ?? column.defaultWidth), 0)}px`,
 }))
 const safeTypes = computed<TypeNode[]>(() => props.types ?? [])
+const statusMap = computed<Map<string, StatusOption>>(() => new Map((props.statuses ?? []).map((status: StatusOption) => [String(status.id), status])))
 const urgencyMap = computed<Map<number, UrgencyCatalogItem>>(() => new Map((props.urgencies ?? []).map((urgency: UrgencyCatalogItem) => [Number(urgency.id ?? 0), urgency])))
 
 function formatAssignment(ticket: Ticket) {
@@ -96,6 +100,15 @@ function resolveUrgency(ticket: Ticket): UrgencyCatalogItem | null {
 	}
 
 	return urgencyMap.value.get(urgencyId) ?? null
+}
+
+function getStatusLabel(ticket: Ticket) {
+	const statusId = typeof ticket.status === 'string' ? ticket.status.trim() : ''
+	if (statusId === '') {
+		return ''
+	}
+
+	return statusMap.value.get(statusId)?.label ?? statusId
 }
 
 function getUrgencyLabel(ticket: Ticket) {
@@ -171,8 +184,12 @@ function getCellTitle(columnKey: SupportColumnKey, ticket: Ticket) {
 		return formatAssignment(ticket)
 	}
 
+	if (columnKey === 'attachments') {
+		return (ticket.attachmentNames ?? []).join(' | ')
+	}
+
 	if (columnKey === 'status') {
-		return ticket.status || ''
+		return getStatusLabel(ticket)
 	}
 
 	if (columnKey === 'urgency') {
@@ -282,8 +299,11 @@ onBeforeUnmount(() => {
 							<template v-else-if="column.key === 'assignment'">
 								<span class="gi-support-table__cell-text">{{ formatAssignment(ticket) }}</span>
 							</template>
+							<template v-else-if="column.key === 'attachments'">
+								<span class="gi-support-table__description gi-support-table__cell-text">{{ (ticket.attachmentNames ?? []).join(' | ') || 'Sin adjuntos' }}</span>
+							</template>
 							<template v-else-if="column.key === 'status'">
-								<span class="gi-badge gi-badge--success gi-support-table__badge gi-support-table__status">{{ ticket.status }}</span>
+								<span class="gi-badge gi-badge--success gi-support-table__badge gi-support-table__status">{{ getStatusLabel(ticket) }}</span>
 							</template>
 							<template v-else-if="column.key === 'urgency'">
 								<span class="gi-badge gi-support-table__badge gi-support-table__urgency" :style="getUrgencyStyle(ticket)">{{ getUrgencyLabel(ticket) }}</span>

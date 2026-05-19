@@ -279,6 +279,47 @@ class TicketService {
 		return $comment->jsonSerialize();
 	}
 
+	public function updateComment(string $uid, int $ticketId, int $commentId, array $payload): array {
+		$ticket = $this->ticketMapper->find($ticketId);
+		$comments = $this->commentMapper->findBy('ticket_id', $ticketId, 'created_at', 'ASC');
+		$comment = $this->findCommentInTicket($comments, $commentId);
+		if (!$comment instanceof Comment) {
+			throw new \InvalidArgumentException('El comentario indicado no pertenece al ticket.');
+		}
+
+		$this->permissionService->assertCanEditComment($uid, $ticket, $comment, $comments);
+
+		$roles = $this->roleService->getEffectiveRoles($uid);
+		$isSupport = in_array(RoleService::SUPPORT, $roles, true) || in_array(RoleService::ADMIN, $roles, true);
+		$body = $this->richTextSanitizer->sanitize((string) ($payload['body'] ?? ''));
+		if (!$this->richTextSanitizer->isMeaningful($body)) {
+			throw new \InvalidArgumentException('El comentario no puede estar vacío.');
+		}
+
+		$visibility = $isSupport ? (string) ($payload['visibility'] ?? $comment->getVisibility()) : 'publico';
+		if (!in_array($visibility, ['interno', 'publico'], true)) {
+			$visibility = 'publico';
+		}
+
+		$previousBody = (string) $comment->getBody();
+		$previousVisibility = (string) $comment->getVisibility();
+		$comment->setBody($body);
+		$comment->setVisibility($visibility);
+		$this->commentMapper->update($comment);
+
+		$ticket->setUpdatedAt(time());
+		$ticket = $this->ticketMapper->update($ticket);
+		$this->addHistory($ticketId, $uid, $this->permissionService->canManageTicket($uid, $ticket) ? RoleService::SUPPORT : RoleService::USER, 'comment_updated', 'interno', [
+			'commentId' => $commentId,
+			'previousBody' => $previousBody,
+			'previousVisibility' => $previousVisibility,
+			'visibility' => $visibility,
+		]);
+		$this->taskSyncService->syncTicket($ticket);
+
+		return $this->serializeTicket($uid, $ticket, true);
+	}
+
 	public function reopen(string $uid, int $id): array {
 		$ticket = $this->ticketMapper->find($id);
 		if (!$this->canReopenTicket($uid, $ticket)) {
@@ -302,6 +343,85 @@ class TicketService {
 		$this->ticketNotificationPublisher->publishReopenedTicket($ticket, $previousStatus);
 
 		return $this->serializeTicket($uid, $ticket, true);
+	}
+
+	public function deleteComment(string $uid, int $ticketId, int $commentId, bool $restoreAssignedStatus = false): array {
+		$ticket = $this->ticketMapper->find($ticketId);
+		$comments = $this->commentMapper->findBy('ticket_id', $ticketId, 'created_at', 'ASC');
+		$comment = $this->findCommentInTicket($comments, $commentId);
+		if (!$comment instanceof Comment) {
+			throw new \InvalidArgumentException('El comentario indicado no pertenece al ticket.');
+		}
+
+		$this->permissionService->assertCanDeleteComment($uid, $ticket, $comment, $comments);
+		$shouldRestoreStatus = $restoreAssignedStatus && $this->permissionService->canRestoreAssignedStatusAfterDeletingComment($uid, $ticket, $comment, $comments);
+		$previousStatus = (string) $ticket->getStatus();
+		$previousAssignedUserUid = $ticket->getAssignedUserUid();
+		$previousAssignedGroupId = $ticket->getAssignedGroupId();
+		$actorRole = $this->permissionService->canManageTicket($uid, $ticket) ? RoleService::SUPPORT : RoleService::USER;
+		$statusChanged = false;
+
+		$this->db->beginTransaction();
+		try {
+			$this->attachmentService->deleteForComment($commentId);
+			$this->commentMapper->delete($comment);
+
+			$historyPayload = ['commentId' => $commentId];
+			if ($shouldRestoreStatus) {
+				$nextStatus = $this->ticketStatusPolicy->resolveUpdatedStatus('asignado', $ticket->getAssignedUserUid(), $ticket->getAssignedGroupId(), false, true);
+				if ($nextStatus !== (string) $ticket->getStatus()) {
+					$ticket->setStatus($nextStatus);
+					$ticket->setStatusUpdatedAt(time());
+					$statusChanged = true;
+					$historyPayload['previousStatus'] = $previousStatus;
+					$historyPayload['nextStatus'] = $nextStatus;
+				}
+			}
+
+			$ticket->setUpdatedAt(time());
+			$ticket = $this->ticketMapper->update($ticket);
+			$this->addHistory($ticketId, $uid, $actorRole, 'comment_deleted', 'interno', $historyPayload);
+			$this->db->commit();
+		} catch (\Throwable $exception) {
+			$this->db->rollBack();
+			throw $exception;
+		}
+
+		$this->taskSyncService->syncTicket($ticket);
+		if ($statusChanged) {
+			$this->ticketNotificationPublisher->publishUpdatedTicket(
+				$ticket,
+				$previousStatus,
+				$previousAssignedUserUid,
+				$previousAssignedGroupId,
+				true,
+				false,
+			);
+		}
+
+		return $this->serializeTicket($uid, $ticket, true);
+	}
+
+	public function deleteTicket(string $uid, int $id): array {
+		$ticket = $this->ticketMapper->find($id);
+		$this->permissionService->assertCanDeleteTicket($uid, $ticket);
+
+		$this->db->beginTransaction();
+		try {
+			$this->attachmentService->deleteForTicket($id);
+			$this->historyMapper->deleteBy('ticket_id', $id);
+			$this->ticketDataMapper->deleteBy('ticket_id', $id);
+			$this->commentMapper->deleteBy('ticket_id', $id);
+			$this->ticketMapper->delete($ticket);
+			$this->db->commit();
+		} catch (\Throwable $exception) {
+			$this->db->rollBack();
+			throw $exception;
+		}
+
+		$this->taskSyncService->deleteForTicket($id);
+
+		return ['deleted' => true];
 	}
 
 	public function addAttachment(string $uid, int $ticketId, array $uploadedFile, int $commentId, ?string $sourceUrl = null, ?string $originalName = null): array {
@@ -435,10 +555,13 @@ class TicketService {
 		$data = $ticket->jsonSerialize();
 		$isClosedStatus = $this->catalogService->isClosedStatus((string) $ticket->getStatus());
 		$comments = $this->commentMapper->findBy('ticket_id', $ticket->getId(), 'created_at', 'ASC');
+		$attachmentNames = $this->safeListAttachmentNames($ticket->getId());
 		$data['canRead'] = $this->permissionService->canReadTicket($uid, $ticket);
 		$data['canManage'] = $this->permissionService->canManageTicket($uid, $ticket);
 		$data['canComment'] = !$isClosedStatus && $this->permissionService->canCommentOnTicket($uid, $ticket);
 		$data['canReopen'] = $isClosedStatus && $this->canReopenTicket($uid, $ticket);
+		$data['canDelete'] = $this->permissionService->canDeleteTicket($uid, $ticket);
+		$data['attachmentNames'] = $attachmentNames;
 		$data['publicCommentSearchText'] = $this->buildCommentSearchText($uid, $ticket, $comments);
 		$attachments = $includeDetail ? $this->safeListAttachments($ticket->getId()) : [];
 		$attachmentsByCommentId = [];
@@ -453,9 +576,12 @@ class TicketService {
 		}
 
 		$data['attachments'] = $attachments;
-		$data['comments'] = $includeDetail ? array_values(array_filter(array_map(function ($row) use ($attachmentsByCommentId) {
+		$data['comments'] = $includeDetail ? array_values(array_filter(array_map(function ($row) use ($uid, $ticket, $comments, $attachmentsByCommentId) {
 			$comment = $row->jsonSerialize();
 			$comment['attachments'] = $attachmentsByCommentId[(int) ($comment['id'] ?? 0)] ?? [];
+			$comment['canEdit'] = $this->permissionService->canEditComment($uid, $ticket, $row, $comments);
+			$comment['canDelete'] = $this->permissionService->canDeleteComment($uid, $ticket, $row, $comments);
+			$comment['canRestoreAssignedStatusOnDelete'] = $this->permissionService->canRestoreAssignedStatusAfterDeletingComment($uid, $ticket, $row, $comments);
 			return $comment;
 		}, $comments), fn (array $comment) => $this->permissionService->canSeeComment($uid, $ticket, (string) $comment['visibility']))) : [];
 		$data['history'] = $includeDetail ? array_values(array_filter(array_map(fn ($row) => $row->jsonSerialize(), $this->historyMapper->findBy('ticket_id', $ticket->getId(), 'created_at', 'ASC')), fn (array $entry) => $entry['visibility'] === 'publico' || $this->permissionService->canManageTicket($uid, $ticket))) : [];
@@ -470,6 +596,23 @@ class TicketService {
 		} catch (\Throwable) {
 			return [];
 		}
+	}
+
+	private function safeListAttachmentNames(int $ticketId): array {
+		return array_values(array_filter(array_map(static fn (array $attachment): string => trim((string) ($attachment['originalName'] ?? '')), $this->safeListAttachments($ticketId)), static fn (string $name): bool => $name !== ''));
+	}
+
+	/**
+	 * @param Comment[] $comments
+	 */
+	private function findCommentInTicket(array $comments, int $commentId): ?Comment {
+		foreach ($comments as $comment) {
+			if ($comment instanceof Comment && (int) $comment->getId() === $commentId) {
+				return $comment;
+			}
+		}
+
+		return null;
 	}
 
 	private function safeGetTaskSync(int $ticketId): ?array {

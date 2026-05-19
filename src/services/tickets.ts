@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from './api'
+import { apiDelete, apiGet, apiPost, apiPut } from './api'
 import type { Ticket, TicketAttachmentLinkDraft, TicketComment } from '@/types'
 
 export const fetchTickets = async(scope: 'user' | 'support', criteria: Record<string, unknown> = {}) => apiGet<{ items: Ticket[] }>('/api/v1/tickets', { scope, criteria })
@@ -7,6 +7,9 @@ export const createTicket = async(payload: Record<string, unknown>) => apiPost<T
 export const updateTicket = async(id: number, payload: Record<string, unknown>) => apiPut<Ticket>(`/api/v1/tickets/${id}`, payload)
 export const reopenTicket = async(id: number) => apiPost<Ticket>(`/api/v1/tickets/${id}/reopen`)
 export const addComment = async(id: number, payload: Record<string, unknown>) => apiPost<TicketComment>(`/api/v1/tickets/${id}/comments`, payload)
+export const updateTicketComment = async(id: number, commentId: number, payload: Record<string, unknown>) => apiPut<Ticket>(`/api/v1/tickets/${id}/comments/${commentId}`, payload)
+export const deleteTicketComment = async(id: number, commentId: number, restoreAssignedStatus = false) => apiDelete<Ticket>(`/api/v1/tickets/${id}/comments/${commentId}`, { restoreAssignedStatus })
+export const deleteTicket = async(id: number) => apiDelete<{ deleted: boolean }>(`/api/v1/tickets/${id}`)
 export const uploadAttachment = async(id: number, file: File, commentId: number) => {
 	const formData = new FormData()
 	formData.append('file', file)

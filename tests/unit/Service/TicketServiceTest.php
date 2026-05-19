@@ -12,6 +12,7 @@ use OCA\ConsultasLegales\Service\RoleService;
 use OCA\ConsultasLegales\Service\TicketService;
 use OCA\ConsultasLegales\Ticket\TicketStatusPolicy;
 use OCP\IGroupManager;
+use OCP\IDBConnection;
 use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
 
@@ -162,6 +163,7 @@ class TicketServiceTest extends TestCase {
 		$permissionService = $this->createMock(\OCA\ConsultasLegales\Service\PermissionService::class);
 		$permissionService->method('canSeeComment')
 			->willReturnCallback(static fn (string $uid, Ticket $ticket, string $visibility): bool => $visibility === 'publico');
+		$this->configureDeletePermissions($permissionService);
 
 		$serviceReflection = new \ReflectionClass(TicketService::class);
 		$service = $serviceReflection->newInstanceWithoutConstructor();
@@ -334,11 +336,24 @@ class TicketServiceTest extends TestCase {
 			->getMock();
 		$ticketDataMapper->method('findBy')->willReturn([]);
 
+		$catalogService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\CatalogService::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['isClosedStatus'])
+			->getMock();
+		$catalogService->method('isClosedStatus')->willReturn(false);
+
+		$catalogService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\CatalogService::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['isClosedStatus'])
+			->getMock();
+		$catalogService->method('isClosedStatus')->willReturn(false);
+
 		$permissionService = $this->createMock(\OCA\ConsultasLegales\Service\PermissionService::class);
 		$permissionService->method('canReadTicket')->willReturn(true);
 		$permissionService->method('canManageTicket')->willReturn(true);
 		$permissionService->method('canCommentOnTicket')->willReturn(true);
 		$permissionService->method('canSeeComment')->willReturn(true);
+		$this->configureDeletePermissions($permissionService);
 
 		$taskSyncService = $this->createMock(\OCA\ConsultasLegales\Service\TaskSyncService::class);
 		$taskSyncService->method('getSyncForTicket')->willThrowException(new \RuntimeException('tasks offline'));
@@ -377,6 +392,7 @@ class TicketServiceTest extends TestCase {
 		$result = $invoke($ticket);
 
 		self::assertSame([], $result['attachments']);
+		self::assertSame([], $result['attachmentNames']);
 		self::assertSame([], $result['comments']);
 		self::assertSame([], $result['history']);
 		self::assertSame([], $result['personalData']);
@@ -409,6 +425,10 @@ class TicketServiceTest extends TestCase {
 			->getMock();
 		$commentMapper->method('find')->with(7)->willReturn($comment);
 
+		$catalogService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\CatalogService::class)
+			->disableOriginalConstructor()
+			->getMock();
+
 		$attachmentService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\AttachmentService::class)
 			->disableOriginalConstructor()
 			->onlyMethods(['create'])
@@ -422,6 +442,7 @@ class TicketServiceTest extends TestCase {
 		$roleService->method('getEffectiveRoles')->with('usuario1')->willReturn([RoleService::USER]);
 
 		foreach ([
+			'catalogService' => $catalogService,
 			'ticketMapper' => $ticketMapper,
 			'commentMapper' => $commentMapper,
 			'attachmentService' => $attachmentService,
@@ -436,6 +457,280 @@ class TicketServiceTest extends TestCase {
 		$this->expectExceptionMessage('No se pudo guardar el adjunto en este momento.');
 
 		$service->addAttachment('usuario1', 61, ['name' => 'x.pdf', 'tmp_name' => 'C:\\tmp\\x.pdf'], 7);
+	}
+
+	public function testDeleteCommentCanRestoreAssignedStatus(): void {
+		$db = $this->createMock(IDBConnection::class);
+		$db->expects(self::once())->method('beginTransaction');
+		$db->expects(self::once())->method('commit');
+
+		$ticket = new Ticket();
+		$ticket->setId(71);
+		$ticket->setNumber('2026-000071');
+		$ticket->setCreatorUid('usuario1');
+		$ticket->setStatus('en_espera_usuario');
+		$ticket->setAssignedUserUid('soporte1');
+		$ticket->setAssignedGroupId('soporte');
+
+		$comment = new Comment();
+		$comment->setId(501);
+		$comment->setTicketId(71);
+		$comment->setAuthorUid('soporte1');
+		$comment->setVisibility('publico');
+		$comment->setCreatedAt(200);
+
+		$ticketMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\TicketMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['find', 'update'])
+			->getMock();
+		$ticketMapper->method('find')->with(71)->willReturn($ticket);
+		$ticketMapper->expects(self::once())->method('update')->willReturnCallback(static fn (Ticket $updated): Ticket => $updated);
+
+		$commentMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\CommentMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['findBy', 'delete'])
+			->getMock();
+		$commentMapper->expects(self::exactly(2))->method('findBy')->willReturnOnConsecutiveCalls([$comment], []);
+		$commentMapper->expects(self::once())->method('delete')->with($comment);
+
+		$attachmentService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\AttachmentService::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['deleteForComment', 'listForTicket'])
+			->getMock();
+		$attachmentService->expects(self::once())->method('deleteForComment')->with(501);
+		$attachmentService->method('listForTicket')->willReturn([]);
+
+		$historyMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\HistoryEntryMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['insert', 'findBy'])
+			->getMock();
+		$historyMapper->expects(self::once())->method('insert');
+		$historyMapper->method('findBy')->willReturn([]);
+
+		$ticketDataMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\TicketDataMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['findBy'])
+			->getMock();
+		$ticketDataMapper->method('findBy')->willReturn([]);
+
+		$catalogService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\CatalogService::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['isClosedStatus'])
+			->getMock();
+		$catalogService->method('isClosedStatus')->willReturn(false);
+
+		$permissionService = $this->createMock(\OCA\ConsultasLegales\Service\PermissionService::class);
+		$permissionService->expects(self::once())->method('assertCanDeleteComment')->with('soporte1', $ticket, $comment, [$comment]);
+		$permissionService->method('canRestoreAssignedStatusAfterDeletingComment')->willReturn(true);
+		$permissionService->method('canManageTicket')->willReturn(true);
+		$permissionService->method('canReadTicket')->willReturn(true);
+		$permissionService->method('canCommentOnTicket')->willReturn(true);
+		$permissionService->method('canSeeComment')->willReturn(true);
+		$permissionService->method('canDeleteTicket')->willReturn(false);
+		$permissionService->method('canDeleteComment')->willReturn(false);
+
+		$taskSyncService = $this->createMock(\OCA\ConsultasLegales\Service\TaskSyncService::class);
+		$taskSyncService->expects(self::once())->method('syncTicket')->with($ticket);
+		$taskSyncService->method('getSyncForTicket')->willReturn(null);
+
+		$ticketNotificationPublisher = $this->createMock(TicketNotificationPublisher::class);
+		$ticketNotificationPublisher->expects(self::once())->method('publishUpdatedTicket');
+
+		$roleService = $this->createMock(RoleService::class);
+		$groupManager = $this->createMock(IGroupManager::class);
+		$userManager = $this->createMock(IUserManager::class);
+		$service = (new \ReflectionClass(TicketService::class))->newInstanceWithoutConstructor();
+		foreach ([
+			'db' => $db,
+			'groupManager' => $groupManager,
+			'userManager' => $userManager,
+			'catalogService' => $catalogService,
+			'ticketMapper' => $ticketMapper,
+			'commentMapper' => $commentMapper,
+			'attachmentService' => $attachmentService,
+			'historyMapper' => $historyMapper,
+			'ticketDataMapper' => $ticketDataMapper,
+			'permissionService' => $permissionService,
+			'ticketStatusPolicy' => new TicketStatusPolicy(),
+			'ticketNotificationPublisher' => $ticketNotificationPublisher,
+			'taskSyncService' => $taskSyncService,
+			'richTextSanitizer' => $this->createMock(RichTextSanitizer::class),
+			'roleService' => $roleService,
+		] as $property => $value) {
+			$reflection = new \ReflectionClass(TicketService::class);
+			$reflection->getProperty($property)->setValue($service, $value);
+		}
+
+		$result = $service->deleteComment('soporte1', 71, 501, true);
+
+		self::assertSame('asignado', $result['status']);
+		self::assertSame([], $result['comments']);
+	}
+
+	public function testUpdateCommentSanitizesAndReturnsUpdatedTicket(): void {
+		$ticket = new Ticket();
+		$ticket->setId(71);
+		$ticket->setCreatorUid('usuario1');
+		$ticket->setStatus('asignado');
+		$ticket->setUpdatedAt(100);
+
+		$comment = new Comment();
+		$comment->setId(501);
+		$comment->setTicketId(71);
+		$comment->setAuthorUid('soporte1');
+		$comment->setAuthorRole(RoleService::SUPPORT);
+		$comment->setBody('<p>Anterior</p>');
+		$comment->setVisibility('interno');
+		$comment->setCreatedAt(200);
+
+		$ticketMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\TicketMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['find', 'update'])
+			->getMock();
+		$ticketMapper->method('find')->with(71)->willReturn($ticket);
+		$ticketMapper->expects(self::once())->method('update')->willReturnCallback(static fn (Ticket $updated): Ticket => $updated);
+
+		$commentMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\CommentMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['findBy', 'update'])
+			->getMock();
+		$commentMapper->expects(self::exactly(2))->method('findBy')->willReturnOnConsecutiveCalls([$comment], [$comment]);
+		$commentMapper->expects(self::once())->method('update')->with($comment)->willReturnCallback(static fn (Comment $updated): Comment => $updated);
+
+		$attachmentService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\AttachmentService::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['listForTicket'])
+			->getMock();
+		$attachmentService->method('listForTicket')->willReturn([]);
+
+		$historyMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\HistoryEntryMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['insert', 'findBy'])
+			->getMock();
+		$historyMapper->expects(self::once())->method('insert');
+		$historyMapper->method('findBy')->willReturn([]);
+
+		$ticketDataMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\TicketDataMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['findBy'])
+			->getMock();
+		$ticketDataMapper->method('findBy')->willReturn([]);
+
+		$catalogService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\CatalogService::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['isClosedStatus'])
+			->getMock();
+		$catalogService->method('isClosedStatus')->willReturn(false);
+
+		$permissionService = $this->createMock(\OCA\ConsultasLegales\Service\PermissionService::class);
+		$permissionService->expects(self::once())->method('assertCanEditComment')->with('soporte1', $ticket, $comment, [$comment]);
+		$permissionService->method('canManageTicket')->willReturn(true);
+		$permissionService->method('canReadTicket')->willReturn(true);
+		$permissionService->method('canCommentOnTicket')->willReturn(true);
+		$permissionService->method('canSeeComment')->willReturn(true);
+		$this->configureDeletePermissions($permissionService);
+
+		$taskSyncService = $this->createMock(\OCA\ConsultasLegales\Service\TaskSyncService::class);
+		$taskSyncService->expects(self::once())->method('syncTicket')->with($ticket);
+		$taskSyncService->method('getSyncForTicket')->willReturn(null);
+
+		$richTextSanitizer = $this->createMock(RichTextSanitizer::class);
+		$richTextSanitizer->method('sanitize')->with('<p>Editado</p>')->willReturn('<p>Editado</p>');
+		$richTextSanitizer->method('isMeaningful')->with('<p>Editado</p>')->willReturn(true);
+		$richTextSanitizer->method('toPlainText')->willReturnCallback(static fn (string $value): string => trim(strip_tags($value)));
+
+		$roleService = $this->createMock(RoleService::class);
+		$roleService->method('getEffectiveRoles')->with('soporte1')->willReturn([RoleService::SUPPORT]);
+
+		$service = (new \ReflectionClass(TicketService::class))->newInstanceWithoutConstructor();
+		foreach ([
+			'catalogService' => $catalogService,
+			'ticketMapper' => $ticketMapper,
+			'commentMapper' => $commentMapper,
+			'attachmentService' => $attachmentService,
+			'historyMapper' => $historyMapper,
+			'ticketDataMapper' => $ticketDataMapper,
+			'permissionService' => $permissionService,
+			'taskSyncService' => $taskSyncService,
+			'richTextSanitizer' => $richTextSanitizer,
+			'roleService' => $roleService,
+			'groupManager' => $this->createMock(IGroupManager::class),
+			'userManager' => $this->createMock(IUserManager::class),
+		] as $property => $value) {
+			$reflection = new \ReflectionClass(TicketService::class);
+			$reflection->getProperty($property)->setValue($service, $value);
+		}
+
+		$result = $service->updateComment('soporte1', 71, 501, ['body' => '<p>Editado</p>', 'visibility' => 'publico']);
+
+		self::assertSame('<p>Editado</p>', $result['comments'][0]['body']);
+		self::assertSame('publico', $result['comments'][0]['visibility']);
+	}
+
+	public function testDeleteTicketRemovesAllRelatedSlices(): void {
+		$db = $this->createMock(IDBConnection::class);
+		$db->expects(self::once())->method('beginTransaction');
+		$db->expects(self::once())->method('commit');
+
+		$ticket = new Ticket();
+		$ticket->setId(88);
+		$ticket->setCreatorUid('usuario1');
+
+		$ticketMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\TicketMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['find', 'delete'])
+			->getMock();
+		$ticketMapper->method('find')->with(88)->willReturn($ticket);
+		$ticketMapper->expects(self::once())->method('delete')->with($ticket);
+
+		$commentMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\CommentMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['deleteBy'])
+			->getMock();
+		$commentMapper->expects(self::once())->method('deleteBy')->with('ticket_id', 88);
+
+		$historyMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\HistoryEntryMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['deleteBy'])
+			->getMock();
+		$historyMapper->expects(self::once())->method('deleteBy')->with('ticket_id', 88);
+
+		$ticketDataMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\TicketDataMapper::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['deleteBy'])
+			->getMock();
+		$ticketDataMapper->expects(self::once())->method('deleteBy')->with('ticket_id', 88);
+
+		$attachmentService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\AttachmentService::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['deleteForTicket'])
+			->getMock();
+		$attachmentService->expects(self::once())->method('deleteForTicket')->with(88);
+
+		$permissionService = $this->createMock(\OCA\ConsultasLegales\Service\PermissionService::class);
+		$permissionService->expects(self::once())->method('assertCanDeleteTicket')->with('admin', $ticket);
+
+		$taskSyncService = $this->createMock(\OCA\ConsultasLegales\Service\TaskSyncService::class);
+		$taskSyncService->expects(self::once())->method('deleteForTicket')->with(88);
+
+		$service = (new \ReflectionClass(TicketService::class))->newInstanceWithoutConstructor();
+		foreach ([
+			'db' => $db,
+			'ticketMapper' => $ticketMapper,
+			'commentMapper' => $commentMapper,
+			'attachmentService' => $attachmentService,
+			'historyMapper' => $historyMapper,
+			'ticketDataMapper' => $ticketDataMapper,
+			'permissionService' => $permissionService,
+			'taskSyncService' => $taskSyncService,
+		] as $property => $value) {
+			$reflection = new \ReflectionClass(TicketService::class);
+			$reflection->getProperty($property)->setValue($service, $value);
+		}
+
+		$result = $service->deleteTicket('admin', 88);
+
+		self::assertTrue($result['deleted']);
 	}
 
 	public function testCreateForAdminAppliesAutomaticAssignmentWhenNoManualAssigneeIsProvided(): void {
@@ -668,6 +963,7 @@ class TicketServiceTest extends TestCase {
 		$ticketDataMapper->method('findBy')->willReturn([]);
 		$permissionService->expects(self::once())->method('assertCanManageTicket')->with('admin', $ticket);
 		$permissionService->method('canAssignGroup')->with('admin', $expectedPayload['assignedGroupId'])->willReturn(true);
+		$this->configureDeletePermissions($permissionService);
 		$taskSyncService->expects(self::once())->method('syncTicket')->with($ticket);
 		$ticketNotificationPublisher->method('publishUpdatedTicket')
 			->willReturnCallback(static function (Ticket $updatedTicket, string $previousStatus, ?string $previousAssignedUserUid, ?string $previousAssignedGroupId, bool $statusChanged, bool $assignmentChanged) use (&$notificationCalls): void {
@@ -754,5 +1050,12 @@ class TicketServiceTest extends TestCase {
 		}
 
 		return $service;
+	}
+
+	private function configureDeletePermissions(object $permissionService): void {
+		$permissionService->method('canDeleteTicket')->willReturn(false);
+		$permissionService->method('canDeleteComment')->willReturn(false);
+		$permissionService->method('canEditComment')->willReturn(false);
+		$permissionService->method('canRestoreAssignedStatusAfterDeletingComment')->willReturn(false);
 	}
 }

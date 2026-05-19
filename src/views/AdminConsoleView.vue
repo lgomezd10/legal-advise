@@ -61,6 +61,8 @@ const profileSelectionState = reactive<Record<FixedProfileId, string | number | 
 	soporte: null,
 	administrador: null,
 })
+const draggedStatusClientId = ref<string | null>(null)
+const dragOverStatusClientId = ref<string | null>(null)
 const activeSection = ref<AdminSectionId>('info')
 const typeDeleteDialog = reactive<TypeDeleteDialogState>({
 	open: false,
@@ -587,6 +589,51 @@ async function saveStatuses() {
 	saveState.statuses = 'Estados guardados.'
 }
 
+function reorderStatuses(sourceClientId: string, targetClientId: string) {
+	if (sourceClientId === targetClientId) {
+		return
+	}
+
+	const next = [...statusDrafts.value]
+	const sourceIndex = next.findIndex((status) => status.clientId === sourceClientId)
+	const targetIndex = next.findIndex((status) => status.clientId === targetClientId)
+	if (sourceIndex === -1 || targetIndex === -1) {
+		return
+	}
+
+	const [movedStatus] = next.splice(sourceIndex, 1)
+	next.splice(targetIndex, 0, movedStatus)
+	statusDrafts.value = next
+	saveState.statuses = 'Tienes cambios sin guardar.'
+}
+
+function handleStatusDragStart(clientId: string) {
+	draggedStatusClientId.value = clientId
+	dragOverStatusClientId.value = clientId
+}
+
+function handleStatusDragOver(clientId: string) {
+	if (!draggedStatusClientId.value || draggedStatusClientId.value === clientId) {
+		return
+	}
+
+	dragOverStatusClientId.value = clientId
+}
+
+function handleStatusDrop(clientId: string) {
+	if (!draggedStatusClientId.value) {
+		return
+	}
+
+	reorderStatuses(draggedStatusClientId.value, clientId)
+	resetStatusDragState()
+}
+
+function resetStatusDragState() {
+	draggedStatusClientId.value = null
+	dragOverStatusClientId.value = null
+}
+
 function addRule() {
 	loadState.renderError = ''
 	ruleDrafts.value.push({
@@ -932,15 +979,28 @@ async function saveNotifications(items: NotificationMatrixItem[]) {
 				<div class="gi-admin-card__header">
 					<div>
 						<h2>Estados</h2>
-						<p>Los estados base no se eliminan. Puedes cambiar la etiqueta visible y activar o desactivar solo los estados permitidos.</p>
+						<p>Los estados base no se eliminan. Puedes cambiar la etiqueta visible, activar o desactivar solo los estados permitidos y reordenarlos arrastrando desde el asa.</p>
 					</div>
 					<div class="gi-admin-card__toolbar">
 						<button class="gi-primary-button" type="button" @click="saveStatuses">Guardar</button>
 					</div>
 				</div>
 				<ul class="gi-admin-list">
-					<li v-for="status in statusItems" :key="status.clientId" class="gi-admin-row gi-admin-row--status">
+					<li
+						v-for="status in statusItems"
+						:key="status.clientId"
+						class="gi-admin-row gi-admin-row--status"
+						:class="{
+							'gi-admin-row--dragging': draggedStatusClientId === status.clientId,
+							'gi-admin-row--drop-target': dragOverStatusClientId === status.clientId && draggedStatusClientId !== status.clientId,
+						}"
+						draggable="true"
+						@dragstart="handleStatusDragStart(status.clientId)"
+						@dragover.prevent="handleStatusDragOver(status.clientId)"
+						@drop.prevent="handleStatusDrop(status.clientId)"
+						@dragend="resetStatusDragState">
 						<div class="gi-admin-row__status-meta">
+							<span class="gi-admin-row__drag-handle" aria-hidden="true" title="Arrastra para mover">⋮⋮</span>
 							<strong>{{ status.id }}</strong>
 							<p>{{ status.description }}</p>
 						</div>
@@ -1631,11 +1691,36 @@ async function saveNotifications(items: NotificationMatrixItem[]) {
 	grid-template-columns: minmax(15rem, 1fr) auto minmax(0, 1.5fr);
 	gap: .9rem;
 	align-items: center;
+	cursor: grab;
+	transition: opacity .18s ease, background .18s ease, outline-color .18s ease;
+}
+
+.gi-admin-row--dragging {
+	opacity: .55;
+	cursor: grabbing;
+}
+
+.gi-admin-row--drop-target {
+	background: var(--gi-color-primary-soft);
+	outline: 1px solid var(--gi-color-primary);
 }
 
 .gi-admin-row__status-meta {
 	display: grid;
 	gap: .35rem;
+}
+
+.gi-admin-row__drag-handle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.9rem;
+	height: 1.9rem;
+	border-radius: 999px;
+	color: var(--gi-color-text-muted);
+	font-size: 1rem;
+	line-height: 1;
+	background: rgba(0, 0, 0, .03);
 }
 
 .gi-admin-row__status-meta strong,

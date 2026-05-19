@@ -48,7 +48,7 @@ export interface EditableTypeNode {
 	clientId: string
 }
 
-export type SupportColumnKey = 'number' | 'createdBy' | 'province' | 'title' | 'userDescription' | 'assignment' | 'status' | 'urgency' | 'createdAt' | 'updatedAt'
+export type SupportColumnKey = 'number' | 'createdBy' | 'province' | 'title' | 'userDescription' | 'assignment' | 'attachments' | 'status' | 'urgency' | 'createdAt' | 'updatedAt'
 
 export interface TicketAttachmentLinkDraft {
 	url: string
@@ -64,6 +64,9 @@ export interface TicketComment {
 	visibility: 'interno' | 'publico'
 	createdAt: number
 	attachments?: TicketAttachment[]
+	canEdit?: boolean
+	canDelete?: boolean
+	canRestoreAssignedStatusOnDelete?: boolean
 }
 
 export interface TicketHistoryEntry {
@@ -108,6 +111,7 @@ export interface Ticket {
 	city?: string | null
 	metadata?: Record<string, unknown>
 	attachments?: TicketAttachment[]
+	attachmentNames?: string[]
 	comments?: TicketComment[]
 	history?: TicketHistoryEntry[]
 	personalData?: Array<Record<string, unknown>>
@@ -116,6 +120,7 @@ export interface Ticket {
 	canManage?: boolean
 	canComment?: boolean
 	canReopen?: boolean
+	canDelete?: boolean
 }
 
 export interface AssignableOption {

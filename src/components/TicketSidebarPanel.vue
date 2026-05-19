@@ -38,6 +38,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	(e: 'comment', payload: { body: string, visibility: 'interno' | 'publico', files: File[], links: TicketAttachmentLinkDraft[], waitForUser?: boolean }): void
+	(e: 'edit-comment', payload: { commentId: number, body: string, visibility: 'interno' | 'publico' }): void
+	(e: 'delete-comment', payload: { commentId: number, restoreAssignedStatus: boolean }): void
 	(e: 'save', payload: Record<string, unknown>): void
 	(e: 'download', attachmentId: number): void
 	(e: 'fullscreen'): void
@@ -59,6 +61,9 @@ const commentsDateTo = ref('')
 const commentsAuthorUid = ref<string | null>(null)
 const commentsMobileMenuOpen = ref(false)
 const expandedCommentIds = ref<number[]>([])
+const commentDeleteDialogOpen = ref(false)
+const pendingCommentDeletion = ref<TicketComment | null>(null)
+const editingCommentId = ref<number | null>(null)
 const discardChangesDialogOpen = ref(false)
 const discardChangesResolver = ref<((confirmed: boolean) => void) | null>(null)
 const closeReasonDialogOpen = ref(false)
@@ -211,7 +216,7 @@ const userTabs = computed(() => ([
 	{ id: 'attachments', label: 'Adjuntos' },
 	] as Array<{ id: TicketSidebarTabId, label: string }>))
 const visibleTabs = computed(() => showSupportTabs.value ? supportTabs.value : userTabs.value)
-const shouldCollapseCommentOptions = computed(() => !showSupportTabs.value)
+const shouldCollapseCommentOptions = computed(() => true)
 const requesterData = computed<Record<string, string>>(() => getTicketPersonalDataRecord(props.ticket))
 const requesterContactEntries = computed(() => {
 	const entries: Array<{ key: string, label: string, value: string }> = []
@@ -342,6 +347,13 @@ const latestVisibleCommentId = computed(() => orderedComments.value.reduce<numbe
 
 	return latestId
 }, null))
+const editingComment = computed(() => {
+	if (!editingCommentId.value) {
+		return null
+	}
+
+	return (props.ticket?.comments ?? []).find((item: TicketComment) => item.id === editingCommentId.value) ?? null
+})
 const replyTargetComment = computed(() => {
 	if (!replyTargetCommentId.value) {
 		return null
@@ -349,9 +361,12 @@ const replyTargetComment = computed(() => {
 
 	return (props.ticket?.comments ?? []).find((item: TicketComment) => item.id === replyTargetCommentId.value) ?? null
 })
-const commentComposerPlaceholder = computed(() => replyTargetComment.value
-	? `Responde a ${resolveUserLabel(replyTargetComment.value.authorUid)}...`
-	: 'Escribe una respuesta, pega una captura o inserta una imagen')
+const commentComposerPlaceholder = computed(() => editingComment.value
+	? 'Edita el comentario'
+	: replyTargetComment.value
+		? `Responde a ${resolveUserLabel(replyTargetComment.value.authorUid)}...`
+		: 'Escribe una respuesta, pega una captura o inserta una imagen')
+const commentComposerSubmitLabel = computed(() => editingComment.value ? 'Guardar' : 'Enviar')
 const visibleCommentIds = computed(() => orderedComments.value.map((item) => item.id))
 const allVisibleCommentsExpanded = computed(() => visibleCommentIds.value.length > 0 && visibleCommentIds.value.every((id) => expandedCommentIds.value.includes(id)))
 
@@ -401,12 +416,15 @@ function resetTransientTicketPanelState() {
 	composerAttachmentsVisible.value = false
 	composerError.value = ''
 	replyTargetCommentId.value = null
+	editingCommentId.value = null
 	commentsSearchText.value = ''
 	commentsSortDirection.value = 'desc'
 	commentsDateFrom.value = ''
 	commentsDateTo.value = ''
 	commentsAuthorUid.value = null
 	commentsMobileMenuOpen.value = false
+	commentDeleteDialogOpen.value = false
+	pendingCommentDeletion.value = null
 	activeTab.value = defaultTab.value
 	closeReason.value = ''
 	closeReasonDialogOpen.value = false
@@ -477,6 +495,16 @@ function sendComment() {
 	}
 
 	composerError.value = ''
+	if (editingCommentId.value !== null) {
+		emit('edit-comment', {
+			commentId: editingCommentId.value,
+			body: sanitizeRichText(comment.value),
+			visibility: visibility.value,
+		})
+		resetCommentComposerState()
+		return
+	}
+
 	const nextPayload = {
 		body: sanitizeRichText(comment.value),
 		visibility: visibility.value,
@@ -494,14 +522,65 @@ function sendComment() {
 
 function resetCommentComposerState() {
 	comment.value = ''
+	visibility.value = 'publico'
 	attachmentsDraft.value = { files: [], links: [] }
 	composerAttachmentsVisible.value = false
 	replyTargetCommentId.value = null
+	editingCommentId.value = null
+	composerError.value = ''
 }
 
 function closeSupportCommentDialog() {
 	supportCommentDialogOpen.value = false
 	pendingSupportCommentAction.value = null
+}
+
+function canDeleteComment(item: TicketComment) {
+	return showSupportTabs.value && Boolean(item.canDelete)
+}
+
+function canEditComment(item: TicketComment) {
+	return showSupportTabs.value && Boolean(item.canEdit)
+}
+
+function requestCommentEdit(item: TicketComment) {
+	editingCommentId.value = item.id
+	replyTargetCommentId.value = null
+	comment.value = item.body
+	visibility.value = item.visibility
+	attachmentsDraft.value = { files: [], links: [] }
+	composerAttachmentsVisible.value = false
+	composerError.value = ''
+	activeTab.value = 'comments'
+	if (!expandedCommentIds.value.includes(item.id)) {
+		expandedCommentIds.value = [...expandedCommentIds.value, item.id]
+	}
+	closeCommentsMobileMenu()
+	focusCommentComposer()
+}
+
+function requestCommentDeletion(item: TicketComment) {
+	pendingCommentDeletion.value = item
+	commentDeleteDialogOpen.value = true
+	closeCommentsMobileMenu()
+}
+
+function closeCommentDeleteDialog() {
+	commentDeleteDialogOpen.value = false
+	pendingCommentDeletion.value = null
+}
+
+function confirmCommentDeletion(restoreAssignedStatus: boolean) {
+	if (!pendingCommentDeletion.value) {
+		closeCommentDeleteDialog()
+		return
+	}
+
+	emit('delete-comment', {
+		commentId: pendingCommentDeletion.value.id,
+		restoreAssignedStatus,
+	})
+	closeCommentDeleteDialog()
 }
 
 function confirmSupportComment(waitForUser: boolean) {
@@ -644,6 +723,16 @@ function clearReplyTarget() {
 	composerAttachmentsVisible.value = false
 }
 
+function closeInlineCommentComposer() {
+	if (editingCommentId.value !== null) {
+		resetCommentComposerState()
+		return
+	}
+
+	clearReplyTarget()
+	composerError.value = ''
+}
+
 function resolveCommentComposerElement() {
 	if (commentComposerRef.value instanceof HTMLElement) {
 		return commentComposerRef.value
@@ -673,8 +762,10 @@ function focusCommentComposer() {
 }
 
 function replyToComment(item: TicketComment) {
+	editingCommentId.value = null
 	replyTargetCommentId.value = item.id
 	composerAttachmentsVisible.value = false
+	composerError.value = ''
 	activeTab.value = 'comments'
 	if (!expandedCommentIds.value.includes(item.id)) {
 		expandedCommentIds.value = [...expandedCommentIds.value, item.id]
@@ -950,7 +1041,7 @@ function assignToCurrentUser() {
 				<button class="gi-secondary-button gi-sidebar-panel__comments-mobile-toggle" :class="{ 'gi-sidebar-panel__comments-mobile-toggle--always': shouldCollapseCommentOptions }" type="button" :aria-expanded="commentsMobileMenuOpen ? 'true' : 'false'" @click="toggleCommentsMobileMenu">
 					{{ commentsMobileMenuOpen ? 'Cerrar filtros' : 'Filtros y opciones' }}
 				</button>
-				<div v-if="showSupportTabs" class="gi-sidebar-panel__comments-toolbar-actions">
+				<div v-if="showSupportTabs && !shouldCollapseCommentOptions" class="gi-sidebar-panel__comments-toolbar-actions">
 					<button v-if="filteredComments.length" class="gi-secondary-button" type="button" @click="exportComments">
 						Exportar comentarios
 					</button>
@@ -982,33 +1073,43 @@ function assignToCurrentUser() {
 					<div class="gi-field"><span>Usuario</span><SearchableSelect :model-value="commentsAuthorUid" :options="commentAuthorOptions" placeholder="Todos" clearable @update:modelValue="commentsAuthorUid = $event ? String($event) : null" /></div>
 				</div>
 			</div>
-			<div v-if="showSupportTabs" class="gi-form-grid gi-sidebar-panel__comments-filters">
+			<div v-if="showSupportTabs && !shouldCollapseCommentOptions" class="gi-form-grid gi-sidebar-panel__comments-filters">
 				<label class="gi-field"><span>Desde</span><input :id="getFieldId('comments-date-from')" v-model="commentsDateFrom" :name="getFieldId('comments-date-from')" class="gi-input" type="date" /></label>
 				<label class="gi-field"><span>Hasta</span><input :id="getFieldId('comments-date-to')" v-model="commentsDateTo" :name="getFieldId('comments-date-to')" class="gi-input" type="date" /></label>
 				<div class="gi-field"><span>Usuario</span><SearchableSelect :model-value="commentsAuthorUid" :options="commentAuthorOptions" placeholder="Todos" clearable @update:modelValue="commentsAuthorUid = $event ? String($event) : null" /></div>
 			</div>
 			<div class="gi-sidebar-panel__comments-accordion">
 				<article v-for="item in orderedComments" :key="item.id" class="gi-sidebar-panel__accordion-item">
-					<button class="gi-sidebar-panel__accordion-trigger" type="button" @click="toggleExpandedComment(item.id)">
-						<span class="gi-sidebar-panel__accordion-trigger-content">
-							<span class="gi-sidebar-panel__accordion-meta">
-								<span>{{ formatDateTime(item.createdAt) }} · {{ resolveUserLabel(item.authorUid) }}</span>
-								<span class="gi-badge gi-badge--success">{{ resolveVisibilityLabel(item.visibility) }}</span>
+					<div class="gi-sidebar-panel__accordion-header">
+						<button class="gi-sidebar-panel__accordion-trigger" type="button" @click="toggleExpandedComment(item.id)">
+							<span class="gi-sidebar-panel__accordion-trigger-content">
+								<span class="gi-sidebar-panel__accordion-meta">
+									<span>{{ formatDateTime(item.createdAt) }} · {{ resolveUserLabel(item.authorUid) }}</span>
+									<span class="gi-badge gi-badge--success">{{ resolveVisibilityLabel(item.visibility) }}</span>
+								</span>
 							</span>
-						</span>
-						<span class="gi-sidebar-panel__accordion-icon" aria-hidden="true">{{ expandedCommentIds.includes(item.id) ? '▾' : '▸' }}</span>
-					</button>
+						</button>
+						<div class="gi-sidebar-panel__accordion-actions">
+							<button v-if="canEditComment(item)" class="gi-sidebar-panel__comment-icon-button" type="button" title="Editar comentario" aria-label="Editar comentario" @click="requestCommentEdit(item)">
+								<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1.003 1.003 0 0 0 0-1.42l-2.5-2.5a1.003 1.003 0 0 0-1.42 0l-1.96 1.96 3.75 3.75 2.13-2.13z" fill="currentColor" /></svg>
+							</button>
+							<button v-if="canDeleteComment(item)" class="gi-sidebar-panel__comment-icon-button gi-sidebar-panel__comment-icon-button--danger" type="button" title="Eliminar comentario" aria-label="Eliminar comentario" @click="requestCommentDeletion(item)">×</button>
+							<button class="gi-sidebar-panel__comment-icon-button gi-sidebar-panel__comment-icon-button--toggle" type="button" :title="expandedCommentIds.includes(item.id) ? 'Contraer comentario' : 'Expandir comentario'" :aria-label="expandedCommentIds.includes(item.id) ? 'Contraer comentario' : 'Expandir comentario'" @click="toggleExpandedComment(item.id)">
+								<span class="gi-sidebar-panel__accordion-icon" aria-hidden="true">{{ expandedCommentIds.includes(item.id) ? '▾' : '▸' }}</span>
+							</button>
+						</div>
+					</div>
 					<div v-if="expandedCommentIds.includes(item.id)" class="gi-sidebar-panel__accordion-body">
 						<RichTextContent :value="item.body" />
 						<div v-if="item.attachments?.length" class="gi-comment__attachments">
 							<button v-for="attachment in item.attachments" :key="attachment.id" class="gi-secondary-button gi-comment__attachment gi-attachment-link" @click="openAttachment(attachment)">{{ attachment.originalName }}</button>
 						</div>
-						<div v-if="canPublishComment && item.id === latestVisibleCommentId && replyTargetCommentId !== item.id" class="gi-sidebar-panel__comment-row-actions">
-							<button class="gi-secondary-button gi-sidebar-panel__reply-button" type="button" @click="replyToComment(item)">Responder</button>
+						<div v-if="canPublishComment && item.id === latestVisibleCommentId && replyTargetCommentId !== item.id && editingCommentId !== item.id" class="gi-sidebar-panel__comment-row-actions">
+							<button v-if="canPublishComment && item.id === latestVisibleCommentId && replyTargetCommentId !== item.id" class="gi-secondary-button gi-sidebar-panel__reply-button" type="button" @click="replyToComment(item)">Responder</button>
 						</div>
 						<TicketCommentComposer
-							v-if="canPublishComment && item.id === latestVisibleCommentId"
-							v-show="replyTargetCommentId === item.id"
+							v-if="canPublishComment && (item.id === latestVisibleCommentId || editingCommentId === item.id)"
+							v-show="replyTargetCommentId === item.id || editingCommentId === item.id"
 							ref="commentComposerRef"
 							:model-value="comment"
 							:attachments-draft="attachmentsDraft"
@@ -1016,10 +1117,12 @@ function assignToCurrentUser() {
 							:max-file-size-mb="maxFileSizeMb || 25"
 							:composer-error="composerError"
 							:placeholder="commentComposerPlaceholder"
+							:submit-label="commentComposerSubmitLabel"
 							:visibility="visibility"
 							:visibility-options="visibilityOptions"
 							:show-visibility="canManage"
-							:attachments-visible="composerAttachmentsVisible"
+							:attachments-visible="composerAttachmentsVisible && editingCommentId !== item.id"
+							:attachments-enabled="editingCommentId !== item.id"
 							dismissible
 							class="gi-sidebar-panel__comment-composer gi-sidebar-panel__comment-composer--inline"
 							@update:modelValue="comment = $event"
@@ -1027,7 +1130,7 @@ function assignToCurrentUser() {
 							@update:visibility="visibility = $event"
 							@show-attachments="showComposerAttachments"
 							@submit="sendComment"
-							@close="clearReplyTarget"
+							@close="closeInlineCommentComposer"
 						/>
 					</div>
 				</article>
@@ -1042,6 +1145,7 @@ function assignToCurrentUser() {
 				:max-file-size-mb="maxFileSizeMb || 25"
 				:composer-error="composerError"
 				:placeholder="commentComposerPlaceholder"
+				:submit-label="commentComposerSubmitLabel"
 				:visibility="visibility"
 				:visibility-options="visibilityOptions"
 				:show-visibility="canManage"
@@ -1078,6 +1182,28 @@ function assignToCurrentUser() {
 				<footer class="gi-dialog__footer">
 					<button class="gi-ghost-button" type="button" @click="confirmSupportComment(false)">No</button>
 					<button class="gi-primary-button" type="button" @click="confirmSupportComment(true)">Sí</button>
+				</footer>
+			</section>
+		</div>
+		<div v-if="commentDeleteDialogOpen" class="gi-app-dialog-backdrop gi-dialog-backdrop" @click.self="closeCommentDeleteDialog()">
+			<section class="gi-app-dialog gi-dialog gi-dialog--compact" aria-label="Confirmar borrado de comentario">
+				<header class="gi-dialog__header">
+					<h3 class="gi-dialog__title">Eliminar comentario</h3>
+					<button class="gi-modal-close" type="button" aria-label="Cerrar ventana" @click="closeCommentDeleteDialog()">x</button>
+				</header>
+				<p class="gi-dialog__message gi-dialog__message--neutral">
+					{{ pendingCommentDeletion?.canRestoreAssignedStatusOnDelete
+						? 'Este comentario es el último que puede retirar y el ticket sigue en espera de usuario. El borrado no se podrá deshacer.'
+						: 'Este borrado no se podrá deshacer.' }}
+				</p>
+				<p v-if="pendingCommentDeletion?.canRestoreAssignedStatusOnDelete" class="gi-dialog__message gi-dialog__message--neutral">
+					¿Quieres mantener el ticket en espera de usuario o volverlo a asignado al borrar el comentario?
+				</p>
+				<footer class="gi-dialog__footer">
+					<button class="gi-ghost-button" type="button" @click="closeCommentDeleteDialog()">Cancelar</button>
+					<button v-if="pendingCommentDeletion?.canRestoreAssignedStatusOnDelete" class="gi-secondary-button gi-dialog__danger" type="button" @click="confirmCommentDeletion(false)">Eliminar y mantener estado</button>
+					<button v-if="pendingCommentDeletion?.canRestoreAssignedStatusOnDelete" class="gi-primary-button gi-dialog__danger" type="button" @click="confirmCommentDeletion(true)">Eliminar y volver a asignado</button>
+					<button v-else class="gi-secondary-button gi-dialog__danger" type="button" @click="confirmCommentDeletion(false)">Eliminar comentario</button>
 				</footer>
 			</section>
 		</div>
@@ -1433,6 +1559,11 @@ function assignToCurrentUser() {
 	white-space: nowrap;
 }
 
+.gi-sidebar-panel__delete-button {
+	white-space: nowrap;
+	color: var(--gi-color-danger, #b42318);
+}
+
 .gi-sidebar-panel__comments-toolbar {
 	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: end;
@@ -1502,11 +1633,21 @@ function assignToCurrentUser() {
 	background: rgba(255, 255, 255, .9);
 }
 
-.gi-sidebar-panel__accordion-trigger {
-	width: 100%;
-	padding: .9rem 1rem;
-	border: none;
+.gi-sidebar-panel__accordion-header {
+	display: flex;
+	align-items: stretch;
+	gap: .35rem;
+	padding-right: .55rem;
 	background: rgba(239, 245, 241, .98);
+	border-radius: 16px 16px 0 0;
+}
+
+.gi-sidebar-panel__accordion-trigger {
+	flex: 1 1 auto;
+	width: auto;
+	padding: .9rem 0 .9rem 1rem;
+	border: none;
+	background: transparent;
 	display: flex;
 	align-items: flex-start;
 	justify-content: space-between;
@@ -1514,6 +1655,14 @@ function assignToCurrentUser() {
 	text-align: left;
 	font: inherit;
 	cursor: pointer;
+}
+
+.gi-sidebar-panel__accordion-actions {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: .35rem;
+	padding: .45rem 0;
 }
 
 .gi-sidebar-panel__accordion-trigger-content {
@@ -1538,6 +1687,50 @@ function assignToCurrentUser() {
 	line-height: 1;
 	color: #4d6962;
 	padding-top: .1rem;
+}
+
+.gi-sidebar-panel__comment-icon-button {
+	width: 1.9rem;
+	height: 1.9rem;
+	padding: 0;
+	border: 1px solid rgba(49, 96, 91, .18);
+	border-radius: 999px;
+	background: rgba(255, 255, 255, .88);
+	color: #385b53;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1.1rem;
+	line-height: 1;
+	cursor: pointer;
+	transition: background-color .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.gi-sidebar-panel__comment-icon-button svg {
+	width: .95rem;
+	height: .95rem;
+}
+
+.gi-sidebar-panel__comment-icon-button:hover,
+.gi-sidebar-panel__comment-icon-button:focus-visible {
+	background: rgba(49, 96, 91, .08);
+	border-color: rgba(49, 96, 91, .28);
+	outline: none;
+}
+
+.gi-sidebar-panel__comment-icon-button--danger {
+	border-color: rgba(180, 35, 24, .18);
+	color: var(--gi-color-danger, #b42318);
+}
+
+.gi-sidebar-panel__comment-icon-button--danger:hover,
+.gi-sidebar-panel__comment-icon-button--danger:focus-visible {
+	background: rgba(180, 35, 24, .08);
+	border-color: rgba(180, 35, 24, .3);
+}
+
+.gi-sidebar-panel__comment-icon-button--toggle {
+	color: #4d6962;
 }
 
 .gi-sidebar-panel__accordion-body {

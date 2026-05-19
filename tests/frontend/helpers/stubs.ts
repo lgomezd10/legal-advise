@@ -86,6 +86,7 @@ export const SupportTicketTableStub = defineComponent({
 export const TicketSidebarPanelStub = defineComponent({
 	name: 'TicketSidebarPanel',
 	props: {
+		roles: { type: Array, default: () => [] },
 		readOnly: { type: Boolean, default: false },
 		showRepeat: { type: Boolean, default: false },
 		showFullscreen: { type: Boolean, default: false },
@@ -97,6 +98,7 @@ export const TicketSidebarPanelStub = defineComponent({
 	template: `
 		<div class="ticket-sidebar-panel-stub">
 			<span>TicketSidebarPanel</span>
+			<span>roles: {{ roles.join(',') }}</span>
 			<span>readonly: {{ readOnly }}</span>
 			<span>showRepeat: {{ showRepeat }}</span>
 			<span>showFullscreen: {{ showFullscreen }}</span>
