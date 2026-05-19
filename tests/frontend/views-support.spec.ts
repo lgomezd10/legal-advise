@@ -252,6 +252,30 @@ describe('Pantallas de soporte', () => {
 		expect(ticketsStoreMock.update).toHaveBeenCalledWith(100, { status: 'en_espera_usuario' })
 	})
 
+	it('al comentar desde soporte completo puede pasar el ticket a en espera de usuario sin guardar aparte', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
+		routeState.path = '/soporte/100/completo'
+		routeState.params = { ticketId: '100' }
+		ticketsStoreMock.selected = createTicket({ id: 100, canManage: true, status: 'nuevo' })
+
+		const wrapper = mount(SupportTicketFullView, {
+			global: {
+				stubs: {
+					TicketSidebarPanel: TicketSidebarPanelStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const panel = wrapper.getComponent(TicketSidebarPanelStub)
+		panel.vm.$emit('comment', { body: '<p>Seguimiento</p>', visibility: 'publico', files: [], links: [], waitForUser: true })
+		await flushPromises()
+
+		expect(ticketsStoreMock.comment).toHaveBeenCalledWith(100, expect.objectContaining({ body: '<p>Seguimiento</p>' }))
+		expect(ticketsStoreMock.update).toHaveBeenCalledWith(100, { status: 'en_espera_usuario' })
+	})
+
 	it('configura el panel lateral en modo soporte con edición habilitada', async() => {
 		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
 		routeState.path = '/soporte/100'
@@ -295,6 +319,30 @@ describe('Pantallas de soporte', () => {
 		panel.vm.$emit('save', { status: 'en_espera_usuario' })
 		await flushPromises()
 
+		expect(ticketsStoreMock.update).toHaveBeenCalledWith(100, { status: 'en_espera_usuario' })
+	})
+
+	it('al comentar desde el panel lateral de soporte puede pasar el ticket a en espera de usuario sin guardar aparte', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
+		routeState.path = '/soporte/100'
+		routeState.params = { ticketId: '100' }
+		ticketsStoreMock.selected = createTicket({ id: 100, canManage: true, status: 'nuevo' })
+
+		const wrapper = mount(TicketSidebarView, {
+			global: {
+				stubs: {
+					TicketSidebarPanel: TicketSidebarPanelStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const panel = wrapper.getComponent(TicketSidebarPanelStub)
+		panel.vm.$emit('comment', { body: '<p>Seguimiento</p>', visibility: 'publico', files: [], links: [], waitForUser: true })
+		await flushPromises()
+
+		expect(ticketsStoreMock.comment).toHaveBeenCalledWith(100, expect.objectContaining({ body: '<p>Seguimiento</p>' }))
 		expect(ticketsStoreMock.update).toHaveBeenCalledWith(100, { status: 'en_espera_usuario' })
 	})
 

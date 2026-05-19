@@ -1,10 +1,11 @@
-import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { flushPromises, mount } from '@vue/test-utils'
+import { defineComponent, nextTick, ref } from 'vue'
 import { vi } from 'vitest'
 import SupportTicketTable from '@/components/SupportTicketTable.vue'
 import TicketList from '@/components/TicketList.vue'
 import TicketForm from '@/components/TicketForm.vue'
 import TicketSidebarPanel from '@/components/TicketSidebarPanel.vue'
+import TicketCommentComposer from '@/components/TicketCommentComposer.vue'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import { AttachmentPickerStub, RichTextContentStub, RichTextEditorStub, SearchableSelectStub, TypeCascadeSelectorStub } from './helpers/stubs'
 import { createBootstrapData, createComment, createTicket } from './helpers/testData'
@@ -66,6 +67,7 @@ describe('Contratos visibles de componentes de pantalla', () => {
 				urgencies: bootstrap.catalogs.urgencies,
 				showFullscreen: true,
 				showRepeat: true,
+				initialTab: 'detail',
 				readOnly: false,
 			},
 			global: {
@@ -114,6 +116,7 @@ describe('Contratos visibles de componentes de pantalla', () => {
 				currentUserUid: 'usuario1',
 				statuses: bootstrap.catalogs.statuses,
 				urgencies: bootstrap.catalogs.urgencies,
+				initialTab: 'detail',
 				readOnly: false,
 			},
 			global: {
@@ -146,6 +149,7 @@ describe('Contratos visibles de componentes de pantalla', () => {
 				currentUserUid: 'usuario1',
 				statuses: bootstrap.catalogs.statuses,
 				urgencies: bootstrap.catalogs.urgencies,
+				initialTab: 'detail',
 				readOnly: false,
 			},
 			global: {
@@ -190,6 +194,7 @@ describe('Contratos visibles de componentes de pantalla', () => {
 				currentUserUid: 'usuario1',
 				statuses: bootstrap.catalogs.statuses,
 				urgencies: bootstrap.catalogs.urgencies,
+				initialTab: 'detail',
 				readOnly: false,
 			},
 			global: {
@@ -229,6 +234,7 @@ describe('Contratos visibles de componentes de pantalla', () => {
 				currentUserUid: 'usuario1',
 				statuses: bootstrap.catalogs.statuses,
 				urgencies: bootstrap.catalogs.urgencies,
+				initialTab: 'detail',
 				readOnly: false,
 			},
 			global: {
@@ -269,6 +275,7 @@ describe('Contratos visibles de componentes de pantalla', () => {
 				currentUserUid: 'usuario1',
 				statuses: bootstrap.catalogs.statuses,
 				urgencies: bootstrap.catalogs.urgencies,
+				initialTab: 'detail',
 				readOnly: false,
 			},
 			global: {
@@ -321,7 +328,7 @@ describe('Contratos visibles de componentes de pantalla', () => {
 		expect(wrapper.text()).toContain('Este ticket está cerrado. Reabre el ticket para volver a actuar sobre él.')
 	})
 
-	it('TicketSidebarPanel oculta por defecto el nuevo comentario en soporte y permite exportar comentarios', async() => {
+	it('TicketSidebarPanel muestra responder en soporte y permite exportar comentarios', async() => {
 		const bootstrap = createBootstrapData({ roles: ['soporte'] })
 		const createObjectUrlMock = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:comentarios')
 		const revokeObjectUrlMock = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
@@ -337,8 +344,6 @@ describe('Contratos visibles de componentes de pantalla', () => {
 				statuses: bootstrap.catalogs.statuses,
 				urgencies: bootstrap.catalogs.urgencies,
 				readOnly: false,
-				initialTab: 'comments',
-				initialComposerVisible: false,
 			},
 			global: {
 				stubs: {
@@ -350,16 +355,20 @@ describe('Contratos visibles de componentes de pantalla', () => {
 			},
 		})
 
-		expect(wrapper.text()).toContain('Nuevo comentario')
-		expect(wrapper.find('button[aria-label="Ocultar nuevo comentario"]').exists()).toBe(false)
+		expect(wrapper.text()).toContain('Responder')
+		expect(wrapper.find('.gi-sidebar-panel__reply-button').exists()).toBe(true)
+		expect(wrapper.find('.gi-sidebar-panel__accordion-summary').exists()).toBe(false)
 
-		await wrapper.get('button.gi-sidebar-panel__composer-toggle-button').trigger('click')
-		expect(wrapper.find('button[aria-label="Ocultar nuevo comentario"]').exists()).toBe(true)
+		await wrapper.get('button.gi-sidebar-panel__reply-button').trigger('click')
+		await nextTick()
+		expect(wrapper.find('.gi-sidebar-panel__reply-button').exists()).toBe(false)
+		expect(wrapper.findAll('button').some((button) => button.text() === 'Enviar')).toBe(true)
+		expect(wrapper.findAll('button').some((button) => button.text() === 'Adjuntar archivo')).toBe(true)
 
 		await wrapper.setProps({ ticket: createTicket({ id: 101, comments: [createComment({ id: 301 })], canManage: true, canComment: true }) })
 		await nextTick()
 
-		expect(wrapper.find('button[aria-label="Ocultar nuevo comentario"]').exists()).toBe(false)
+		expect(wrapper.find('.gi-sidebar-panel__reply-button').exists()).toBe(true)
 
 		const exportButton = wrapper.findAll('button').find((button) => button.text() === 'Exportar comentarios')
 		expect(exportButton).toBeDefined()
@@ -374,6 +383,45 @@ describe('Contratos visibles de componentes de pantalla', () => {
 		clickMock.mockRestore()
 	})
 
+	it('TicketSidebarPanel pregunta en soporte si quiere pasar el ticket a espera de usuario al enviar comentario', async() => {
+		const bootstrap = createBootstrapData({ roles: ['soporte'] })
+		const wrapper = mount(TicketSidebarPanel, {
+			props: {
+				ticket: createTicket({ comments: [createComment()], canManage: true, canComment: true }),
+				roles: ['soporte'],
+				users: bootstrap.assignables.users,
+				groups: bootstrap.assignables.groups,
+				currentUserUid: 'usuario1',
+				statuses: bootstrap.catalogs.statuses,
+				urgencies: bootstrap.catalogs.urgencies,
+				readOnly: false,
+				initialTab: 'comments',
+			},
+			global: {
+				stubs: {
+					SearchableSelect: SearchableSelectStub,
+					AttachmentPicker: AttachmentPickerStub,
+					RichTextEditor: RichTextEditorStub,
+					RichTextContent: RichTextContentStub,
+				},
+			},
+		})
+
+		await wrapper.get('.gi-sidebar-panel__reply-button').trigger('click')
+		await wrapper.get('.rich-text-editor-stub').setValue('<p>Seguimiento</p>')
+		await nextTick()
+		const sendButton = wrapper.findAll('button').find((button) => button.text() === 'Enviar')
+		expect(sendButton).toBeDefined()
+		await sendButton!.trigger('click')
+
+		expect(wrapper.text()).toContain('¿Quieres pasar el ticket a en espera de usuario al enviar este comentario?')
+		const yesButton = wrapper.findAll('button').find((button) => button.text() === 'Sí')
+		expect(yesButton).toBeDefined()
+		await yesButton!.trigger('click')
+
+		expect(wrapper.emitted('comment')?.[0]?.[0]).toMatchObject({ waitForUser: true })
+	})
+
 	it('TicketSidebarPanel muestra el tipo seleccionado del ticket', () => {
 		const bootstrap = createBootstrapData({ roles: ['soporte', 'usuario'] })
 		const wrapper = mount(TicketSidebarPanel, {
@@ -386,6 +434,7 @@ describe('Contratos visibles de componentes de pantalla', () => {
 				currentUserUid: 'usuario1',
 				statuses: bootstrap.catalogs.statuses,
 				urgencies: bootstrap.catalogs.urgencies,
+				initialTab: 'detail',
 				readOnly: false,
 			},
 			global: {
@@ -481,9 +530,73 @@ describe('Contratos visibles de componentes de pantalla', () => {
 
 		expect(wrapper.findAll('.gi-sidebar-panel__tab').map((tab) => tab.text())).toEqual(['Comentarios', 'Detalles', 'Adjuntos'])
 		expect(wrapper.find('.gi-sidebar-panel__comments-toolbar-actions').exists()).toBe(false)
+		expect(wrapper.text()).toContain('Responder')
+		expect(wrapper.text()).toContain('Adjuntar archivo')
 
 		await wrapper.get('.gi-sidebar-panel__comments-mobile-toggle').trigger('click')
 		expect(wrapper.text()).toContain('Expandir comentarios')
+	})
+
+	it('TicketCommentComposer abre el selector de archivo aunque el picker se monte después de pedirlo', async() => {
+		const openFileDialog = vi.fn()
+		const DeferredAttachmentPickerStub = {
+			name: 'AttachmentPicker',
+			props: {
+				modelValue: { type: Object, default: () => ({ files: [], links: [] }) },
+				allowedExtensions: { type: Array, default: () => [] },
+				maxFileSizeMb: { type: Number, default: 25 },
+				showToolbar: { type: Boolean, default: true },
+				showUrlAction: { type: Boolean, default: true },
+				showHelperInfo: { type: Boolean, default: true },
+			},
+			setup() {
+				return { openFileDialog }
+			},
+			template: '<div class="attachment-picker-stub">Adjuntar archivos</div>',
+		}
+
+		const Harness = defineComponent({
+			components: { TicketCommentComposer },
+			setup() {
+				const attachmentsVisible = ref(false)
+				const attachmentsDraft = ref({ files: [] as File[], links: [] })
+
+				function handleShowAttachments() {
+					attachmentsVisible.value = true
+				}
+
+				return {
+					attachmentsVisible,
+					attachmentsDraft,
+					handleShowAttachments,
+				}
+			},
+			template: `
+				<TicketCommentComposer
+					ref="composer"
+					:model-value="''"
+					:attachments-draft="attachmentsDraft"
+					:attachments-visible="attachmentsVisible"
+					@show-attachments="handleShowAttachments"
+				/>
+			`,
+		})
+
+		const wrapper = mount(Harness, {
+			global: {
+				stubs: {
+					AttachmentPicker: DeferredAttachmentPickerStub,
+					RichTextEditor: RichTextEditorStub,
+					SearchableSelect: SearchableSelectStub,
+				},
+			},
+		})
+
+		;(wrapper.getComponent(TicketCommentComposer).vm as { openFileAttachment: () => void }).openFileAttachment()
+		await nextTick()
+		await nextTick()
+
+		expect(openFileDialog).toHaveBeenCalledTimes(1)
 	})
 
 	it('RichTextEditor no activa botones de formato al iniciarse vacío', async() => {
@@ -495,6 +608,7 @@ describe('Contratos visibles de componentes de pantalla', () => {
 		})
 
 		await nextTick()
+		await flushPromises()
 
 		expect(wrapper.findAll('.gi-rich-text-editor__tool--active')).toHaveLength(0)
 		expect(wrapper.find('.tiptap h2').exists()).toBe(false)

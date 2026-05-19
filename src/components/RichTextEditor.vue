@@ -77,9 +77,12 @@ const showFallback = ref(true)
 const fallbackReason = ref('')
 const showHtmlSource = ref(false)
 const htmlSource = ref('')
+const mobileToolbarOpen = ref(false)
+const toolbarShellRef = ref<HTMLElement | null>(null)
 let syncingFromExternal = false
 let pendingImageDialogFocusHandler: (() => void) | null = null
 let isUnmounted = false
+let pointerDownOutsideToolbarHandler: ((event: PointerEvent) => void) | null = null
 
 async function loadTiptapModules(): Promise<TiptapModuleSet> {
 	const [vueTiptap, starterKit, link, placeholder, textAlign, underline, resizableImage] = await Promise.all([
@@ -123,11 +126,33 @@ watch(() => props.disabled, (disabled) => {
 })
 
 onMounted(() => {
+	pointerDownOutsideToolbarHandler = (event: PointerEvent) => {
+		if (!mobileToolbarOpen.value) {
+			return
+		}
+
+		const target = event.target
+		if (!(target instanceof Node)) {
+			return
+		}
+
+		if (toolbarShellRef.value?.contains(target)) {
+			return
+		}
+
+		mobileToolbarOpen.value = false
+	}
+
+	window.addEventListener('pointerdown', pointerDownOutsideToolbarHandler)
 	void initializeEditor()
 })
 
 onBeforeUnmount(() => {
 	isUnmounted = true
+	if (pointerDownOutsideToolbarHandler) {
+		window.removeEventListener('pointerdown', pointerDownOutsideToolbarHandler)
+		pointerDownOutsideToolbarHandler = null
+	}
 	clearPendingImageDialogFocusHandler()
 	editor.value?.destroy()
 	editor.value = null
@@ -410,6 +435,23 @@ function toggleHtmlSource() {
 	showHtmlSource.value = true
 }
 
+function closeMobileToolbarMenu() {
+	mobileToolbarOpen.value = false
+}
+
+function runToolbarAction(action: () => void) {
+	action()
+	closeMobileToolbarMenu()
+}
+
+function toggleMobileToolbarMenu() {
+	if (props.disabled) {
+		return
+	}
+
+	mobileToolbarOpen.value = !mobileToolbarOpen.value
+}
+
 function onHtmlSourceInput(event: Event) {
 	const nextValue = (event.target as HTMLTextAreaElement).value
 	htmlSource.value = nextValue
@@ -495,52 +537,60 @@ function openImageDialog() {
 			<p class="gi-rich-text-editor__fallback-hint">{{ fallbackReason }}</p>
 		</div>
 		<div v-else class="gi-rich-text-editor__surface">
-			<div class="gi-rich-text-editor__toolbar">
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isHeadingToolActive(2) }" :disabled="disabled || showHtmlSource" title="Título grande" aria-label="Título grande" @click="toggleHeading(2)">
+			<div ref="toolbarShellRef" class="gi-rich-text-editor__toolbar-shell">
+				<div class="gi-rich-text-editor__toolbar-mobile-head">
+					<button type="button" class="gi-rich-text-editor__mobile-menu-button" :class="{ 'gi-rich-text-editor__mobile-menu-button--active': mobileToolbarOpen }" :disabled="disabled" aria-label="Opciones de formato" :aria-expanded="mobileToolbarOpen" @click="toggleMobileToolbarMenu">
+						Formato
+						<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z" fill="currentColor" /></svg>
+					</button>
+				</div>
+				<div class="gi-rich-text-editor__toolbar" :class="{ 'gi-rich-text-editor__toolbar--mobile-open': mobileToolbarOpen }">
+					<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isHeadingToolActive(2) }" :disabled="disabled || showHtmlSource" title="Título grande" aria-label="Título grande" @click="runToolbarAction(() => toggleHeading(2))">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h3v5h10V6h3v12h-3v-5H7v5H4z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isHeadingToolActive(3) }" :disabled="disabled || showHtmlSource" title="Subtítulo" aria-label="Subtítulo" @click="toggleHeading(3)">
+					<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isHeadingToolActive(3) }" :disabled="disabled || showHtmlSource" title="Subtítulo" aria-label="Subtítulo" @click="runToolbarAction(() => toggleHeading(3))">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3v4h10V7h3v10h-3v-4H7v4H4z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('bold') }" :disabled="disabled || showHtmlSource" title="Negrita" aria-label="Negrita" @click="toggleBold">
+					<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('bold') }" :disabled="disabled || showHtmlSource" title="Negrita" aria-label="Negrita" @click="runToolbarAction(toggleBold)">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h6.5a4 4 0 0 1 2.7 6.96A4.5 4.5 0 0 1 14 19H8zm3 3v3h3.5a1.5 1.5 0 0 0 0-3zm0 6v3h3a1.5 1.5 0 0 0 0-3z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('italic') }" :disabled="disabled || showHtmlSource" title="Cursiva" aria-label="Cursiva" @click="toggleItalic">
+					<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('italic') }" :disabled="disabled || showHtmlSource" title="Cursiva" aria-label="Cursiva" @click="runToolbarAction(toggleItalic)">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5v2h2.2l-2.4 10H7v2h7v-2h-2.2l2.4-10H17V5z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('underline') }" :disabled="disabled || showHtmlSource" title="Subrayado" aria-label="Subrayado" @click="toggleUnderline">
+					<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('underline') }" :disabled="disabled || showHtmlSource" title="Subrayado" aria-label="Subrayado" @click="runToolbarAction(toggleUnderline)">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v6a5 5 0 0 0 10 0V5h-2v6a3 3 0 0 1-6 0V5zm-1 14h12v-2H6z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('orderedList') }" :disabled="disabled || showHtmlSource" title="Lista numerada" aria-label="Lista numerada" @click="toggleOrderedList">
+					<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('orderedList') }" :disabled="disabled || showHtmlSource" title="Lista numerada" aria-label="Lista numerada" @click="runToolbarAction(toggleOrderedList)">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h2V5H3v1h1zm0 6h1v1H3v1h3v-3H4zm-1 5h1.8L3 20v1h3v-1H4.8L6 18.5V17H3zm5-11h13V5H8zm0 12h13v-2H8zm0-5h13v-2H8z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('bulletList') }" :disabled="disabled || showHtmlSource" title="Lista con viñetas" aria-label="Lista con viñetas" @click="toggleBulletList">
+					<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('bulletList') }" :disabled="disabled || showHtmlSource" title="Lista con viñetas" aria-label="Lista con viñetas" @click="runToolbarAction(toggleBulletList)">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5A1.5 1.5 0 1 0 5 9.5A1.5 1.5 0 1 0 5 6.5M8 8h13V6H8zm-3 5.5A1.5 1.5 0 1 0 5 16.5A1.5 1.5 0 1 0 5 13.5M8 15h13v-2H8zm-3 4A1.5 1.5 0 1 0 5 22A1.5 1.5 0 1 0 5 19m3 1h13v-2H8z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('blockquote') }" :disabled="disabled || showHtmlSource" title="Cita" aria-label="Cita" @click="toggleBlockquote">
+					<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('blockquote') }" :disabled="disabled || showHtmlSource" title="Cita" aria-label="Cita" @click="runToolbarAction(toggleBlockquote)">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17h4l2-4V7H7zm8 0h4l2-4V7h-6z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isTextAlignToolActive('left') }" :disabled="disabled || showHtmlSource" title="Alinear a la izquierda" aria-label="Alinear a la izquierda" @click="setAlignment('left')">
+					<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isTextAlignToolActive('left') }" :disabled="disabled || showHtmlSource" title="Alinear a la izquierda" aria-label="Alinear a la izquierda" @click="runToolbarAction(() => setAlignment('left'))">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16V4H4zm0 4h10V8H4zm0 4h16v-2H4zm0 4h10v-2H4z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isTextAlignToolActive('center') }" :disabled="disabled || showHtmlSource" title="Centrar" aria-label="Centrar" @click="setAlignment('center')">
+					<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isTextAlignToolActive('center') }" :disabled="disabled || showHtmlSource" title="Centrar" aria-label="Centrar" @click="runToolbarAction(() => setAlignment('center'))">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16V4H4zm3 4h10V8H7zm-3 4h16v-2H4zm3 4h10v-2H7z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isTextAlignToolActive('right') }" :disabled="disabled || showHtmlSource" title="Alinear a la derecha" aria-label="Alinear a la derecha" @click="setAlignment('right')">
+					<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isTextAlignToolActive('right') }" :disabled="disabled || showHtmlSource" title="Alinear a la derecha" aria-label="Alinear a la derecha" @click="runToolbarAction(() => setAlignment('right'))">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16V4H4zm6 4h10V8H10zm-6 4h16v-2H4zm6 4h10v-2H10z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('link') }" :disabled="disabled || showHtmlSource" title="Enlace" aria-label="Enlace" @click="toggleLink">
+					<button type="button" class="gi-rich-text-editor__tool" :class="{ 'gi-rich-text-editor__tool--active': isEditorActive('link') }" :disabled="disabled || showHtmlSource" title="Enlace" aria-label="Enlace" @click="runToolbarAction(toggleLink)">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.6 13.4a1 1 0 0 0 1.4 1.4l4.24-4.24a3 3 0 0 0-4.24-4.24l-1.88 1.88a1 1 0 1 0 1.42 1.42l1.87-1.88a1 1 0 1 1 1.41 1.42zm2.8-2.8a1 1 0 0 0-1.4-1.4l-4.24 4.24a3 3 0 1 0 4.24 4.24l1.88-1.88a1 1 0 1 0-1.42-1.42l-1.87 1.88a1 1 0 1 1-1.41-1.42z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :disabled="disabled || showHtmlSource" title="Insertar imagen" aria-label="Insertar imagen" @click="openImageDialog">
+					<button type="button" class="gi-rich-text-editor__tool" :disabled="disabled || showHtmlSource" title="Insertar imagen" aria-label="Insertar imagen" @click="runToolbarAction(openImageDialog)">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2m0 2v10h14V7zm2 8l2.5-3 2.2 2.6 3-4L19 15zm2-5a1.5 1.5 0 1 0 0-3a1.5 1.5 0 1 0 0 3" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool" :disabled="disabled || showHtmlSource" title="Limpiar formato" aria-label="Limpiar formato" @click="clearFormatting">
+					<button type="button" class="gi-rich-text-editor__tool" :disabled="disabled || showHtmlSource" title="Limpiar formato" aria-label="Limpiar formato" @click="runToolbarAction(clearFormatting)">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5.4 4 1.2 1.2 1.9-1.2h7l1.7 3h-3.4l-3.8 3.8-4.2-4.2zm11.3 8.5 1.4 1.4-8.6 8.6H8.1v-1.4zm-8.4-1.3 1.4-1.4 3.1 3.1-1.4 1.4z" fill="currentColor" /></svg>
 				</button>
-				<button type="button" class="gi-rich-text-editor__tool gi-rich-text-editor__tool--text" :class="{ 'gi-rich-text-editor__tool--active': showHtmlSource }" :disabled="disabled" :title="showHtmlSource ? 'Volver al editor visual' : 'Editar HTML'" :aria-label="showHtmlSource ? 'Volver al editor visual' : 'Editar HTML'" @click="toggleHtmlSource">
-					HTML
-				</button>
+					<button type="button" class="gi-rich-text-editor__tool gi-rich-text-editor__tool--text" :class="{ 'gi-rich-text-editor__tool--active': showHtmlSource }" :disabled="disabled" :title="showHtmlSource ? 'Volver al editor visual' : 'Editar HTML'" :aria-label="showHtmlSource ? 'Volver al editor visual' : 'Editar HTML'" @click="runToolbarAction(toggleHtmlSource)">
+						HTML
+					</button>
+				</div>
 			</div>
 			<textarea v-if="showHtmlSource" class="gi-rich-text-editor__html-source" :disabled="disabled" :value="htmlSource" aria-label="HTML del contenido" spellcheck="false" @input="onHtmlSourceInput" />
 			<component :is="editorContentComponent" v-else :editor="editor as never" class="gi-rich-text-editor__content" />
@@ -560,6 +610,42 @@ function openImageDialog() {
 	gap: 0;
 	width: 100%;
 	min-width: 0;
+}
+
+.gi-rich-text-editor__toolbar-shell {
+	display: grid;
+	gap: 0;
+	position: relative;
+}
+
+.gi-rich-text-editor__toolbar-mobile-head {
+	display: none;
+}
+
+.gi-rich-text-editor__mobile-menu-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: .5rem;
+	width: 100%;
+	padding: .7rem .9rem;
+	border: 1px solid var(--gi-color-border-strong);
+	border-radius: 14px 14px 0 0;
+	background: var(--gi-color-surface-subtle);
+	color: var(--gi-color-primary-soft-text);
+	font: inherit;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.gi-rich-text-editor__mobile-menu-button svg {
+	width: 1rem;
+	height: 1rem;
+	transition: transform .18s ease;
+}
+
+.gi-rich-text-editor__mobile-menu-button--active svg {
+	transform: rotate(180deg);
 }
 
 .gi-rich-text-editor__toolbar {
@@ -792,6 +878,43 @@ function openImageDialog() {
 	outline: none;
 	white-space: pre-wrap;
 	word-break: break-word;
+}
+
+@media (max-width: 900px) {
+	.gi-rich-text-editor__toolbar-mobile-head {
+		display: block;
+	}
+
+	.gi-rich-text-editor__toolbar {
+		display: none;
+		position: absolute;
+		top: calc(100% - 1px);
+		left: 0;
+		right: 0;
+		z-index: 6;
+		padding: .55rem;
+		border-radius: 0 0 14px 14px;
+		box-shadow: 0 18px 32px var(--gi-color-shadow-medium);
+	}
+
+	.gi-rich-text-editor__toolbar--mobile-open {
+		display: flex;
+	}
+
+	.gi-rich-text-editor__content,
+	.gi-rich-text-editor__html-source {
+		border-top: 1px solid var(--gi-color-border-strong);
+		border-radius: 0 0 14px 14px;
+	}
+
+	.gi-rich-text-editor__toolbar--mobile-open + .gi-rich-text-editor__html-source,
+	.gi-rich-text-editor__toolbar--mobile-open + .gi-rich-text-editor__content {
+		margin-top: 11.5rem;
+	}
+
+	.gi-rich-text-editor__tool--text {
+		padding-inline: .55rem;
+	}
 }
 
 

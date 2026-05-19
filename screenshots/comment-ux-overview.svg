@@ -1,0 +1,74 @@
+<svg width="1600" height="980" viewBox="0 0 1600 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="980" fill="#F4F1EA"/>
+  <text x="72" y="74" fill="#1F2A20" font-family="Segoe UI, Arial, sans-serif" font-size="36" font-weight="700">Patrones habituales para gestion de comentarios</text>
+  <text x="72" y="112" fill="#566257" font-family="Segoe UI, Arial, sans-serif" font-size="18">Tres variantes comunes para detalle de ticket. La accion Responder pasa a ser local a cada comentario.</text>
+
+  <rect x="60" y="150" width="470" height="760" rx="28" fill="#FFFDFC" stroke="#D8D0C2"/>
+  <text x="92" y="205" fill="#17392D" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">Opcion A · Responder en cada comentario</text>
+  <text x="92" y="236" fill="#6A736B" font-family="Segoe UI, Arial, sans-serif" font-size="16">Patron foro/helpdesk. Muy claro para usuarios ocasionales.</text>
+  <rect x="92" y="276" width="406" height="52" rx="16" fill="#ECF1ED"/>
+  <text x="114" y="309" fill="#214536" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600">Historial</text>
+  <rect x="92" y="352" width="406" height="150" rx="20" fill="#FFFFFF" stroke="#D9DED8"/>
+  <text x="116" y="390" fill="#2C4A3D" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">11/05/2026 17:55 · admin · Publico</text>
+  <text x="450" y="390" fill="#7B857D" font-family="Segoe UI, Arial, sans-serif" font-size="22">...</text>
+  <text x="116" y="430" fill="#233028" font-family="Segoe UI, Arial, sans-serif" font-size="22">Hola</text>
+  <line x1="116" y1="456" x2="474" y2="456" stroke="#E4E8E3"/>
+  <rect x="116" y="470" width="108" height="34" rx="17" fill="#0D7A5B"/>
+  <text x="145" y="492" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">Responder</text>
+  <text x="358" y="492" fill="#587063" font-family="Segoe UI, Arial, sans-serif" font-size="16">Adjuntar · Citar</text>
+  <rect x="92" y="528" width="406" height="182" rx="20" fill="#F7FAF7" stroke="#D9DED8"/>
+  <text x="116" y="566" fill="#2C4A3D" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">Respuesta abierta a admin</text>
+  <rect x="116" y="584" width="358" height="84" rx="14" fill="#FFFFFF" stroke="#B9C9BE" stroke-dasharray="6 6"/>
+  <text x="136" y="632" fill="#6D776F" font-family="Segoe UI, Arial, sans-serif" font-size="20">Escribe aqui tu respuesta...</text>
+  <rect x="344" y="680" width="130" height="34" rx="17" fill="#DCE8E1"/>
+  <text x="386" y="702" fill="#244436" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">Enviar</text>
+  <text x="92" y="758" fill="#17392D" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">Cuando usarla</text>
+  <text x="92" y="790" fill="#4F5E55" font-family="Segoe UI, Arial, sans-serif" font-size="16">Si quieres que el usuario piense en terminos de conversacion</text>
+  <text x="92" y="815" fill="#4F5E55" font-family="Segoe UI, Arial, sans-serif" font-size="16">y no en terminos de formulario global.</text>
+
+  <rect x="565" y="150" width="470" height="760" rx="28" fill="#FFFDFC" stroke="#D8D0C2"/>
+  <text x="597" y="205" fill="#17392D" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">Opcion B · Caja fija abajo</text>
+  <text x="597" y="236" fill="#6A736B" font-family="Segoe UI, Arial, sans-serif" font-size="16">Patron chat/ticket moderno. Reduce friccion y siempre esta visible.</text>
+  <rect x="597" y="276" width="406" height="470" rx="24" fill="#F7F8F6" stroke="#D9DED8"/>
+  <rect x="621" y="304" width="358" height="126" rx="18" fill="#FFFFFF" stroke="#D9DED8"/>
+  <text x="645" y="338" fill="#2C4A3D" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">11/05/2026 17:55 · admin</text>
+  <text x="645" y="382" fill="#233028" font-family="Segoe UI, Arial, sans-serif" font-size="22">Hola</text>
+  <text x="887" y="402" fill="#587063" font-family="Segoe UI, Arial, sans-serif" font-size="15">Responder</text>
+  <rect x="621" y="448" width="358" height="104" rx="18" fill="#FDFDFC" stroke="#D9DED8"/>
+  <text x="645" y="482" fill="#2C4A3D" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">12/05/2026 09:10 · usuario</text>
+  <text x="645" y="520" fill="#233028" font-family="Segoe UI, Arial, sans-serif" font-size="22">Adjunto la documentacion</text>
+  <rect x="621" y="590" width="358" height="128" rx="18" fill="#FFFFFF" stroke="#D9DED8"/>
+  <text x="645" y="624" fill="#2C4A3D" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">12/05/2026 10:02 · admin</text>
+  <text x="645" y="662" fill="#233028" font-family="Segoe UI, Arial, sans-serif" font-size="22">Recibido, revisamos y te avisamos</text>
+  <rect x="597" y="768" width="406" height="110" rx="24" fill="#FFFFFF" stroke="#BFD0C5"/>
+  <text x="621" y="806" fill="#6D776F" font-family="Segoe UI, Arial, sans-serif" font-size="20">Escribe una respuesta...</text>
+  <rect x="621" y="826" width="104" height="32" rx="16" fill="#E6EFEB"/>
+  <text x="648" y="846" fill="#264739" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700">Adjuntar</text>
+  <rect x="867" y="820" width="112" height="40" rx="20" fill="#0D7A5B"/>
+  <text x="903" y="846" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">Enviar</text>
+  <text x="597" y="906" fill="#17392D" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">Cuando usarla</text>
+  <text x="597" y="936" fill="#4F5E55" font-family="Segoe UI, Arial, sans-serif" font-size="16">Si la accion principal es responder rapido y varias veces.</text>
+
+  <rect x="1070" y="150" width="470" height="760" rx="28" fill="#FFFDFC" stroke="#D8D0C2"/>
+  <text x="1102" y="205" fill="#17392D" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">Opcion C · Barra superior compacta</text>
+  <text x="1102" y="236" fill="#6A736B" font-family="Segoe UI, Arial, sans-serif" font-size="16">Patron enterprise. Menos visual, mas cercano a mesa de ayuda clasica.</text>
+  <rect x="1102" y="276" width="406" height="56" rx="16" fill="#EDF1F5"/>
+  <text x="1128" y="310" fill="#294357" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">Responder</text>
+  <text x="1250" y="310" fill="#5D6B77" font-family="Segoe UI, Arial, sans-serif" font-size="18">Buscar</text>
+  <text x="1336" y="310" fill="#5D6B77" font-family="Segoe UI, Arial, sans-serif" font-size="18">Filtrar</text>
+  <text x="1428" y="310" fill="#5D6B77" font-family="Segoe UI, Arial, sans-serif" font-size="18">Orden</text>
+  <rect x="1102" y="356" width="406" height="138" rx="18" fill="#FFFFFF" stroke="#D9DED8"/>
+  <text x="1126" y="392" fill="#2C4A3D" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">11/05/2026 17:55 · admin · Publico</text>
+  <text x="1126" y="432" fill="#233028" font-family="Segoe UI, Arial, sans-serif" font-size="22">Hola</text>
+  <text x="1126" y="468" fill="#617067" font-family="Segoe UI, Arial, sans-serif" font-size="16">Ver hilo</text>
+  <rect x="1102" y="516" width="406" height="138" rx="18" fill="#FFFFFF" stroke="#D9DED8"/>
+  <text x="1126" y="552" fill="#2C4A3D" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">12/05/2026 09:10 · usuario · Publico</text>
+  <text x="1126" y="592" fill="#233028" font-family="Segoe UI, Arial, sans-serif" font-size="22">Adjunto la documentacion</text>
+  <text x="1126" y="628" fill="#617067" font-family="Segoe UI, Arial, sans-serif" font-size="16">Ver hilo</text>
+  <rect x="1102" y="684" width="406" height="162" rx="20" fill="#F7FAF7" stroke="#D9DED8"/>
+  <text x="1128" y="722" fill="#28453A" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700">Panel de respuesta</text>
+  <rect x="1128" y="742" width="354" height="64" rx="14" fill="#FFFFFF" stroke="#B9C9BE" stroke-dasharray="6 6"/>
+  <text x="1148" y="780" fill="#6D776F" font-family="Segoe UI, Arial, sans-serif" font-size="20">Escribe tu respuesta...</text>
+  <text x="1102" y="906" fill="#17392D" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">Cuando usarla</text>
+  <text x="1102" y="936" fill="#4F5E55" font-family="Segoe UI, Arial, sans-serif" font-size="16">Si necesitas filtros potentes y prioridad de gestion sobre conversacion.</text>
+</svg>
