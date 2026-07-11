@@ -31,7 +31,7 @@ class ExportService {
 	}
 
 	private function normalizeColumns(array $columns): array {
-		$allowed = ['number', 'createdBy', 'province', 'title', 'userDescription', 'assignment', 'status', 'urgency', 'createdAt', 'updatedAt'];
+		$allowed = ['number', 'createdBy', 'province', 'title', 'userDescription', 'assignment', 'attachments', 'status', 'urgency', 'createdAt', 'updatedAt'];
 		$selected = array_values(array_filter($columns, static fn (string $column) => in_array($column, $allowed, true)));
 
 		return $selected !== [] ? $selected : ['number', 'createdBy', 'title', 'userDescription', 'assignment'];
@@ -45,6 +45,7 @@ class ExportService {
 			'title' => 'titulo',
 			'userDescription' => 'descripcion',
 			'assignment' => 'asignacion',
+			'attachments' => 'adjuntos',
 			'status' => 'estado',
 			'urgency' => 'urgencia',
 			'createdAt' => 'fecha_apertura',
@@ -61,6 +62,7 @@ class ExportService {
 			'title' => (string) ($row['title'] ?? ''),
 			'userDescription' => (string) ($row['userDescription'] ?? ''),
 			'assignment' => $this->formatAssignment($row),
+			'attachments' => implode('|', array_map('strval', is_array($row['attachmentNames'] ?? null) ? $row['attachmentNames'] : [])),
 			'status' => (string) ($row['status'] ?? ''),
 			'urgency' => isset($row['urgencyId']) && $row['urgencyId'] !== null ? (string) $row['urgencyId'] : '',
 			'createdAt' => date('c', (int) ($row['createdAt'] ?? time())),

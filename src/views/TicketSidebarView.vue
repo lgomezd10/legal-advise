@@ -49,12 +49,31 @@ async function download(attachmentId: number) {
 	URL.revokeObjectURL(link.href)
 }
 
-async function commentOnTicket(payload: { body: string, visibility: 'interno' | 'publico', files: File[], links: TicketAttachmentLinkDraft[] }) {
+async function commentOnTicket(payload: { body: string, visibility: 'interno' | 'publico', files: File[], links: TicketAttachmentLinkDraft[], waitForUser?: boolean }) {
 	if (!ticketsStore.selected) {
 		return
 	}
 
 	await ticketsStore.comment(ticketsStore.selected.id, payload)
+	if (supportMode.value && payload.waitForUser) {
+		await ticketsStore.update(ticketsStore.selected.id, { status: 'en_espera_usuario' })
+	}
+}
+
+async function deleteCommentOnTicket(payload: { commentId: number, restoreAssignedStatus: boolean }) {
+	if (!ticketsStore.selected || !supportMode.value) {
+		return
+	}
+
+	await ticketsStore.deleteComment(ticketsStore.selected.id, payload.commentId, payload.restoreAssignedStatus)
+}
+
+async function editCommentOnTicket(payload: { commentId: number, body: string, visibility: 'interno' | 'publico' }) {
+	if (!ticketsStore.selected || !supportMode.value) {
+		return
+	}
+
+	await ticketsStore.editComment(ticketsStore.selected.id, payload.commentId, payload)
 }
 
 async function saveTicket(payload: Record<string, unknown>) {
@@ -73,12 +92,15 @@ async function reopenTicket() {
 	await ticketsStore.reopen(ticketsStore.selected.id)
 }
 
-async function assignToCurrentUser() {
+async function assignToCurrentUser(payload?: { assignedUserUid: string | null, assignedGroupId: string | null }) {
 	if (!ticketsStore.selected || !supportMode.value) {
 		return
 	}
 
-	await ticketsStore.update(ticketsStore.selected.id, { assignedUserUid: bootstrapStore.data.currentUser.uid })
+	await ticketsStore.update(ticketsStore.selected.id, payload ?? {
+		assignedUserUid: bootstrapStore.data.currentUser.uid,
+		assignedGroupId: null,
+	})
 }
 
 function openFullscreen() {
@@ -123,6 +145,8 @@ function repeatTicket() {
 		:show-fullscreen="true"
 		:show-repeat="!supportMode"
 		@comment="commentOnTicket"
+		@edit-comment="editCommentOnTicket"
+		@delete-comment="deleteCommentOnTicket"
 		@save="saveTicket"
 		@download="download"
 		@fullscreen="openFullscreen"

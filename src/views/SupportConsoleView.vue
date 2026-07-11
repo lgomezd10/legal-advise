@@ -47,6 +47,7 @@ const availableColumns: Array<{ key: SupportColumnKey, label: string }> = [
 	{ key: 'title', label: 'Título' },
 	{ key: 'userDescription', label: 'Descripción' },
 	{ key: 'status', label: 'Estado' },
+	{ key: 'attachments', label: 'Adjuntos' },
 	{ key: 'urgency', label: 'Criticidad' },
 	{ key: 'createdAt', label: 'Fecha de apertura' },
 ]
@@ -82,6 +83,9 @@ function getSortValue(ticket: Ticket, key: SupportColumnKey | 'createdBy') {
 	}
 	if (key === 'assignment') {
 		return `${ticket.assignedUserUid ?? ''} ${ticket.assignedGroupId ?? ''}`.trim()
+	}
+	if (key === 'attachments') {
+		return (ticket.attachmentNames ?? []).join(' | ')
 	}
 	if (key === 'status') {
 		return ticket.status || ''
@@ -156,6 +160,7 @@ async function applySelectedFilter(filterId: number | null) {
 
 onMounted(async() => {
 	const savedState = loadSupportConsoleState()
+	const restoredSavedCriteria = savedState !== null
 	if (savedState) {
 		columnEditorOrder.value = normalizeSupportColumnOrder(savedState.columnEditorOrder, DEFAULT_COLUMN_EDITOR_ORDER)
 		visibleColumns.value = columnEditorOrder.value.filter((column) => normalizeSupportColumns(savedState.visibleColumns, DEFAULT_SUPPORT_COLUMNS).includes(column))
@@ -173,7 +178,7 @@ onMounted(async() => {
 	if (routeFilterId !== null && resolveFilterCriteria(routeFilterId)) {
 		selectedFilterId.value = routeFilterId
 		criteria.value = normalizeSupportCriteria(resolveFilterCriteria(routeFilterId)?.criteria ?? {})
-	} else if (Object.keys(criteria.value).length === 0) {
+	} else if (!restoredSavedCriteria && Object.keys(criteria.value).length === 0) {
 		criteria.value = normalizeSupportCriteria(initialCriteria.value)
 		if (selectedFilterId.value === null && Object.keys(criteria.value).length > 0) {
 			selectedFilterId.value = supportFiltersStore.defaultFilterId
@@ -330,6 +335,7 @@ function closeColumnEditor() {
 			@delete="supportFiltersStore.remove" />
 		<SupportTicketTable
 			:tickets="sortedTickets"
+			:statuses="statuses"
 			:urgencies="urgencies"
 			:types="types"
 			:visible-columns="orderedVisibleColumns"

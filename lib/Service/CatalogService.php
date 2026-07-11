@@ -68,6 +68,7 @@ class CatalogService {
 
 	public static function normalizeStatusCatalog(mixed $entries): array {
 		$labelsById = [];
+		$currentOrder = [];
 		if (is_array($entries)) {
 			foreach ($entries as $entry) {
 				if (!is_array($entry)) {
@@ -81,11 +82,31 @@ class CatalogService {
 						'label' => $label,
 						'active' => isset($entry['active']) ? (bool) $entry['active'] : null,
 					];
+					$currentOrder[] = $id;
 				}
 			}
 		}
 
-		return array_map(static function (array $definition) use ($labelsById): array {
+		$definitionsById = [];
+		foreach (self::CORE_STATUS_DEFINITIONS as $definition) {
+			$definitionsById[$definition['id']] = $definition;
+		}
+
+		$orderedIds = [];
+		foreach ($currentOrder as $id) {
+			if (isset($definitionsById[$id]) && !in_array($id, $orderedIds, true)) {
+				$orderedIds[] = $id;
+			}
+		}
+
+		foreach (self::CORE_STATUS_DEFINITIONS as $definition) {
+			if (!in_array($definition['id'], $orderedIds, true)) {
+				$orderedIds[] = $definition['id'];
+			}
+		}
+
+		return array_map(static function (string $id) use ($definitionsById, $labelsById): array {
+			$definition = $definitionsById[$id];
 			$id = $definition['id'];
 			$current = $labelsById[$id] ?? [];
 			return [
@@ -97,7 +118,7 @@ class CatalogService {
 				'toggleable' => (bool) $definition['toggleable'],
 				'description' => $definition['description'],
 			];
-		}, self::CORE_STATUS_DEFINITIONS);
+		}, $orderedIds);
 	}
 
 	public function isClosedStatus(string $statusId): bool {

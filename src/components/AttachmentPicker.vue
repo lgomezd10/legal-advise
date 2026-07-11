@@ -13,10 +13,16 @@ const props = withDefaults(defineProps<{
 	modelValue?: AttachmentDraft | null
 	allowedExtensions?: string[]
 	maxFileSizeMb?: number
+	showToolbar?: boolean
+	showUrlAction?: boolean
+	showHelperInfo?: boolean
 }>(), {
 	modelValue: null,
 	allowedExtensions: () => [],
 	maxFileSizeMb: 25,
+	showToolbar: true,
+	showUrlAction: true,
+	showHelperInfo: true,
 })
 
 const emit = defineEmits<{
@@ -118,6 +124,11 @@ onBeforeUnmount(() => {
 	clearPendingFocusHandler()
 })
 
+defineExpose({
+	openFileDialog,
+	openUrlModal,
+})
+
 function removeFile(index: number) {
 	files.value.splice(index, 1)
 	emitValue()
@@ -171,11 +182,11 @@ function saveUrl() {
 
 <template>
 	<div class="gi-attachment-picker">
-		<div class="gi-attachment-picker__toolbar">
+		<div v-if="showToolbar" class="gi-attachment-picker__toolbar">
 			<button class="gi-secondary-button gi-attachment-picker__trigger" type="button" @click="openFileDialog">Adjuntar archivos</button>
 			<input :id="`${instanceId}-files`" ref="fileInputRef" :name="`${instanceId}-files`" class="gi-attachment-picker__input" type="file" multiple :accept="allowedExtensionsAccept" @change="onFileChange" />
-			<button class="gi-secondary-button" type="button" @click="openUrlModal">Adjuntar URL</button>
-			<div v-if="allowedExtensionsLabel" class="gi-attachment-picker__helper-info">
+			<button v-if="showUrlAction" class="gi-secondary-button" type="button" @click="openUrlModal">Adjuntar URL</button>
+			<div v-if="showHelperInfo && allowedExtensionsLabel" class="gi-attachment-picker__helper-info">
 				<button class="gi-round-icon-button gi-attachment-picker__helper-button" type="button" aria-label="Ver tipos de archivo permitidos" :aria-expanded="extensionsInfoOpen" @click="extensionsInfoOpen = !extensionsInfoOpen">
 					<svg viewBox="0 0 20 20" aria-hidden="true">
 						<path d="M10 1.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 0 0 0-17Zm0 12.3a1 1 0 1 1 0 2a1 1 0 0 1 0-2Zm1.2-2.7c-.65.42-.8.7-.8 1.2v.25H9v-.35c0-1.02.43-1.66 1.24-2.18c.73-.47 1.09-.81 1.09-1.43c0-.75-.6-1.2-1.46-1.2c-.84 0-1.49.34-2.07.95L6.9 7.3c.74-.9 1.8-1.45 3.23-1.45c1.77 0 3 .99 3 2.5c0 1.24-.7 1.93-1.93 2.75Z" />
@@ -186,8 +197,9 @@ function saveUrl() {
 					<span>{{ allowedExtensionsLabel }}</span>
 				</div>
 			</div>
-			<span class="gi-attachment-picker__helper">Maximo: {{ maxFileSizeMb }} MB</span>
+			<span v-if="showHelperInfo" class="gi-attachment-picker__helper">Maximo: {{ maxFileSizeMb }} MB</span>
 		</div>
+		<input v-else :id="`${instanceId}-files`" ref="fileInputRef" :name="`${instanceId}-files`" class="gi-attachment-picker__input" type="file" multiple :accept="allowedExtensionsAccept" @change="onFileChange" />
 
 		<ul v-if="files.length || links.length" class="gi-attachment-picker__list">
 			<li v-for="(file, index) in files" :key="`${file.name}-${file.size}-${file.lastModified}`" class="gi-row-card gi-attachment-picker__item">

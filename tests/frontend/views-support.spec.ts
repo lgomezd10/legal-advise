@@ -252,6 +252,53 @@ describe('Pantallas de soporte', () => {
 		expect(ticketsStoreMock.update).toHaveBeenCalledWith(100, { status: 'en_espera_usuario' })
 	})
 
+	it('al comentar desde soporte completo puede pasar el ticket a en espera de usuario sin guardar aparte', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
+		routeState.path = '/soporte/100/completo'
+		routeState.params = { ticketId: '100' }
+		ticketsStoreMock.selected = createTicket({ id: 100, canManage: true, status: 'nuevo' })
+
+		const wrapper = mount(SupportTicketFullView, {
+			global: {
+				stubs: {
+					TicketSidebarPanel: TicketSidebarPanelStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const panel = wrapper.getComponent(TicketSidebarPanelStub)
+		panel.vm.$emit('comment', { body: '<p>Seguimiento</p>', visibility: 'publico', files: [], links: [], waitForUser: true })
+		await flushPromises()
+
+		expect(ticketsStoreMock.comment).toHaveBeenCalledWith(100, expect.objectContaining({ body: '<p>Seguimiento</p>' }))
+		expect(ticketsStoreMock.update).toHaveBeenCalledWith(100, { status: 'en_espera_usuario' })
+	})
+
+	it('al asignarse a si mismo desde soporte completo limpia el grupo anterior incompatible', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte', 'administrador'] })
+		routeState.path = '/soporte/100/completo'
+		routeState.params = { ticketId: '100' }
+		ticketsStoreMock.selected = createTicket({ id: 100, canManage: true, assignedGroupId: 'grupo-soporte' })
+
+		const wrapper = mount(SupportTicketFullView, {
+			global: {
+				stubs: {
+					TicketSidebarPanel: TicketSidebarPanelStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const panel = wrapper.getComponent(TicketSidebarPanelStub)
+		panel.vm.$emit('assign-to-me', { assignedUserUid: 'usuario1', assignedGroupId: null })
+		await flushPromises()
+
+		expect(ticketsStoreMock.update).toHaveBeenCalledWith(100, { assignedUserUid: 'usuario1', assignedGroupId: null })
+	})
+
 	it('configura el panel lateral en modo soporte con edición habilitada', async() => {
 		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
 		routeState.path = '/soporte/100'
@@ -298,6 +345,53 @@ describe('Pantallas de soporte', () => {
 		expect(ticketsStoreMock.update).toHaveBeenCalledWith(100, { status: 'en_espera_usuario' })
 	})
 
+	it('al comentar desde el panel lateral de soporte puede pasar el ticket a en espera de usuario sin guardar aparte', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte'] })
+		routeState.path = '/soporte/100'
+		routeState.params = { ticketId: '100' }
+		ticketsStoreMock.selected = createTicket({ id: 100, canManage: true, status: 'nuevo' })
+
+		const wrapper = mount(TicketSidebarView, {
+			global: {
+				stubs: {
+					TicketSidebarPanel: TicketSidebarPanelStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const panel = wrapper.getComponent(TicketSidebarPanelStub)
+		panel.vm.$emit('comment', { body: '<p>Seguimiento</p>', visibility: 'publico', files: [], links: [], waitForUser: true })
+		await flushPromises()
+
+		expect(ticketsStoreMock.comment).toHaveBeenCalledWith(100, expect.objectContaining({ body: '<p>Seguimiento</p>' }))
+		expect(ticketsStoreMock.update).toHaveBeenCalledWith(100, { status: 'en_espera_usuario' })
+	})
+
+	it('al asignarse a si mismo desde el panel lateral limpia el grupo anterior incompatible', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['soporte', 'administrador'] })
+		routeState.path = '/soporte/100'
+		routeState.params = { ticketId: '100' }
+		ticketsStoreMock.selected = createTicket({ id: 100, canManage: true, assignedGroupId: 'grupo-soporte' })
+
+		const wrapper = mount(TicketSidebarView, {
+			global: {
+				stubs: {
+					TicketSidebarPanel: TicketSidebarPanelStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const panel = wrapper.getComponent(TicketSidebarPanelStub)
+		panel.vm.$emit('assign-to-me', { assignedUserUid: 'usuario1', assignedGroupId: null })
+		await flushPromises()
+
+		expect(ticketsStoreMock.update).toHaveBeenCalledWith(100, { assignedUserUid: 'usuario1', assignedGroupId: null })
+	})
+
 	it('configura el panel lateral en modo usuario con repetición y solo lectura', async() => {
 		bootstrapStoreMock.data = createBootstrapData({ roles: ['usuario'] })
 		routeState.path = '/mis-incidencias/100'
@@ -315,6 +409,28 @@ describe('Pantallas de soporte', () => {
 		await flushPromises()
 
 		const panel = wrapper.getComponent(TicketSidebarPanelStub)
+		expect(panel.props('readOnly')).toBe(true)
+		expect(panel.props('showRepeat')).toBe(true)
+	})
+
+	it('mantiene el panel lateral en modo usuario dentro de Mis tickets aunque la cuenta tenga roles de soporte o administración', async() => {
+		bootstrapStoreMock.data = createBootstrapData({ roles: ['administrador', 'soporte', 'usuario'] })
+		routeState.path = '/mis-incidencias/100'
+		routeState.params = { ticketId: '100' }
+		ticketsStoreMock.selected = createTicket({ id: 100, canManage: true })
+
+		const wrapper = mount(TicketSidebarView, {
+			global: {
+				stubs: {
+					TicketSidebarPanel: TicketSidebarPanelStub,
+				},
+			},
+		})
+
+		await flushPromises()
+
+		const panel = wrapper.getComponent(TicketSidebarPanelStub)
+		expect(panel.props('roles')).toEqual(['usuario'])
 		expect(panel.props('readOnly')).toBe(true)
 		expect(panel.props('showRepeat')).toBe(true)
 	})

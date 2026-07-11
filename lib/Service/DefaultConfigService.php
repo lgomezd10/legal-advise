@@ -96,9 +96,9 @@ class DefaultConfigService {
 
 	private function ensureUrgencies(): void {
 		$defaults = [
-			['name' => 'Baja', 'weight' => 1, 'color' => '#7A8F62'],
+			['name' => 'Alta', 'weight' => 1, 'color' => '#D96C3F'],
 			['name' => 'Media', 'weight' => 2, 'color' => '#D9A441'],
-			['name' => 'Alta', 'weight' => 3, 'color' => '#D96C3F'],
+			['name' => 'Baja', 'weight' => 3, 'color' => '#7A8F62'],
 		];
 
 		foreach ($defaults as $row) {
@@ -151,6 +151,20 @@ class DefaultConfigService {
 	 * @return array<string, int>
 	 */
 	private function ensureTypes(): array {
+		$existingTypes = $this->typeMapper->findAllOrdered('level', 'ASC');
+		if ($existingTypes !== []) {
+			$this->markTypeDefaultsSeeded();
+
+			return array_reduce($existingTypes, static function (array $typeIds, IncidentType $type): array {
+				$typeIds[(string) $type->getSlug()] = (int) $type->getId();
+				return $typeIds;
+			}, []);
+		}
+
+		if ($this->hasSeededTypeDefaults()) {
+			return [];
+		}
+
 		$defaults = [
 			['slug' => 'necesito-asesoramiento', 'name' => 'Necesito asesoramiento', 'legacyNames' => ['Neceisto asesoramiento'], 'parentSlug' => null, 'level' => 0, 'sortOrder' => 10],
 			['slug' => 'necesito-asesoramiento-solo-territorial', 'name' => 'Solo Territorial', 'parentSlug' => 'necesito-asesoramiento', 'level' => 1, 'sortOrder' => 10],
@@ -183,7 +197,36 @@ class DefaultConfigService {
 			$typeIds[$row['slug']] = (int) $this->typeMapper->insert($entity)->getId();
 		}
 
+		$this->markTypeDefaultsSeeded();
+
 		return $typeIds;
+	}
+
+	private function hasSeededTypeDefaults(): bool {
+		$existing = $this->settingMapper->findOneBy('config_key', 'types_defaults_seeded');
+		if (!$existing instanceof AppSetting) {
+			return false;
+		}
+
+		return (bool) $existing->getConfigValue();
+	}
+
+	private function markTypeDefaultsSeeded(): void {
+		$existing = $this->settingMapper->findOneBy('config_key', 'types_defaults_seeded');
+		if ($existing instanceof AppSetting) {
+			if ((bool) $existing->getConfigValue() === true) {
+				return;
+			}
+
+			$existing->setConfigValue(true);
+			$this->settingMapper->update($existing);
+			return;
+		}
+
+		$setting = new AppSetting();
+		$setting->setConfigKey('types_defaults_seeded');
+		$setting->setConfigValue(true);
+		$this->settingMapper->insert($setting);
 	}
 
 	/**

@@ -71,7 +71,7 @@ function buildUpdateDetails(entry: TicketHistoryEntry, context: HistoryContext) 
 	}
 
 	if (Object.prototype.hasOwnProperty.call(payload, 'supportDescription')) {
-		details.push('Descripción de soporte actualizada')
+		details.push('Notas de soporte actualizadas')
 	}
 
 	if (Object.prototype.hasOwnProperty.call(payload, 'userDescription')) {

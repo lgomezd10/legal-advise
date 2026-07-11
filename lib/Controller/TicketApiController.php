@@ -59,6 +59,14 @@ class TicketApiController extends BaseApiController {
 	}
 
 	#[NoAdminRequired]
+	public function destroy(int $id): DataResponse {
+		return $this->respond(function () use ($id): array {
+			$uid = $this->assertAppAccess();
+			return $this->ticketService->deleteTicket($uid, $id);
+		});
+	}
+
+	#[NoAdminRequired]
 	public function reopen(int $id): DataResponse {
 		return $this->respond(function () use ($id): array {
 			$uid = $this->assertAppAccess();
@@ -72,6 +80,23 @@ class TicketApiController extends BaseApiController {
 			$uid = $this->assertAppAccess();
 			return $this->ticketService->addComment($uid, $id, $this->getRequestPayload());
 		}, 201);
+	}
+
+	#[NoAdminRequired]
+	public function updateComment(int $id, int $commentId): DataResponse {
+		return $this->respond(function () use ($id, $commentId): array {
+			$uid = $this->assertAppAccess();
+			return $this->ticketService->updateComment($uid, $id, $commentId, $this->getRequestPayload());
+		});
+	}
+
+	#[NoAdminRequired]
+	public function deleteComment(int $id, int $commentId): DataResponse {
+		return $this->respond(function () use ($id, $commentId): array {
+			$uid = $this->assertAppAccess();
+			$restoreAssignedStatus = filter_var($this->request->getParam('restoreAssignedStatus') ?? false, FILTER_VALIDATE_BOOLEAN);
+			return $this->ticketService->deleteComment($uid, $id, $commentId, $restoreAssignedStatus);
+		});
 	}
 
 	private function getRequestPayload(): array {
