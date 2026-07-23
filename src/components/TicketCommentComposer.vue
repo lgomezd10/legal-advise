@@ -110,9 +110,10 @@ defineExpose({
 <style scoped>
 .gi-ticket-comment-composer {
 	padding: 0;
-	border: 1px solid rgba(49, 96, 91, .12);
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .12));
 	border-radius: 16px;
-	background: rgba(244, 248, 245, .98);
+	background: var(--gi-color-surface-subtle, rgba(244, 248, 245, .98));
+	color: var(--gi-color-text, #222222);
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6);
 	display: grid;
 	gap: .9rem;

@@ -32,6 +32,21 @@ async function download(attachmentId: number) {
 	URL.revokeObjectURL(link.href)
 }
 
+async function downloadArchive(attachmentIds: number[]) {
+	if (!ticketsStore.selected) {
+		return
+	}
+
+	const result = await ticketsStore.downloadArchive(ticketsStore.selected.id, attachmentIds)
+	const binary = atob(result.content)
+	const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+	const link = document.createElement('a')
+	link.href = URL.createObjectURL(new Blob([bytes], { type: result.mimeType }))
+	link.download = result.filename
+	link.click()
+	URL.revokeObjectURL(link.href)
+}
+
 async function commentOnTicket(payload: { body: string, visibility: 'interno' | 'publico', files: File[], links: TicketAttachmentLinkDraft[], waitForUser?: boolean }) {
 	if (!ticketsStore.selected) {
 		return
@@ -95,6 +110,7 @@ function repeatTicket() {
 			:show-repeat="true"
 			@comment="commentOnTicket"
 			@download="download"
+			@download-archive="downloadArchive"
 			@reopen="reopenTicket"
 			@repeat="repeatTicket"
 		/>

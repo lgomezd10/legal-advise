@@ -183,6 +183,7 @@ export interface BootstrapData {
 		appInfo: {
 			id: string
 			version: string
+			displayName: string
 			storageBytes: number
 			storageLabel: string
 			appDataBytes: number

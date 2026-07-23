@@ -83,6 +83,70 @@ class AttachmentService {
 		}
 	}
 
+	/**
+	 * @param array<int, array<string, mixed>> $attachments
+	 */
+	public function downloadArchive(array $attachments, string $ticketNumber): array {
+		if ($attachments === []) {
+			throw new \InvalidArgumentException('No hay archivos disponibles para descargar.');
+		}
+
+		if (!class_exists(\ZipArchive::class)) {
+			throw new \RuntimeException('La descarga de adjuntos en ZIP no está disponible en este momento.', 503);
+		}
+
+		$temporaryFile = tempnam(sys_get_temp_dir(), 'legal-advice-attachments-');
+		if ($temporaryFile === false) {
+			throw new \RuntimeException('No se pudo preparar la descarga de adjuntos.', 503);
+		}
+
+		try {
+			$archive = new \ZipArchive();
+			if ($archive->open($temporaryFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+				throw new \RuntimeException('No se pudo preparar la descarga de adjuntos.', 503);
+			}
+
+			$usedNames = [];
+			foreach ($attachments as $attachment) {
+				$storedName = trim((string) ($attachment['storedName'] ?? ''));
+				$attachmentTicketId = (int) ($attachment['ticketId'] ?? 0);
+				if ($storedName === '' || $attachmentTicketId <= 0) {
+					continue;
+				}
+
+				$file = $this->getOrCreateFolder('attachments')->getFolder((string) $attachmentTicketId)->getFile($storedName);
+				$entryName = $this->uniqueArchiveEntryName((string) ($attachment['originalName'] ?? 'adjunto'), $usedNames);
+				if ($archive->addFromString($entryName, $file->getContent()) === false) {
+					throw new \RuntimeException('No se pudo añadir un adjunto al archivo ZIP.', 503);
+				}
+			}
+
+			$archive->close();
+			$content = file_get_contents($temporaryFile);
+			if ($content === false) {
+				throw new \RuntimeException('No se pudo preparar la descarga de adjuntos.', 503);
+			}
+
+			$safeTicketNumber = preg_replace('/[^A-Za-z0-9_.-]/', '_', $ticketNumber) ?: 'ticket';
+			return [
+				'filename' => "adjuntos-{$safeTicketNumber}.zip",
+				'mimeType' => 'application/zip',
+				'content' => base64_encode($content),
+			];
+		} catch (\RuntimeException $exception) {
+			$status = (int) $exception->getCode();
+			if ($status >= 400 && $status <= 599) {
+				throw $exception;
+			}
+
+			throw new \RuntimeException('No se pudo descargar los adjuntos en este momento.', 503);
+		} catch (\Throwable) {
+			throw new \RuntimeException('No se pudo descargar los adjuntos en este momento.', 503);
+		} finally {
+			@unlink($temporaryFile);
+		}
+	}
+
 	public function listForTicket(int $ticketId): array {
 		return array_map(static fn ($row) => $row->jsonSerialize(), $this->attachmentMapper->findBy('ticket_id', $ticketId, 'created_at', 'ASC'));
 	}
@@ -150,6 +214,23 @@ class AttachmentService {
 		} catch (\Throwable) {
 			return $this->appData->newFolder($name);
 		}
+	}
+
+	/**
+	 * @param array<string, int> $usedNames
+	 */
+	private function uniqueArchiveEntryName(string $originalName, array &$usedNames): string {
+		$baseName = trim(basename($originalName));
+		$baseName = $baseName === '' ? 'adjunto' : $baseName;
+		if (!isset($usedNames[$baseName])) {
+			$usedNames[$baseName] = 1;
+			return $baseName;
+		}
+
+		$usedNames[$baseName]++;
+		$extension = pathinfo($baseName, PATHINFO_EXTENSION);
+		$name = pathinfo($baseName, PATHINFO_FILENAME);
+		return $name . ' (' . $usedNames[$baseName] . ')' . ($extension !== '' ? '.' . $extension : '');
 	}
 
 	private function deleteAttachmentEntity(Attachment $attachment): void {

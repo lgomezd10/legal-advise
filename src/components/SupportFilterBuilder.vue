@@ -1163,8 +1163,8 @@ function getSuggestedSaveName() {
 	gap: .75rem;
 	padding: .55rem .75rem;
 	border-radius: 18px;
-	background: rgba(242, 246, 243, .92);
-	border: 1px solid rgba(49, 96, 91, .1);
+	background: var(--gi-color-surface-subtle, rgba(242, 246, 243, .92));
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .1));
 }
 
 .gi-filter-chip-bar__label {
@@ -1172,7 +1172,7 @@ function getSuggestedSaveName() {
 	font-weight: 700;
 	letter-spacing: .04em;
 	text-transform: uppercase;
-	color: #4b645d;
+	color: var(--gi-color-text-muted, #4b645d);
 	white-space: nowrap;
 }
 

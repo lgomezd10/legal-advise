@@ -35,6 +35,8 @@ La app puede instalarse desde el apartado `Apps` de Nextcloud. En el Store apare
 - Consulta del estado actual y del historial visible de cada incidencia.
 - Pantalla de detalle en modo solo lectura para los datos del ticket.
 - Publicación de comentarios y adjuntos como parte de la conversación.
+- Descarga de todos los archivos adjuntos de un comentario en un único archivo ZIP.
+- Pestaña `Adjuntos` para seleccionar y descargar todos o solo los archivos seleccionados en ZIP.
 - Acción de `Repetir incidencia` para reutilizar información de un caso anterior.
 - Configuración personal para precargar datos frecuentes en nuevas solicitudes.
 
@@ -45,12 +47,14 @@ La app puede instalarse desde el apartado `Apps` de Nextcloud. En el Store apare
 - Filtros predefinidos y filtros guardados por el equipo.
 - Gestión de estado, criticidad, asignación y descripción interna de soporte.
 - Comentarios internos o visibles para el usuario según el contexto.
+- Pestaña `Adjuntos` en el detalle, con descarga ZIP de todos los archivos o de una selección.
 - Edición y borrado del último comentario propio de soporte dentro del flujo de trabajo del ticket.
 - Exportación CSV del conjunto visible de resultados.
 - Integración opcional con Tasks para crear o actualizar tareas asociadas al ticket asignado.
 
 ### Administración
 
+- Modificación del nombre visible de la App.
 - Gestión de perfiles funcionales y acceso por usuarios o grupos de Nextcloud.
 - Configuración de tipos y subtipos de incidencia.
 - Catálogos iniciales para empezar a usar la app desde el primer arranque.

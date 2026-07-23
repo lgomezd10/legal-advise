@@ -7,6 +7,7 @@ const fallbackState: BootstrapData = {
 		appInfo: {
 			id: 'legal_advice',
 			version: '',
+			displayName: 'Consultas Legales',
 			storageBytes: 0,
 			storageLabel: '0 B',
 			appDataBytes: 0,

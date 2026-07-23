@@ -19,6 +19,7 @@ type AdminConfigData = {
 	notifications: NotificationMatrixItem[]
 	attachmentConfig: { allowedExtensions: string[], maxFileSizeMb: number }
 	tasksConfig: Record<string, unknown>
+	appDisplayName: string
 }
 
 type StatusDraft = AdminStatusOption & { clientId: string }
@@ -48,6 +49,7 @@ const adminConfigStore = useAdminConfigStore()
 const bootstrapStore = useBootstrapStore()
 const taskConfig = reactive<{ enabled: boolean }>({ enabled: false })
 const attachmentConfig = reactive<{ allowedExtensionsText: string, maxFileSizeMb: number }>({ allowedExtensionsText: '', maxFileSizeMb: 25 })
+const appDisplayNameDraft = ref('')
 const statusDrafts = ref<StatusDraft[]>([])
 const urgencyDrafts = ref<UrgencyDraft[]>([])
 const typeDrafts = ref<EditableTypeNode[]>([])
@@ -86,6 +88,7 @@ const saveState = reactive({
 	profiles: '',
 	attachments: '',
 	tasks: '',
+	appDisplayName: '',
 })
 
 const adminSections = [
@@ -318,6 +321,7 @@ function syncDrafts() {
 	taskConfig.enabled = Boolean(adminData.value?.tasksConfig?.enabled)
 	attachmentConfig.allowedExtensionsText = (adminData.value?.attachmentConfig?.allowedExtensions ?? []).map((extension) => `.${extension}`).join(', ')
 	attachmentConfig.maxFileSizeMb = Math.max(1, Number(adminData.value?.attachmentConfig?.maxFileSizeMb ?? 25))
+	appDisplayNameDraft.value = typeof adminData.value?.appDisplayName === 'string' ? adminData.value.appDisplayName : ''
 	statusDrafts.value = normalizeStatuses(adminData.value?.statuses).map((item, index) => ({
 		...item,
 		clientId: buildClientId('status', item.id || index),
@@ -358,6 +362,7 @@ function syncDrafts() {
 	saveState.profiles = ''
 	saveState.attachments = ''
 	saveState.tasks = ''
+	saveState.appDisplayName = ''
 }
 
 function normalizeNotifications(entries: unknown): NotificationMatrixItem[] {
@@ -587,6 +592,18 @@ async function saveStatuses() {
 	await adminConfigStore.save({ statuses: payload })
 	syncDrafts()
 	saveState.statuses = 'Estados guardados.'
+}
+
+async function saveAppDisplayName() {
+	const name = appDisplayNameDraft.value.trim()
+	if (name === '') {
+		saveState.appDisplayName = 'El nombre visible no puede estar vacío.'
+		return
+	}
+
+	await adminConfigStore.save({ appDisplayName: name })
+	syncDrafts()
+	saveState.appDisplayName = 'Nombre visible guardado.'
 }
 
 function reorderStatuses(sourceClientId: string, targetClientId: string) {
@@ -950,6 +967,22 @@ async function saveNotifications(items: NotificationMatrixItem[]) {
 		</nav>
 
 		<section v-if="activeSection === 'info'" class="gi-admin-panel gi-admin-panel--stacked">
+			<section class="gi-admin-card gi-admin-card--fullwidth">
+				<div class="gi-admin-card__header">
+					<div>
+						<h2>Nombre visible en Nextcloud</h2>
+						<p>Este nombre se muestra en el menú de aplicaciones, la cabecera y la pestaña del navegador de Nextcloud.</p>
+					</div>
+					<div class="gi-admin-card__toolbar">
+						<button class="gi-primary-button" type="button" @click="saveAppDisplayName">Guardar</button>
+					</div>
+				</div>
+				<label class="gi-field gi-field--wide">
+					<span>Nombre de la aplicación</span>
+					<input id="app-display-name" v-model="appDisplayNameDraft" name="app-display-name" class="gi-input" type="text" maxlength="100" placeholder="Consultas Legales" />
+				</label>
+				<p v-if="saveState.appDisplayName" class="gi-admin-feedback">{{ saveState.appDisplayName }}</p>
+			</section>
 			<section class="gi-admin-card gi-admin-card--fullwidth">
 				<div class="gi-admin-card__header">
 					<div>
@@ -1405,6 +1438,7 @@ async function saveNotifications(items: NotificationMatrixItem[]) {
 	cursor: pointer;
 }
 
+.gi-admin-topnav__item:focus,
 .gi-admin-topnav__item--active {
 	background: rgba(11, 110, 79, .12);
 	border-color: rgba(11, 110, 79, .18);

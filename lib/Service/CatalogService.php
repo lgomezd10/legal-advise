@@ -10,6 +10,8 @@ use OCA\ConsultasLegales\Db\IncidentTypeMapper;
 use OCA\ConsultasLegales\Db\UrgencyMapper;
 
 class CatalogService {
+	public const DEFAULT_APP_DISPLAY_NAME = 'Consultas Legales';
+
 	private const DEFAULT_ATTACHMENT_CONFIG = [
 		'allowedExtensions' => [
 			'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf', 'txt',
@@ -202,6 +204,14 @@ class CatalogService {
 
 	public function getAllowedAttachmentExtensions(): array {
 		return $this->getAttachmentConfig()['allowedExtensions'] ?? [];
+	}
+
+	public function getAppDisplayName(): string {
+		$setting = $this->settingMapper->findOneBy('config_key', 'app_display_name');
+		$value = $setting?->getConfigValue();
+		$name = is_string($value) ? trim($value) : '';
+
+		return $name !== '' ? $name : self::DEFAULT_APP_DISPLAY_NAME;
 	}
 
 	public function getMaxAttachmentFileSizeBytes(): int {

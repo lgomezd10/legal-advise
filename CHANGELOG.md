@@ -1,3 +1,13 @@
+## 0.4.0
+
+### Added
+- Añadida configuración en la consola de administración (pestaña `Información`) para personalizar el nombre visible de la aplicación en el menú de aplicaciones, la cabecera y la pestaña del navegador de Nextcloud.
+- Añadida descarga ZIP de todos los archivos adjuntos de cada comentario.
+- Añadida la pestaña `Adjuntos` en el detalle de soporte, con selección de archivos y descarga ZIP de todos o de los seleccionados.
+
+### Fixed
+- Corregidos los colores en el modo oscuro del navegador
+
 ## 0.3.2
 
 ### Changed

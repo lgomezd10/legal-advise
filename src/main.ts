@@ -46,6 +46,11 @@ function bootstrapApplication() {
 	app.use(pinia)
 	const bootstrapStore = useBootstrapStore(pinia)
 
+	const appDisplayName = bootstrapStore.data.appInfo.displayName
+	if (appDisplayName) {
+		document.title = appDisplayName
+	}
+
 	router.beforeEach((to) => {
 		if (to.path === '/') {
 			return resolveLandingRoute(bootstrapStore)

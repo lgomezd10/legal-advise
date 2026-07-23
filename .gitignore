@@ -16,3 +16,5 @@ AGENTS.md
 /.deploy
 .github/instructions/tickets.instructions.md
 /build
+pnpm-lock.yaml
+pnpm-workspace.yaml

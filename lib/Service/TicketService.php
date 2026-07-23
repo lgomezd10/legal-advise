@@ -445,6 +445,35 @@ class TicketService {
 		return $attachment;
 	}
 
+	/**
+	 * @param array<int, mixed> $attachmentIds
+	 */
+	public function downloadAttachmentsArchive(string $uid, int $ticketId, array $attachmentIds = []): array {
+		$ticket = $this->ticketMapper->find($ticketId);
+		$this->permissionService->assertCanReadTicket($uid, $ticket);
+		$comments = $this->commentMapper->findBy('ticket_id', $ticketId, 'created_at', 'ASC');
+		$visibleCommentIds = [];
+		foreach ($comments as $comment) {
+			if ($this->permissionService->canSeeComment($uid, $ticket, (string) $comment->getVisibility())) {
+				$visibleCommentIds[] = (int) $comment->getId();
+			}
+		}
+
+		$requestedIds = array_values(array_unique(array_filter(array_map('intval', $attachmentIds), static fn (int $id): bool => $id > 0)));
+		$attachments = array_values(array_filter($this->safeListAttachments($ticketId), static function (array $attachment) use ($visibleCommentIds, $requestedIds): bool {
+			$commentId = (int) ($attachment['commentId'] ?? 0);
+			return in_array($commentId, $visibleCommentIds, true)
+				&& trim((string) ($attachment['sourceUrl'] ?? '')) === ''
+				&& ($requestedIds === [] || in_array((int) ($attachment['id'] ?? 0), $requestedIds, true));
+		}));
+
+		if ($attachments === []) {
+			throw new \InvalidArgumentException('No hay archivos disponibles para descargar.');
+		}
+
+		return $this->attachmentService->downloadArchive($attachments, (string) $ticket->getNumber());
+	}
+
 	private function safeCreateAttachment(int $ticketId, string $uid, array $uploadedFile, int $commentId): array {
 		try {
 			return $this->attachmentService->create($ticketId, $uid, $uploadedFile, $commentId);
@@ -564,6 +593,8 @@ class TicketService {
 		$data['attachmentNames'] = $attachmentNames;
 		$data['publicCommentSearchText'] = $this->buildCommentSearchText($uid, $ticket, $comments);
 		$attachments = $includeDetail ? $this->safeListAttachments($ticket->getId()) : [];
+		$visibleCommentIds = array_map(static fn (Comment $comment): int => (int) $comment->getId(), array_filter($comments, fn (Comment $comment): bool => $this->permissionService->canSeeComment($uid, $ticket, (string) $comment->getVisibility())));
+		$attachments = array_values(array_filter($attachments, static fn (array $attachment): bool => in_array((int) ($attachment['commentId'] ?? 0), $visibleCommentIds, true)));
 		$attachmentsByCommentId = [];
 		foreach ($attachments as $attachment) {
 			$commentId = isset($attachment['commentId']) ? (int) $attachment['commentId'] : 0;

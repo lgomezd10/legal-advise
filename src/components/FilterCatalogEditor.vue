@@ -97,8 +97,9 @@ function save() {
 .gi-filter-catalog-row {
 	padding: 1rem;
 	border-radius: 18px;
-	border: 1px solid rgba(49, 96, 91, .12);
-	background: rgba(255, 255, 255, .86);
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .12));
+	background: var(--gi-color-surface-plain, rgba(255, 255, 255, .86));
+	color: var(--gi-color-text, #222222);
 }
 
 .gi-filter-catalog-row__header {

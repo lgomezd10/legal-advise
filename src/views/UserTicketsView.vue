@@ -218,10 +218,10 @@ function isClosedTicket(ticket: Ticket) {
 	align-items: center;
 	gap: 1rem;
 	padding: .85rem 1rem;
-	border: 1px solid rgba(49, 96, 91, .12);
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .12));
 	border-radius: 18px;
-	background: rgba(245, 249, 247, .96);
-	color: #214f45;
+	background: var(--gi-color-surface-subtle, rgba(245, 249, 247, .96));
+	color: var(--gi-color-text, #214f45);
 	font: inherit;
 	font-weight: 700;
 	cursor: pointer;

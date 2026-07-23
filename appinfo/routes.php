@@ -20,6 +20,7 @@ return [
 		['name' => 'ticket_api#deleteComment', 'url' => '/api/v1/tickets/{id}/comments/{commentId}', 'verb' => 'DELETE'],
 		['name' => 'ticket_api#uploadAttachment', 'url' => '/api/v1/tickets/{id}/attachments', 'verb' => 'POST'],
 		['name' => 'ticket_api#downloadAttachment', 'url' => '/api/v1/attachments/{id}', 'verb' => 'GET'],
+		['name' => 'ticket_api#downloadAttachmentsArchive', 'url' => '/api/v1/tickets/{id}/attachments/archive', 'verb' => 'POST'],
 		['name' => 'support_api#filters', 'url' => '/api/v1/support/filters', 'verb' => 'GET'],
 		['name' => 'support_api#saveFilter', 'url' => '/api/v1/support/filters', 'verb' => 'POST'],
 		['name' => 'support_api#deleteFilter', 'url' => '/api/v1/support/filters/{id}', 'verb' => 'DELETE'],

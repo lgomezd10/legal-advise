@@ -31,11 +31,15 @@ class DefaultConfigServiceTest extends TestCase {
 		$seededFlag->setConfigKey('types_defaults_seeded');
 		$seededFlag->setConfigValue(true);
 
+		$appDisplayNameSetting = new AppSetting();
+		$appDisplayNameSetting->setConfigKey('app_display_name');
+		$appDisplayNameSetting->setConfigValue('Consultas Legales');
+
 		$settingMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\AppSettingMapper::class)
 			->disableOriginalConstructor()
 			->onlyMethods(['findOneBy', 'update', 'insert'])
 			->getMock();
-		$settingMapper->method('findOneBy')->willReturnCallback(static function (string $field, string $value) use ($attachmentConfigSetting, $notificationPolicySetting, $seededFlag, $statusCatalogSetting, $tasksConfigSetting) {
+		$settingMapper->method('findOneBy')->willReturnCallback(static function (string $field, string $value) use ($appDisplayNameSetting, $attachmentConfigSetting, $notificationPolicySetting, $seededFlag, $statusCatalogSetting, $tasksConfigSetting) {
 			if ($field !== 'config_key') {
 				return null;
 			}
@@ -46,6 +50,7 @@ class DefaultConfigServiceTest extends TestCase {
 				'notification_policy' => $notificationPolicySetting,
 				'attachment_config' => $attachmentConfigSetting,
 				'types_defaults_seeded' => $seededFlag,
+				'app_display_name' => $appDisplayNameSetting,
 				default => null,
 			};
 		});
@@ -132,11 +137,15 @@ class DefaultConfigServiceTest extends TestCase {
 		$attachmentConfigSetting->setConfigKey('attachment_config');
 		$attachmentConfigSetting->setConfigValue(['allowedExtensions' => ['pdf'], 'maxFileSizeMb' => 100]);
 
+		$appDisplayNameSetting = new AppSetting();
+		$appDisplayNameSetting->setConfigKey('app_display_name');
+		$appDisplayNameSetting->setConfigValue('Consultas Legales');
+
 		$settingMapper = $this->getMockBuilder(\OCA\ConsultasLegales\Db\AppSettingMapper::class)
 			->disableOriginalConstructor()
 			->onlyMethods(['findOneBy', 'update', 'insert'])
 			->getMock();
-		$settingMapper->method('findOneBy')->willReturnCallback(static function (string $field, string $value) use ($attachmentConfigSetting, $notificationPolicySetting, $statusCatalogSetting, $tasksConfigSetting) {
+		$settingMapper->method('findOneBy')->willReturnCallback(static function (string $field, string $value) use ($appDisplayNameSetting, $attachmentConfigSetting, $notificationPolicySetting, $statusCatalogSetting, $tasksConfigSetting) {
 			if ($field !== 'config_key') {
 				return null;
 			}
@@ -147,6 +156,7 @@ class DefaultConfigServiceTest extends TestCase {
 				'notification_policy' => $notificationPolicySetting,
 				'attachment_config' => $attachmentConfigSetting,
 				'types_defaults_seeded' => null,
+				'app_display_name' => $appDisplayNameSetting,
 				default => null,
 			};
 		});

@@ -87,4 +87,30 @@ class TicketApiControllerTest extends TestCase {
 		self::assertSame(403, $response->getStatus());
 		self::assertSame(['message' => 'Forbidden'], $response->getData());
 	}
+
+	public function testDownloadAttachmentsArchiveDelegatesSelectedAttachmentIdsToTicketService(): void {
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParam')->with('attachmentIds')->willReturn([11, 12]);
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('usuario1');
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($user);
+
+		$ticketService = $this->createMock(TicketService::class);
+		$ticketService->expects(self::once())
+			->method('downloadAttachmentsArchive')
+			->with('usuario1', 44, [11, 12])
+			->willReturn(['filename' => 'adjuntos-2026-000044.zip', 'mimeType' => 'application/zip', 'content' => 'UEsDB']);
+
+		$roleService = $this->createMock(RoleService::class);
+		$roleService->expects(self::once())->method('hasAnyRole')->with('usuario1')->willReturn(true);
+		$attachmentService = $this->createMock(AttachmentService::class);
+		$controller = new TicketApiController('legal_advice', $request, $userSession, $roleService, $ticketService, $attachmentService);
+
+		$response = $controller->downloadAttachmentsArchive(44);
+
+		self::assertSame(200, $response->getStatus());
+		self::assertSame('adjuntos-2026-000044.zip', $response->getData()['filename']);
+	}
 }

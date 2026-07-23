@@ -161,4 +161,13 @@ class TicketApiController extends BaseApiController {
 			return $this->attachmentService->download($id);
 		});
 	}
+
+	#[NoAdminRequired]
+	public function downloadAttachmentsArchive(int $id): DataResponse {
+		return $this->respond(function () use ($id): array {
+			$uid = $this->assertAppAccess();
+			$attachmentIds = $this->request->getParam('attachmentIds') ?? [];
+			return $this->ticketService->downloadAttachmentsArchive($uid, $id, is_array($attachmentIds) ? $attachmentIds : []);
+		});
+	}
 }

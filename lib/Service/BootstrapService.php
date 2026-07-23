@@ -102,12 +102,21 @@ class BootstrapService {
 		];
 	}
 
+	private function safeAppDisplayName(): string {
+		try {
+			return $this->catalogService->getAppDisplayName();
+		} catch (\Throwable) {
+			return CatalogService::DEFAULT_APP_DISPLAY_NAME;
+		}
+	}
+
 	private function buildAppInfo(): array {
 		$storage = $this->appStorageUsageService->summarize();
 
 		return [
 			'id' => Application::APP_ID,
 			'version' => $this->appManager->getAppVersion(Application::APP_ID),
+			'displayName' => $this->safeAppDisplayName(),
 			'storageBytes' => $storage['totalBytes'],
 			'storageLabel' => $storage['totalLabel'],
 			'appDataBytes' => $storage['appDataBytes'],
