@@ -86,6 +86,7 @@ describe('Contratos visibles de componentes de pantalla', () => {
 		expect(wrapper.text()).toContain('Guardar')
 		expect(wrapper.text()).toContain('Detalle')
 		expect(wrapper.text()).toContain('Comentarios')
+		expect(wrapper.text()).toContain('Adjuntos')
 		expect(wrapper.text()).toContain('Historial')
 		expect(wrapper.text()).toContain('Asignado a usuario')
 		expect(wrapper.text()).toContain('Asignado a grupo')
@@ -103,6 +104,37 @@ describe('Contratos visibles de componentes de pantalla', () => {
 
 		expect(wrapper.emitted('save')).toBeTruthy()
 		expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({ status: 'cerrado', closeReason: 'Cierre validado en prueba' })
+	})
+
+	it('TicketSidebarPanel permite descargar todos o una selección de adjuntos', async() => {
+		const bootstrap = createBootstrapData({ roles: ['soporte'] })
+		const firstAttachment = createAttachment({ id: 901, originalName: 'informe.pdf' })
+		const secondAttachment = createAttachment({ id: 902, originalName: 'captura.png' })
+		const wrapper = mount(TicketSidebarPanel, {
+			props: {
+				ticket: createTicket({ attachments: [firstAttachment, secondAttachment], canManage: true, canComment: true }),
+				roles: ['soporte'],
+				users: bootstrap.assignables.users,
+				groups: bootstrap.assignables.groups,
+				currentUserUid: 'usuario1',
+				statuses: bootstrap.catalogs.statuses,
+				urgencies: bootstrap.catalogs.urgencies,
+				readOnly: false,
+			},
+			global: { stubs: { SearchableSelect: SearchableSelectStub, AttachmentPicker: AttachmentPickerStub, RichTextEditor: RichTextEditorStub, RichTextContent: RichTextContentStub } },
+		})
+
+		await wrapper.findAll('button').find((button) => button.text() === 'Adjuntos')!.trigger('click')
+		await nextTick()
+		expect(wrapper.text()).toContain('Descargar todos')
+		expect(wrapper.text()).toContain('Descargar seleccionados')
+
+		await wrapper.find('input[type="checkbox"]').setValue(true)
+		await wrapper.findAll('button').find((button) => button.text() === 'Descargar seleccionados')!.trigger('click')
+		expect(wrapper.emitted('download-archive')?.[0]?.[0]).toEqual([901])
+
+		await wrapper.findAll('button').find((button) => button.text() === 'Descargar todos')!.trigger('click')
+		expect(wrapper.emitted('download-archive')?.[1]?.[0]).toEqual([901, 902])
 	})
 
 	it('TicketSidebarPanel emite el nuevo estado al guardar cambios de soporte', async() => {

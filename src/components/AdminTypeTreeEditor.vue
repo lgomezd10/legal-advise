@@ -78,7 +78,8 @@ function buildPath(node: EditableTypeNode): string {
 	align-items: end;
 	padding: .85rem;
 	border-radius: 16px;
-	background: rgba(236, 242, 239, .76);
+	background: var(--gi-color-surface-subtle, rgba(236, 242, 239, .76));
+	color: var(--gi-color-text, #222222);
 	min-width: 0;
 }
 

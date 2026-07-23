@@ -42,6 +42,7 @@ const emit = defineEmits<{
 	(e: 'delete-comment', payload: { commentId: number, restoreAssignedStatus: boolean }): void
 	(e: 'save', payload: Record<string, unknown>): void
 	(e: 'download', attachmentId: number): void
+	(e: 'download-archive', attachmentIds: number[]): void
 	(e: 'fullscreen'): void
 	(e: 'reopen'): void
 	(e: 'assign-to-me', payload: { assignedUserUid: string | null, assignedGroupId: string | null }): void
@@ -61,6 +62,7 @@ const commentsDateTo = ref('')
 const commentsAuthorUid = ref<string | null>(null)
 const commentsMobileMenuOpen = ref(false)
 const expandedCommentIds = ref<number[]>([])
+const visibleCommentAttachmentIds = ref<number[]>([])
 const commentDeleteDialogOpen = ref(false)
 const pendingCommentDeletion = ref<TicketComment | null>(null)
 const editingCommentId = ref<number | null>(null)
@@ -70,6 +72,7 @@ const closeReasonDialogOpen = ref(false)
 const supportCommentDialogOpen = ref(false)
 const externalAttachmentUrlDialogOpen = ref(false)
 const pendingExternalAttachment = ref<TicketAttachment | null>(null)
+const selectedAttachmentIds = ref<number[]>([])
 const pendingSupportCommentAction = ref<{ body: string, visibility: 'interno' | 'publico', files: File[], links: TicketAttachmentLinkDraft[] } | null>(null)
 const editableTicket = reactive({
 	title: '',
@@ -207,6 +210,7 @@ const visibilityOptions: SearchableSelectOption[] = [
 const supportTabs = computed(() => ([
 	{ id: 'detail', label: 'Detalle' },
 	{ id: 'comments', label: 'Comentarios' },
+	{ id: 'attachments', label: 'Adjuntos' },
 	{ id: 'requester', label: 'Solicitante' },
 	{ id: 'history', label: 'Historial' },
 	] as Array<{ id: TicketSidebarTabId, label: string }>))
@@ -216,6 +220,7 @@ const userTabs = computed(() => ([
 	{ id: 'attachments', label: 'Adjuntos' },
 	] as Array<{ id: TicketSidebarTabId, label: string }>))
 const visibleTabs = computed(() => showSupportTabs.value ? supportTabs.value : userTabs.value)
+	const downloadableTicketAttachments = computed(() => (props.ticket?.attachments ?? []).filter((attachment: TicketAttachment) => !attachment.sourceUrl))
 const shouldCollapseCommentOptions = computed(() => true)
 const requesterData = computed<Record<string, string>>(() => getTicketPersonalDataRecord(props.ticket))
 const requesterContactEntries = computed(() => {
@@ -370,6 +375,37 @@ const commentComposerSubmitLabel = computed(() => editingComment.value ? 'Guarda
 const visibleCommentIds = computed(() => orderedComments.value.map((item) => item.id))
 const allVisibleCommentsExpanded = computed(() => visibleCommentIds.value.length > 0 && visibleCommentIds.value.every((id) => expandedCommentIds.value.includes(id)))
 
+function isDownloadableAttachment(attachment: TicketAttachment) {
+	return !attachment.sourceUrl
+}
+
+function toggleAttachmentSelection(attachmentId: number, selected: boolean) {
+	selectedAttachmentIds.value = selected
+		? [...new Set([...selectedAttachmentIds.value, attachmentId])]
+		: selectedAttachmentIds.value.filter((id) => id !== attachmentId)
+}
+
+function downloadAttachmentArchive(attachments: TicketAttachment[]) {
+	const attachmentIds = attachments.filter(isDownloadableAttachment).map((attachment) => attachment.id)
+	if (attachmentIds.length > 0) {
+		emit('download-archive', attachmentIds)
+	}
+}
+
+function getSelectedTicketAttachments() {
+	return (props.ticket?.attachments ?? []).filter((attachment: TicketAttachment) => selectedAttachmentIds.value.includes(attachment.id))
+}
+
+function areCommentAttachmentsVisible(commentId: number) {
+	return visibleCommentAttachmentIds.value.includes(commentId)
+}
+
+function toggleCommentAttachments(commentId: number) {
+	visibleCommentAttachmentIds.value = areCommentAttachmentsVisible(commentId)
+		? visibleCommentAttachmentIds.value.filter((id) => id !== commentId)
+		: [...visibleCommentAttachmentIds.value, commentId]
+}
+
 function hasUnsavedChanges() {
 	return dirty.value
 }
@@ -423,6 +459,7 @@ function resetTransientTicketPanelState() {
 	commentsDateTo.value = ''
 	commentsAuthorUid.value = null
 	commentsMobileMenuOpen.value = false
+	visibleCommentAttachmentIds.value = []
 	commentDeleteDialogOpen.value = false
 	pendingCommentDeletion.value = null
 	activeTab.value = defaultTab.value
@@ -434,6 +471,7 @@ function resetTransientTicketPanelState() {
 
 watch(() => props.ticket?.id, () => {
 	resetTransientTicketPanelState()
+	selectedAttachmentIds.value = []
 	if (discardChangesDialogOpen.value) {
 		resolveDiscardChangesDialog(false)
 	}
@@ -441,6 +479,9 @@ watch(() => props.ticket?.id, () => {
 
 watch(() => (props.ticket?.comments ?? []).map((item: TicketComment) => item.id).join(','), () => {
 	expandedCommentIds.value = (props.ticket?.comments ?? []).map((item: TicketComment) => item.id)
+	visibleCommentAttachmentIds.value = (props.ticket?.comments ?? [])
+		.filter((item: TicketComment) => (item.attachments?.length ?? 0) > 0)
+		.map((item: TicketComment) => item.id)
 }, { immediate: true })
 
 watch(() => props.ticket ? JSON.stringify({
@@ -1011,11 +1052,19 @@ function assignToCurrentUser() {
 				</div>
 			</div>
 		</section>
-		<section v-if="showSupportTabs ? activeTab === 'detail' : activeTab === 'attachments'" class="gi-sidebar-panel__block">
+		<section v-if="activeTab === 'attachments'" class="gi-sidebar-panel__block">
 			<h3>Adjuntos</h3>
+			<div class="gi-sidebar-panel__attachment-actions">
+				<button class="gi-secondary-button" type="button" :disabled="downloadableTicketAttachments.length === 0" @click="downloadAttachmentArchive(ticket.attachments || [])">Descargar todos</button>
+				<button class="gi-secondary-button" type="button" :disabled="selectedAttachmentIds.length === 0" @click="downloadAttachmentArchive(getSelectedTicketAttachments())">Descargar seleccionados</button>
+			</div>
 			<div class="gi-sidebar-panel__attachment-list">
-				<button v-for="attachment in ticket.attachments || []" :key="attachment.id" class="gi-secondary-button gi-attachment-link" @click="openAttachment(attachment)">{{ attachment.originalName }}</button>
+				<label v-for="attachment in ticket.attachments || []" :key="attachment.id" class="gi-sidebar-panel__attachment-item">
+					<input type="checkbox" :checked="selectedAttachmentIds.includes(attachment.id)" :disabled="!isDownloadableAttachment(attachment)" :title="attachment.sourceUrl ? 'Los enlaces URL no se incluyen en archivos ZIP.' : undefined" @change="toggleAttachmentSelection(attachment.id, ($event.target as HTMLInputElement).checked)" />
+					<button class="gi-secondary-button gi-attachment-link" type="button" @click="openAttachment(attachment)">{{ attachment.originalName }}</button>
+				</label>
 				<p v-if="!(ticket.attachments || []).length" class="gi-sidebar-panel__muted">No hay adjuntos publicados.</p>
+				<p v-else-if="downloadableTicketAttachments.length === 0" class="gi-sidebar-panel__muted">Los enlaces URL se abren de forma individual y no se incluyen en archivos ZIP.</p>
 			</div>
 		</section>
 		<section v-if="showSupportTabs && activeTab === 'requester'" class="gi-sidebar-panel__block gi-sidebar-panel__requester-block">
@@ -1102,7 +1151,20 @@ function assignToCurrentUser() {
 					<div v-if="expandedCommentIds.includes(item.id)" class="gi-sidebar-panel__accordion-body">
 						<RichTextContent :value="item.body" />
 						<div v-if="item.attachments?.length" class="gi-comment__attachments">
-							<button v-for="attachment in item.attachments" :key="attachment.id" class="gi-secondary-button gi-comment__attachment gi-attachment-link" @click="openAttachment(attachment)">{{ attachment.originalName }}</button>
+							<div class="gi-comment__attachments-header">
+								<strong>Adjuntos</strong>
+								<div class="gi-comment__attachments-actions">
+									<button class="gi-sidebar-panel__comment-icon-button" type="button" title="Descargar todos los adjuntos" aria-label="Descargar todos los adjuntos" :disabled="!item.attachments.some(isDownloadableAttachment)" @click="downloadAttachmentArchive(item.attachments)">
+										<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v10.17l3.59-3.58L18 11l-6 6-6-6 1.41-1.41L11 13.17V3zm-6 15h14v3H5v-3z" fill="currentColor" /></svg>
+									</button>
+									<button class="gi-sidebar-panel__comment-icon-button gi-sidebar-panel__comment-icon-button--toggle" type="button" :title="areCommentAttachmentsVisible(item.id) ? 'Ocultar adjuntos' : 'Ver adjuntos'" :aria-label="areCommentAttachmentsVisible(item.id) ? 'Ocultar adjuntos' : 'Ver adjuntos'" @click="toggleCommentAttachments(item.id)">
+										<span class="gi-sidebar-panel__accordion-icon" aria-hidden="true">{{ areCommentAttachmentsVisible(item.id) ? '▾' : '▸' }}</span>
+									</button>
+								</div>
+							</div>
+							<div v-if="areCommentAttachmentsVisible(item.id)" class="gi-comment__attachments-list">
+								<button v-for="attachment in item.attachments" :key="attachment.id" class="gi-secondary-button gi-comment__attachment gi-attachment-link" type="button" @click="openAttachment(attachment)">{{ attachment.originalName }}</button>
+							</div>
 						</div>
 						<div v-if="canPublishComment && item.id === latestVisibleCommentId && replyTargetCommentId !== item.id && editingCommentId !== item.id" class="gi-sidebar-panel__comment-row-actions">
 							<button v-if="canPublishComment && item.id === latestVisibleCommentId && replyTargetCommentId !== item.id" class="gi-secondary-button gi-sidebar-panel__reply-button" type="button" @click="replyToComment(item)">Responder</button>
@@ -1275,7 +1337,7 @@ function assignToCurrentUser() {
 	align-items: center;
 	gap: .45rem;
 	flex-wrap: wrap;
-	color: #48645d;
+	color: var(--gi-color-text-muted, #48645d);
 	font-size: .92rem;
 }
 
@@ -1289,7 +1351,7 @@ function assignToCurrentUser() {
 	padding: 0;
 	font: inherit;
 	font-weight: 700;
-	color: #0b6e4f;
+	color: var(--gi-color-primary, #0b6e4f);
 	text-decoration: underline;
 	text-underline-offset: .15em;
 	cursor: pointer;
@@ -1297,7 +1359,7 @@ function assignToCurrentUser() {
 
 .gi-sidebar-panel__requester-button:hover,
 .gi-sidebar-panel__requester-button:focus-visible {
-	color: #084f39;
+	color: var(--gi-color-primary-hover, #084f39);
 }
 
 .gi-sidebar-panel__header h2 {
@@ -1311,20 +1373,27 @@ function assignToCurrentUser() {
 }
 
 .gi-sidebar-panel__tab {
-	border: 1px solid rgba(49, 96, 91, .14);
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .14));
 	border-radius: 999px;
 	padding: .55rem .9rem;
-	background: rgba(239, 245, 241, .96);
-	color: #29594e;
+	background: var(--gi-color-plain-soft, var(--gi-color-surface-subtle, rgba(239, 245, 241, .96)));
+	color: var(--gi-color-text, #29594e);
 	font: inherit;
 	font-weight: 600;
 	cursor: pointer;
 }
 
+.gi-sidebar-panel__tab:hover {
+	background: var(--gi-color-plain-hover, var(--gi-color-primary, #0b6e4f));
+	border-color: var(--gi-color-plain-hover, var(--gi-color-primary, #0b6e4f));
+	color: var(--gi-color-primary-text, #fff);
+}
+
+.gi-sidebar-panel__tab:focus,
 .gi-sidebar-panel__tab--active {
-	background: #0b6e4f;
-	border-color: #0b6e4f;
-	color: #fff;
+	background: var(--gi-color-plain, var(--gi-color-primary, #0b6e4f));
+	border-color: var(--gi-color-plain, var(--gi-color-primary, #0b6e4f));
+	color: var(--gi-color-primary-text, #fff);
 }
 
 .gi-sidebar-panel__fullscreen-button {
@@ -1350,6 +1419,41 @@ function assignToCurrentUser() {
 .gi-sidebar-panel__closed-summary {
 	display: grid;
 	gap: 1rem;
+}
+
+.gi-sidebar-panel__attachment-actions,
+.gi-sidebar-panel__attachment-item,
+.gi-comment__attachments-header,
+.gi-comment__attachments-actions,
+.gi-comment__attachments-list {
+	display: flex;
+	align-items: center;
+	gap: .65rem;
+	flex-wrap: wrap;
+}
+
+.gi-sidebar-panel__attachment-actions {
+	margin-bottom: 1rem;
+}
+
+.gi-comment__attachments-actions {
+	justify-content: flex-end;
+}
+
+.gi-sidebar-panel__attachment-item {
+	width: fit-content;
+}
+
+.gi-comment__attachments {
+	padding: .85rem;
+	border: 1px solid var(--color-border, rgba(49, 96, 91, .2));
+	border-radius: 10px;
+	background: var(--color-background-dark, rgba(245, 249, 247, .96));
+}
+
+.gi-comment__attachments-header {
+	width: 100%;
+	justify-content: space-between;
 }
 
 .gi-sidebar-panel__support-editor-grid {
@@ -1439,8 +1543,8 @@ function assignToCurrentUser() {
 .gi-sidebar-panel__history-item {
 	padding: .95rem 1rem;
 	border-radius: 16px;
-	background: rgba(245, 249, 247, .96);
-	border: 1px solid rgba(49, 96, 91, .12);
+	background: var(--gi-color-surface-subtle, rgba(245, 249, 247, .96));
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .12));
 	display: grid;
 	gap: .7rem;
 }
@@ -1450,7 +1554,7 @@ function assignToCurrentUser() {
 	padding-left: 1rem;
 	display: grid;
 	gap: .35rem;
-	color: #4b6058;
+	color: var(--gi-color-text-muted, #4b6058);
 }
 
 .gi-attachment-link {
@@ -1462,7 +1566,7 @@ function assignToCurrentUser() {
 
 .gi-sidebar-panel__muted {
 	margin: 0;
-	color: #5f726b;
+	color: var(--gi-color-text-muted, #5f726b);
 }
 
 .gi-sidebar-panel__section-kicker {
@@ -1472,7 +1576,7 @@ function assignToCurrentUser() {
 	line-height: 1.2;
 	letter-spacing: .06em;
 	text-transform: uppercase;
-	color: #547068;
+	color: var(--gi-color-text-muted, #547068);
 }
 
 .gi-sidebar-panel__comments-header {
@@ -1496,11 +1600,12 @@ function assignToCurrentUser() {
 .gi-sidebar-panel__requester-card {
 	padding: .95rem 1rem;
 	border-radius: 16px;
-	background: rgba(245, 249, 247, .96);
-	border: 1px solid rgba(49, 96, 91, .12);
+	background: var(--gi-color-surface-subtle, rgba(245, 249, 247, .96));
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .12));
 	display: grid;
 	gap: .35rem;
 	justify-items: start;
+	color: var(--gi-color-text, #222222);
 }
 
 .gi-sidebar-panel__comments-header-actions,
@@ -1520,11 +1625,11 @@ function assignToCurrentUser() {
 
 .gi-sidebar-panel__type-chip {
 	padding: .8rem .95rem;
-	border: 1px solid rgba(49, 96, 91, .12);
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .12));
 	border-radius: 14px;
-	background: rgba(245, 249, 247, .96);
+	background: var(--gi-color-surface-subtle, rgba(245, 249, 247, .96));
 	font-weight: 600;
-	color: #2f554c;
+	color: var(--gi-color-text, #2f554c);
 }
 
 .gi-sidebar-panel__comments-mobile-toggle,
@@ -1541,9 +1646,9 @@ function assignToCurrentUser() {
 	display: grid;
 	gap: .85rem;
 	padding: .9rem 1rem;
-	border: 1px solid rgba(49, 96, 91, .12);
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .12));
 	border-radius: 16px;
-	background: rgba(247, 250, 248, .95);
+	background: var(--gi-color-surface-subtle, rgba(247, 250, 248, .95));
 }
 
 .gi-sidebar-panel__comment-composer--inline {
@@ -1597,9 +1702,10 @@ function assignToCurrentUser() {
 .gi-sidebar-panel__selected-file {
 	justify-content: space-between;
 	padding: .65rem .8rem;
-	border: 1px solid rgba(33, 53, 68, .12);
+	border: 1px solid var(--gi-color-border, rgba(33, 53, 68, .12));
 	border-radius: 12px;
-	background: rgba(255, 255, 255, .7);
+	background: var(--gi-color-surface, rgba(255, 255, 255, .7));
+	color: var(--gi-color-text, #222222);
 }
 
 .gi-sidebar-panel__comments-filters,
@@ -1627,10 +1733,11 @@ function assignToCurrentUser() {
 }
 
 .gi-sidebar-panel__accordion-item {
-	border: 1px solid rgba(49, 96, 91, .12);
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .12));
 	border-radius: 16px;
 	overflow: visible;
-	background: rgba(255, 255, 255, .9);
+	background: var(--gi-color-surface-plain, rgba(255, 255, 255, .9));
+	color: var(--gi-color-text, #222222);
 }
 
 .gi-sidebar-panel__accordion-header {
@@ -1638,7 +1745,7 @@ function assignToCurrentUser() {
 	align-items: stretch;
 	gap: .35rem;
 	padding-right: .55rem;
-	background: rgba(239, 245, 241, .98);
+	background: var(--gi-color-surface-subtle, rgba(239, 245, 241, .98));
 	border-radius: 16px 16px 0 0;
 }
 
@@ -1678,14 +1785,14 @@ function assignToCurrentUser() {
 	gap: .45rem;
 	font-size: .87rem;
 	font-weight: 700;
-	color: #385b53;
+	color: var(--gi-color-text, #385b53);
 	line-height: 1.35;
 }
 
 .gi-sidebar-panel__accordion-icon {
 	font-size: 1rem;
 	line-height: 1;
-	color: #4d6962;
+	color: var(--gi-color-text-muted, #4d6962);
 	padding-top: .1rem;
 }
 
@@ -1693,10 +1800,10 @@ function assignToCurrentUser() {
 	width: 1.9rem;
 	height: 1.9rem;
 	padding: 0;
-	border: 1px solid rgba(49, 96, 91, .18);
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .18));
 	border-radius: 999px;
-	background: rgba(255, 255, 255, .88);
-	color: #385b53;
+	background: var(--gi-color-surface-plain, rgba(255, 255, 255, .88));
+	color: var(--gi-color-text, #385b53);
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -1730,7 +1837,7 @@ function assignToCurrentUser() {
 }
 
 .gi-sidebar-panel__comment-icon-button--toggle {
-	color: #4d6962;
+	color: var(--gi-color-text-muted, #4d6962);
 }
 
 .gi-sidebar-panel__accordion-body {

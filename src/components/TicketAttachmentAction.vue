@@ -101,11 +101,11 @@ const infoText = computed(() => {
 	min-width: 16rem;
 	max-width: min(24rem, calc(100vw - 2rem));
 	padding: .7rem .8rem;
-	border: 1px solid rgba(49, 96, 91, .12);
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .12));
 	border-radius: 14px;
-	background: rgba(255, 255, 255, .98);
+	background: var(--gi-color-surface-plain, rgba(255, 255, 255, .98));
 	box-shadow: 0 18px 40px rgba(20, 34, 30, .16);
-	color: #435852;
+	color: var(--gi-color-text, #435852);
 	z-index: 5;
 	line-height: 1.4;
 }

@@ -24,4 +24,5 @@ export const uploadAttachmentUrl = async(id: number, link: TicketAttachmentLinkD
 	return apiPost(`/api/v1/tickets/${id}/attachments`, formData)
 }
 export const downloadAttachment = async(id: number) => apiGet<{ meta: Record<string, unknown>, content: string }>(`/api/v1/attachments/${id}`)
+export const downloadAttachmentsArchive = async(ticketId: number, attachmentIds: number[] = []) => apiPost<{ filename: string, mimeType: string, content: string }>(`/api/v1/tickets/${ticketId}/attachments/archive`, { attachmentIds })
 export const exportTickets = async(scope: 'user' | 'support', criteria: Record<string, unknown>, columns: string[] = []) => apiGet<{ filename: string, mimeType: string, content: string }>('/api/v1/export/tickets', { scope, criteria, columns })

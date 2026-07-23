@@ -17,6 +17,52 @@ use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
 
 class TicketServiceTest extends TestCase {
+	public function testDownloadAttachmentsArchiveOnlyIncludesVisibleFilesFromTheTicket(): void {
+		$ticket = new Ticket();
+		$ticket->setId(41);
+		$ticket->setNumber('2026-000041');
+		$ticket->setCreatorUid('usuario1');
+
+		$publicComment = new Comment();
+		$publicComment->setId(101);
+		$publicComment->setTicketId(41);
+		$publicComment->setVisibility('publico');
+		$internalComment = new Comment();
+		$internalComment->setId(102);
+		$internalComment->setTicketId(41);
+		$internalComment->setVisibility('interno');
+
+		$ticketMapper = $this->createMock(\OCA\ConsultasLegales\Db\TicketMapper::class);
+		$ticketMapper->method('find')->with(41)->willReturn($ticket);
+		$commentMapper = $this->createMock(\OCA\ConsultasLegales\Db\CommentMapper::class);
+		$commentMapper->method('findBy')->with('ticket_id', 41, 'created_at', 'ASC')->willReturn([$publicComment, $internalComment]);
+		$permissionService = $this->createMock(\OCA\ConsultasLegales\Service\PermissionService::class);
+		$permissionService->expects(self::once())->method('assertCanReadTicket')->with('usuario1', $ticket);
+		$permissionService->method('canSeeComment')->willReturnCallback(static fn (string $_uid, Ticket $_ticket, string $visibility): bool => $visibility === 'publico');
+		$attachmentService = $this->getMockBuilder(\OCA\ConsultasLegales\Service\AttachmentService::class)
+			->disableOriginalConstructor()
+			->onlyMethods(['listForTicket', 'downloadArchive'])
+			->getMock();
+		$attachmentService->method('listForTicket')->with(41)->willReturn([
+			['id' => 1, 'ticketId' => 41, 'commentId' => 101, 'originalName' => 'visible.pdf', 'storedName' => 'visible.pdf', 'sourceUrl' => null],
+			['id' => 2, 'ticketId' => 41, 'commentId' => 102, 'originalName' => 'internal.pdf', 'storedName' => 'internal.pdf', 'sourceUrl' => null],
+			['id' => 3, 'ticketId' => 41, 'commentId' => 101, 'originalName' => 'enlace', 'storedName' => '', 'sourceUrl' => 'https://example.com'],
+		]);
+		$attachmentService->expects(self::once())->method('downloadArchive')
+			->with([['id' => 1, 'ticketId' => 41, 'commentId' => 101, 'originalName' => 'visible.pdf', 'storedName' => 'visible.pdf', 'sourceUrl' => null]], '2026-000041')
+			->willReturn(['filename' => 'adjuntos-2026-000041.zip', 'mimeType' => 'application/zip', 'content' => 'UEsDB']);
+
+		$reflection = new \ReflectionClass(TicketService::class);
+		$service = $reflection->newInstanceWithoutConstructor();
+		foreach (['ticketMapper' => $ticketMapper, 'commentMapper' => $commentMapper, 'permissionService' => $permissionService, 'attachmentService' => $attachmentService] as $property => $value) {
+			$reflection->getProperty($property)->setValue($service, $value);
+		}
+
+		$result = $service->downloadAttachmentsArchive('usuario1', 41, [1, 2, 3]);
+
+		self::assertSame('adjuntos-2026-000041.zip', $result['filename']);
+	}
+
 	public function testUpdateDoesNotEmitAssignmentNotificationsWhenOnlyGroupChangesAndThereIsAlreadyAnAssignedUser(): void {
 		$ticket = new Ticket();
 		$ticket->setId(22);

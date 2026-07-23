@@ -124,9 +124,10 @@ async function submit(payload: Record<string, unknown>) {
 	display: grid;
 	gap: 1rem;
 	padding: 1.25rem;
-	border: 1px solid rgba(49, 96, 91, .12);
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .12));
 	border-radius: 22px;
-	background: rgba(255, 255, 255, .94);
+	background: var(--gi-color-surface-plain, rgba(255, 255, 255, .94));
+	color: var(--gi-color-text, #222222);
 	box-shadow: 0 20px 48px rgba(34, 62, 55, .06);
 }
 

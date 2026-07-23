@@ -66,6 +66,7 @@ class DefaultConfigService {
 				'allowedExtensions' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'tif', 'tiff', 'mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac', 'flac', 'opus', 'wma', 'mp4', 'm4v', 'mov', 'avi', 'mkv', 'webm', 'mpeg', 'mpg', '3gp', 'wmv', 'ogv'],
 				'maxFileSizeMb' => 100,
 			],
+			'app_display_name' => CatalogService::DEFAULT_APP_DISPLAY_NAME,
 		];
 
 		foreach ($settings as $key => $value) {

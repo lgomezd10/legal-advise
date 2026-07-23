@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import type { Ticket, TicketAttachmentLinkDraft, TicketComment, TicketDraft } from '@/types'
-import { addComment, createTicket, deleteTicket as deleteTicketRequest, deleteTicketComment, downloadAttachment, exportTickets, fetchTicket, fetchTickets, reopenTicket, updateTicket, updateTicketComment, uploadAttachment, uploadAttachmentUrl } from '@/services/tickets'
+import { addComment, createTicket, deleteTicket as deleteTicketRequest, deleteTicketComment, downloadAttachment, downloadAttachmentsArchive, exportTickets, fetchTicket, fetchTickets, reopenTicket, updateTicket, updateTicketComment, uploadAttachment, uploadAttachmentUrl } from '@/services/tickets'
 
 type CommentPayload = {
 	body: string
@@ -96,6 +96,9 @@ export const useTicketsStore = defineStore('tickets', {
 		},
 		async download(attachmentId: number) {
 			return downloadAttachment(attachmentId)
+		},
+		async downloadArchive(ticketId: number, attachmentIds: number[] = []) {
+			return downloadAttachmentsArchive(ticketId, attachmentIds)
 		},
 		async export(scope: 'user' | 'support', criteria: Record<string, unknown>, columns: string[] = []) {
 			return exportTickets(scope, criteria, columns)

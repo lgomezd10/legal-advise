@@ -84,7 +84,8 @@ const showAdmin = computed(() => bootstrapStore.hasRole('administrador'))
 	gap: 1rem;
 	padding: 1rem 1.2rem;
 	border: none;
-	background: rgba(238, 244, 242, .86);
+	background: var(--gi-color-surface-subtle, rgba(238, 244, 242, .86));
+	color: var(--gi-color-text, #222222);
 	font: inherit;
 	font-weight: 700;
 	cursor: pointer;
@@ -92,6 +93,7 @@ const showAdmin = computed(() => bootstrapStore.hasRole('administrador'))
 
 .gi-config-accordion__content {
 	padding: .5rem;
-	background: rgba(250, 251, 250, .92);
+	background: var(--gi-color-surface-plain, rgba(250, 251, 250, .92));
+	color: var(--gi-color-text, #222222);
 }
 </style>

@@ -69,9 +69,10 @@ function resolveTypeLabel(typeId?: number | null) {
 	display: grid;
 	gap: .55rem;
 	padding: 1rem 1.1rem;
-	border: 1px solid rgba(49, 96, 91, .14);
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .14));
 	border-radius: 16px;
-	background: linear-gradient(180deg, rgba(250, 251, 249, .96), rgba(240, 245, 242, .92));
+	background: var(--gi-color-surface-plain, rgba(250, 251, 249, .96));
+	color: var(--gi-color-text, #222222);
 	text-align: left;
 	cursor: pointer;
 	box-shadow: 0 12px 28px rgba(34, 62, 55, .06);

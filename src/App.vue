@@ -50,7 +50,7 @@ const currentNavigationItem = computed(() => {
 
 	return matched ?? navigation.value[0] ?? null
 })
-const currentSectionTitle = computed(() => currentNavigationItem.value?.label ?? 'Consultas Legales')
+const currentSectionTitle = computed(() => currentNavigationItem.value?.label ?? bootstrapStore.data.appInfo.displayName)
 const hasSidebar = computed(() => {
 	const hasTicketSidebarRoute = typeof route.params.ticketId !== 'undefined'
 	const isFullscreenRoute = route.path.endsWith('/completo')
@@ -263,11 +263,9 @@ onBeforeUnmount(() => {
 					<svg v-if="navigationVisible" class="gi-nav-toggle__icon gi-nav-toggle__icon--open" viewBox="0 0 24 24" aria-hidden="true">
 						<path d="M21,15.61L19.59,17L14.58,12L19.59,7L21,8.39L17.44,12L21,15.61M3,6H16V8H3V6M3,13V11H13V13H3M3,18V16H16V18H3Z" />
 					</svg>
-					<template v-else>
-						<span class="gi-nav-toggle__line" />
-						<span class="gi-nav-toggle__line" />
-						<span class="gi-nav-toggle__line" />
-					</template>
+					<svg v-else class="gi-nav-toggle__icon gi-nav-toggle__icon--closed" viewBox="0 0 24 24" aria-hidden="true">
+						<path d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z" />
+					</svg>
 				</button>
 				<h1 class="gi-content-header__title">{{ currentSectionTitle }}</h1>
 			</header>
@@ -395,6 +393,7 @@ onBeforeUnmount(() => {
 	flex: 0 0 auto;
 }
 
+.gi-nav-item:focus,
 .gi-nav-item--active {
 	background: var(--gi-nav-accent);
 	border-color: var(--gi-nav-accent);
@@ -578,6 +577,10 @@ onBeforeUnmount(() => {
 	height: 1.2rem;
 	fill: var(--gi-color-text);
 	display: block;
+}
+
+.gi-nav-toggle__icon--closed {
+	transform: translateX(.02rem);
 }
 
 .gi-nav-toggle__icon--open {

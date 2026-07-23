@@ -56,7 +56,16 @@ class AdminConfigService {
 			'notifications' => $this->safeProfileNotificationPreferences(),
 			'attachmentConfig' => $this->safeAttachmentConfig(),
 			'tasksConfig' => $this->safeTasksConfig(),
+			'appDisplayName' => $this->safeAppDisplayName(),
 		];
+	}
+
+	private function safeAppDisplayName(): string {
+		try {
+			return $this->catalogService->getAppDisplayName();
+		} catch (\Throwable) {
+			return CatalogService::DEFAULT_APP_DISPLAY_NAME;
+		}
 	}
 
 	private function safeAdminFilters(): array {
@@ -245,6 +254,20 @@ class AdminConfigService {
 				'allowedExtensions' => $this->normalizeAllowedExtensions($payload['attachmentConfig']['allowedExtensions'] ?? []),
 				'maxFileSizeMb' => $this->normalizeMaxFileSizeMb($payload['attachmentConfig']['maxFileSizeMb'] ?? null),
 			]);
+			$this->settingMapper->update($setting);
+		}
+
+		if (array_key_exists('appDisplayName', $payload)) {
+			$name = is_string($payload['appDisplayName']) ? trim($payload['appDisplayName']) : '';
+			if ($name === '') {
+				throw new \InvalidArgumentException('El nombre visible de la aplicación no puede quedar vacío.');
+			}
+			if (mb_strlen($name) > 100) {
+				throw new \InvalidArgumentException('El nombre visible de la aplicación es demasiado largo.');
+			}
+
+			$setting = $this->settingMapper->findOneBy('config_key', 'app_display_name');
+			$setting->setConfigValue($name);
 			$this->settingMapper->update($setting);
 		}
 

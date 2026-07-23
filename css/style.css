@@ -23,6 +23,11 @@ body,
 	--gi-color-surface-subtle: var(--color-background-hover, #f5f5f5);
 	--gi-color-surface-muted: var(--color-background-dark, #ededed);
 	--gi-color-surface-strong: var(--color-background-darker, #dbdbdb);
+	--gi-color-plain: color-mix(in srgb, var(--color-background-plain, #767676) 40%, #000000);
+	--gi-color-plain-text: var(--color-background-plain-text, #ffffff);
+	--gi-color-plain-soft: var(--gi-color-surface-subtle, #f5f5f5);
+	--gi-color-plain-soft: color-mix(in srgb, var(--gi-color-plain) 10%, var(--gi-color-surface-plain));
+	--gi-color-plain-hover: color-mix(in srgb, var(--gi-color-plain) 50%, var(--gi-color-surface-plain));
 	--gi-color-border: var(--color-border, #ededed);
 	--gi-color-border-strong: var(--color-border-dark, #dbdbdb);
 	--gi-color-text: var(--color-main-text, #222222);

@@ -30,9 +30,9 @@ const sanitizedValue = computed(() => sanitizeRichText(props.value ?? ''))
 
 .gi-rich-text-content--surface {
 	padding: 1rem;
-	border: 1px solid rgba(49, 96, 91, .12);
+	border: 1px solid var(--gi-color-border, rgba(49, 96, 91, .12));
 	border-radius: 16px;
-	background: rgba(245, 249, 247, .96);
+	background: var(--gi-color-surface-subtle, rgba(245, 249, 247, .96));
 }
 
 .gi-rich-text-content__scroll {
@@ -48,6 +48,7 @@ const sanitizedValue = computed(() => sanitizeRichText(props.value ?? ''))
 	text-align: left;
 	overflow-wrap: anywhere;
 	word-break: break-word;
+	color: var(--gi-color-text, #222222);
 }
 
 .gi-rich-text-content__body :deep(ul),
